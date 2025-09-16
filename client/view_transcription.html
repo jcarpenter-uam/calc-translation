@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-Time Viewer</title>
+    <style>
+      :root {
+        --bg-color: #1a1a1a;
+        --text-color: #e0e0e0;
+        --status-connected-color: #2ecc71;
+        --status-disconnected-color: #e74c3c;
+        --status-connecting-color: #f39c12;
+        --border-color: #444;
+      }
+      body {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        padding: 20px;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      h1 {
+        text-align: center;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 15px;
+        margin-top: 0;
+      }
+      .main-container {
+        max-width: 1800px;
+        margin: 0 auto;
+        display: flex;
+        gap: 20px;
+      }
+      .panel {
+        flex: 1;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+      }
+      .status-bar {
+        padding: 10px;
+        margin-bottom: 20px;
+        border-radius: 5px;
+        text-align: center;
+        font-weight: bold;
+        transition: background-color 0.3s ease;
+      }
+      .connecting {
+        background-color: var(--status-connecting-color);
+        color: #111;
+      }
+      .connected {
+        background-color: var(--status-connected-color);
+        color: #111;
+      }
+      .disconnected {
+        background-color: var(--status-disconnected-color);
+        color: #fff;
+      }
+      .output {
+        background-color: #252525;
+        padding: 15px;
+        border-radius: 5px;
+        min-height: 400px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-family: "Courier New", Courier, monospace;
+        flex-grow: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Live Transcription & Translation</h1>
+    <div class="main-container">
+      <div class="panel">
+        <h2>Transcription (Chinese)</h2>
+        <div id="transcription-status" class="status-bar connecting">
+          Connecting...
+        </div>
+        <pre id="transcription-output" class="output"></pre>
+      </div>
+
+      <div class="panel">
+        <h2>Translation (English)</h2>
+        <div id="translation-status" class="status-bar connecting">
+          Connecting...
+        </div>
+        <pre id="translation-output" class="output"></pre>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        function connectWebSocket(config) {
+          let fullText = ""; // Holds the finalized text (sentences)
+          let lastPartial = ""; // Holds the currently updating sentence
+
+          const ws = new WebSocket(config.url);
+
+          ws.onopen = () => {
+            console.log(`Connection opened for: ${config.url}`);
+            config.statusEl.textContent = "Connected";
+            config.statusEl.className = "status-bar connected";
+          };
+
+          ws.onerror = (error) => {
+            console.error(`WebSocket Error for ${config.url}:`, error);
+          };
+
+          ws.onclose = () => {
+            console.log(`Connection closed for ${config.url}. Reconnecting...`);
+            config.statusEl.textContent = "Disconnected. Retrying...";
+            config.statusEl.className = "status-bar disconnected";
+            setTimeout(() => connectWebSocket(config), 5000);
+          };
+
+          ws.onmessage = (event) => {
+            if (
+              lastPartial.length > 0 &&
+              event.data.length < lastPartial.length
+            ) {
+              fullText += lastPartial + "\n";
+              lastPartial = event.data;
+            } else {
+              lastPartial = event.data;
+            }
+
+            config.outputEl.textContent = fullText + lastPartial;
+            config.outputEl.scrollTop = config.outputEl.scrollHeight;
+          };
+        }
+
+        connectWebSocket({
+          url: "ws://localhost:8000/ws/view_transcription",
+          statusEl: document.getElementById("transcription-status"),
+          outputEl: document.getElementById("transcription-output"),
+        });
+
+        connectWebSocket({
+          url: "ws://localhost:8000/ws/view_translation",
+          statusEl: document.getElementById("translation-status"),
+          outputEl: document.getElementById("translation-output"),
+        });
+      });
+    </script>
+  </body>
+</html>

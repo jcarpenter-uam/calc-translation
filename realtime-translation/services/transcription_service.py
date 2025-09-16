@@ -149,12 +149,10 @@ class TranscriptionService:
                 )
                 return
 
-            data = msg_json.get("data", {}).get("result", {}).get("ws", [])
-            result = "".join(w["w"] for i in data for w in i.get("cw", []))
-
-            if result:
+            data = msg_json.get("data", {})
+            if data:
                 asyncio.run_coroutine_threadsafe(
-                    self.on_message_callback(result), self.loop
+                    self.on_message_callback(data), self.loop
                 )
 
         except Exception as e:

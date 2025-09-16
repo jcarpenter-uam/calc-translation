@@ -53,7 +53,7 @@ async def receive_transcriptions(ws):
     print("--- Live Transcription Active (Press Ctrl+C to stop) 🎤 ---")
     try:
         async for message in ws:
-            print(message, end="", flush=True)
+            pass
     except websockets.exceptions.ConnectionClosed as e:
         print(f"\nConnection closed by server: {e.reason}")
 

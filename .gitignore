@@ -1,0 +1,10 @@
+# PYTHON
+__pycache__/
+venv/
+
+# NPM
+node_modules/
+logs/*
+
+# SECRETS
+.env

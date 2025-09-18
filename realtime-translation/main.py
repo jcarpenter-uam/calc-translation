@@ -8,9 +8,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from services.transcription_service import (
     STATUS_CONTINUE_FRAME,
     STATUS_FIRST_FRAME,
+    STATUS_LAST_FRAME,
     TranscriptionService,
 )
 from services.translation_service import QwenTranslationService
+from services.vad_service import VADService
 
 app = FastAPI(
     title="Real-Time Transcription and Translation API",
@@ -73,89 +75,74 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
     loop = asyncio.get_running_loop()
     translation_service = QwenTranslationService()
     transcription_buffer = ""
-    # This deque will now store and use the last 4 sentences as context.
     context_buffer = deque(maxlen=4)
+    transcription_sentence_id = 0
+    translation_sentence_id = 0
+    transcription_service = None
 
     async def handle_translation(
         sentence_to_translate: str, context_history: List[str]
     ):
-        """
-        A coroutine that streams translation, providing previous sentences as context.
-        """
+        nonlocal translation_sentence_id
+        translation_sentence_id += 1
+        current_translation_id = f"tr-{translation_sentence_id}"
+
         print(f"Context: {context_history} | Translating: '{sentence_to_translate}'")
         full_translation = ""
-        # Pass both the sentence and the context to the service
+
         async for translated_chunk in translation_service.translate_stream(
             text_to_translate=sentence_to_translate, context=context_history
         ):
-            await translation_manager.broadcast(translated_chunk)
             full_translation = translated_chunk
+            interim_message = {
+                "type": "interim",
+                "id": current_translation_id,
+                "data": full_translation,
+            }
+            await translation_manager.broadcast(json.dumps(interim_message))
 
-        await websocket.send_text(
-            json.dumps({"type": "full_translation", "data": full_translation})
-        )
+        final_message = {
+            "type": "final",
+            "id": current_translation_id,
+            "data": full_translation,
+        }
+        await translation_manager.broadcast(json.dumps(final_message))
         print(f"Translation complete: '{full_translation}'")
 
     async def on_transcription_message(data: dict):
-        """
-        Callback to process messages from iFlyTek. It now triggers translation
-        on commas (，) and periods (。) in addition to the end-of-speech flag.
-        """
-        nonlocal transcription_buffer
+        nonlocal transcription_buffer, transcription_sentence_id
         result_data = data.get("result", {})
-
+        is_new_utterance = not transcription_buffer and result_data.get("pgs") != "rpl"
+        if is_new_utterance:
+            transcription_sentence_id += 1
         current_text = "".join(
             cw.get("w", "") for w in result_data.get("ws", []) for cw in w.get("cw", [])
         )
-
         if result_data.get("pgs") == "rpl":
             full_sentence = transcription_buffer[: -len(current_text)] + current_text
         else:
             full_sentence = transcription_buffer + current_text
-
-        await transcription_manager.broadcast(full_sentence)
+        interim_message = {
+            "type": "interim",
+            "id": f"t-{transcription_sentence_id}",
+            "data": full_sentence,
+        }
+        await transcription_manager.broadcast(json.dumps(interim_message))
         transcription_buffer = full_sentence
-
-        delimiters = ["，", "。"]
-        sentence_to_process = ""
-
-        first_delimiter_pos = -1
-        for delim in delimiters:
-            pos = transcription_buffer.find(delim)
-            if pos != -1 and (first_delimiter_pos == -1 or pos < first_delimiter_pos):
-                first_delimiter_pos = pos
-
-        if first_delimiter_pos != -1:
-            sentence_to_process = transcription_buffer[: first_delimiter_pos + 1]
-            transcription_buffer = transcription_buffer[first_delimiter_pos + 1 :]
-
-            final_sentence = sentence_to_process.strip()
-            print(f"Delimiter-based sentence detected: '{final_sentence}'")
-            await websocket.send_text(
-                json.dumps({"type": "final_transcription", "data": final_sentence})
-            )
-            if final_sentence:
-                # Pass the current buffer as context BEFORE adding the new sentence
-                asyncio.create_task(
-                    handle_translation(final_sentence, list(context_buffer))
-                )
-                # Now, add the finalized sentence to the context window for the *next* translation
-                context_buffer.append(final_sentence)
-
         if result_data.get("ls"):
             final_chunk = transcription_buffer.strip()
             if final_chunk:
-                print(f"Final sentence detected (ls=True): '{final_chunk}'")
-                await websocket.send_text(
-                    json.dumps({"type": "final_transcription", "data": final_chunk})
-                )
-                # Pass the current buffer as context BEFORE adding the final chunk
+                print(f"VAD-based final sentence detected: '{final_chunk}'")
+                final_message = {
+                    "type": "final",
+                    "id": f"t-{transcription_sentence_id}",
+                    "data": final_chunk,
+                }
+                await transcription_manager.broadcast(json.dumps(final_message))
                 asyncio.create_task(
                     handle_translation(final_chunk, list(context_buffer))
                 )
-                # Now, add the final chunk to the context window for the *next* translation
                 context_buffer.append(final_chunk)
-
             transcription_buffer = ""
 
     async def on_service_error(error_message: str):
@@ -163,29 +150,41 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
         await websocket.close(code=1011, reason=f"Transcription Error: {error_message}")
 
     async def on_service_close():
-        print("Transcription service closed the connection.")
+        print("Transcription service connection closed as expected.")
 
-    transcription_service = TranscriptionService(
-        on_message_callback=on_transcription_message,
-        on_error_callback=on_service_error,
-        on_close_callback=on_service_close,
-        loop=loop,
-    )
+    # The ammount of time in seconds for a pause to be considered the end of a sentence
+    vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
 
     try:
-        transcription_service.connect()
-        status = STATUS_FIRST_FRAME
         while True:
             audio_chunk = await websocket.receive_bytes()
-            transcription_service.send_audio(audio_chunk, status)
-            if status == STATUS_FIRST_FRAME:
-                status = STATUS_CONTINUE_FRAME
+            for event, data in vad_service.process_audio(audio_chunk):
+                if event == "start":
+                    print("VAD: Speech started. Creating new transcription session.")
+                    transcription_buffer = ""
+                    transcription_service = TranscriptionService(
+                        on_message_callback=on_transcription_message,
+                        on_error_callback=on_service_error,
+                        on_close_callback=on_service_close,
+                        loop=loop,
+                    )
+                    transcription_service.connect()
+                    transcription_service.send_audio(data, STATUS_FIRST_FRAME)
+                elif event == "speech":
+                    if transcription_service:
+                        transcription_service.send_audio(data, STATUS_CONTINUE_FRAME)
+                elif event == "end":
+                    print("VAD: Speech ended. Closing transcription session.")
+                    if transcription_service:
+                        transcription_service.send_audio(b"", STATUS_LAST_FRAME)
+                        transcription_service = None
     except WebSocketDisconnect:
         print("Transcription client disconnected.")
     except Exception as e:
         print(f"An unexpected error occurred in transcribe endpoint: {e}")
     finally:
-        transcription_service.close()
+        if transcription_service:
+            transcription_service.close()
         print("Cleaned up transcription service.")
 
 

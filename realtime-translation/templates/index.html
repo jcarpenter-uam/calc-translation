@@ -269,12 +269,12 @@
         }
         connectWebSocket({
           name: "Transcription",
-          url: "ws://localhost:8000/ws/view_transcription",
+          url: "{{ transcription_url }}",
           indicatorEl: document.getElementById("transcription-indicator"),
         });
         connectWebSocket({
           name: "Translation",
-          url: "ws://localhost:8000/ws/view_translation",
+          url: "{{ translation_url }}",
           indicatorEl: document.getElementById("translation-indicator"),
         });
       });

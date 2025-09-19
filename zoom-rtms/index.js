@@ -1,7 +1,9 @@
+import "dotenv/config";
+
 import rtms from "@zoom/rtms";
 import { WebSocket } from "ws";
 
-const TRANSCRIPTION_SERVER_URL = "ws://localhost:8000/ws/transcribe";
+const TRANSCRIPTION_SERVER_URL = process.env.TRANSCRIPTION_SERVER_URL;
 const CHUNK_SIZE_BYTES = 1280;
 const SEND_INTERVAL_MS = 40;
 

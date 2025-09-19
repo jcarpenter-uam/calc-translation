@@ -1,0 +1,8 @@
+.env
+.env.example
+setup.md
+__pycache__/
+debug/
+venv/
+Dockerfile
+.dockerignore

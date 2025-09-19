@@ -1,0 +1,34 @@
+services:
+  zoom-rtms-client:
+    build: ./zoom-rtms
+    container_name: zoom-rtms-client
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
+      - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
+      - TRANSCRIPTION_SERVER_URL=${TRANSCRIPTION_SERVER_URL}
+    depends_on:
+      - realtime-translation
+    networks:
+      - zoom-translation
+
+  realtime-translation:
+    build: ./realtime-translation/
+    container_name: realtime-translation
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APPID=${APPID}
+      - APISECRET=${APISECRET}
+      - APIKEY=${APIKEY}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DEBUG_MODE=True
+    networks:
+      - zoom-translation
+
+networks:
+  zoom-translation:
+    driver: bridge

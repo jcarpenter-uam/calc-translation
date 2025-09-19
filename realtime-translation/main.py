@@ -1,6 +1,7 @@
 import asyncio
 import json
 from collections import deque
+from datetime import datetime, timezone
 from typing import List
 
 import uvicorn
@@ -105,6 +106,7 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
             "type": "final",
             "id": current_translation_id,
             "data": full_translation,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await translation_manager.broadcast(json.dumps(final_message))
         print(f"Translation complete: '{full_translation}'")
@@ -137,6 +139,7 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
                     "type": "final",
                     "id": f"t-{transcription_sentence_id}",
                     "data": final_chunk,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
                 await transcription_manager.broadcast(json.dumps(final_message))
                 asyncio.create_task(

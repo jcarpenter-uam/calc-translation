@@ -142,6 +142,20 @@
       .output span.finalized {
         opacity: 1;
       }
+      .output p {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      .output p strong {
+        margin-right: 5px;
+      }
+      .timestamp-display {
+        font-size: 0.75em;
+        color: var(--muted);
+        margin-left: 10px;
+        font-family: monospace;
+      }
       .spinner {
         display: inline-block;
         width: 8px;
@@ -222,6 +236,11 @@
               sentenceEl.appendChild(textNode);
 
               lineContainer.appendChild(sentenceEl);
+
+              const timestampNode = document.createElement("span");
+              timestampNode.className = "timestamp-display";
+              lineContainer.appendChild(timestampNode);
+
               config.outputEl.appendChild(lineContainer);
             } else {
               textNode = sentenceEl.lastChild;
@@ -234,6 +253,17 @@
               const spinner = sentenceEl.querySelector(".spinner");
               if (spinner) {
                 spinner.remove();
+              }
+
+              if (message.timestamp) {
+                const timestampNode = sentenceEl.nextElementSibling;
+                if (
+                  timestampNode &&
+                  timestampNode.className === "timestamp-display"
+                ) {
+                  const d = new Date(message.timestamp);
+                  timestampNode.textContent = `[${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}]`;
+                }
               }
             }
 

@@ -75,7 +75,7 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
     loop = asyncio.get_running_loop()
     translation_service = QwenTranslationService()
     transcription_buffer = ""
-    context_buffer = deque(maxlen=4)
+    context_buffer = deque(maxlen=2)
     transcription_sentence_id = 0
     translation_sentence_id = 0
     transcription_service = None

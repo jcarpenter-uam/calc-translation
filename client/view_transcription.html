@@ -6,42 +6,114 @@
     <title>Real-Time Viewer</title>
     <style>
       :root {
-        --bg-color: #1a1a1a;
-        --text-color: #e0e0e0;
-        --status-connected-color: #2ecc71;
-        --status-disconnected-color: #e74c3c;
-        --status-connecting-color: #f39c12;
-        --border-color: #444;
+        --bg: #ffffff;
+        --text: #111111;
+        --muted: #666666;
+        --border: #e5e5e5;
+        --chip-bg: rgba(0, 0, 0, 0.04);
+        --chip-text: #000000;
+        --spinner-border: #8d8d8d5c;
+        --spinner-top: #b0b0b0;
+        --silence-bg: #f3f3f3;
+        --loading-bg: rgba(255, 77, 77, 0.06);
+        --button-bg: #ffffff;
+        --button-border: #e9e9e9;
+        --wave-stroke: #000000;
+        --label-dia-text: #868686;
+        --label-trans-text: #111111;
       }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0b0b0b;
+          --text: #e6e6e6;
+          --muted: #9aa0a6;
+          --border: #333333;
+          --chip-bg: rgba(255, 255, 255, 0.08);
+          --chip-text: #e6e6e6;
+          --spinner-border: #555555;
+          --spinner-top: #dddddd;
+          --silence-bg: #1a1a1a;
+          --loading-bg: rgba(255, 77, 77, 0.12);
+          --button-bg: #111111;
+          --button-border: #333333;
+          --wave-stroke: #e6e6e6;
+          --label-dia-text: #b3b3b3;
+          --label-trans-text: #ffffff;
+        }
+      }
+
+      :root[data-theme="dark"] {
+        --bg: #0b0b0b;
+        --text: #e6e6e6;
+        --muted: #9aa0a6;
+        --border: #333333;
+        --chip-bg: rgba(255, 255, 255, 0.08);
+        --chip-text: #e6e6e6;
+        --spinner-border: #555555;
+        --spinner-top: #dddddd;
+        --silence-bg: #1a1a1a;
+        --loading-bg: rgba(255, 77, 77, 0.12);
+        --button-bg: #111111;
+        --button-border: #333333;
+        --wave-stroke: #e6e6e6;
+        --label-dia-text: #b3b3b3;
+        --label-trans-text: #ffffff;
+      }
+
+      :root[data-theme="light"] {
+        --bg: #ffffff;
+        --text: #111111;
+        --muted: #666666;
+        --border: #e5e5e5;
+        --chip-bg: rgba(0, 0, 0, 0.04);
+        --chip-text: #000000;
+        --spinner-border: #8d8d8d5c;
+        --spinner-top: #b0b0b0;
+        --silence-bg: #f3f3f3;
+        --loading-bg: rgba(255, 77, 77, 0.06);
+        --button-bg: #ffffff;
+        --button-border: #e9e9e9;
+        --wave-stroke: #000000;
+        --label-dia-text: #868686;
+        --label-trans-text: #111111;
+      }
+
       body {
-        background-color: var(--bg-color);
-        color: var(--text-color);
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        font-family:
+          ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+          "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
         margin: 0;
-        padding: 20px;
-        font-size: 16px;
-        line-height: 1.6;
-      }
-      h1 {
         text-align: center;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 15px;
-        margin-top: 0;
-      }
-      .main-container {
-        max-width: 1800px;
-        margin: 0 auto;
-        display: flex;
-        gap: 20px;
-      }
-      .panel {
-        flex: 1;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 20px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        background-color: var(--bg);
+        color: var(--text);
+        height: 100vh;
         display: flex;
         flex-direction: column;
+      }
+      .header-container {
+        position: sticky;
+        top: 0;
+        background-color: var(--bg);
+        z-index: 100;
+        padding: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+      .transcript-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      .transcript-container::-webkit-scrollbar {
+        display: none;
+      }
+      #linesTranscript {
+        margin: 0 auto;
+        max-width: 700px;
+        text-align: left;
+        font-size: 16px;
       }
       .status-bar {
         padding: 10px;
@@ -52,26 +124,16 @@
         transition: background-color 0.3s ease;
       }
       .connecting {
-        background-color: var(--status-connecting-color);
+        background-color: #f39c12;
         color: #111;
       }
       .connected {
-        background-color: var(--status-connected-color);
+        background-color: #2ecc71;
         color: #111;
       }
       .disconnected {
-        background-color: var(--status-disconnected-color);
+        background-color: #e74c3c;
         color: #fff;
-      }
-      .output {
-        background-color: #252525;
-        padding: 15px;
-        border-radius: 5px;
-        min-height: 400px;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        font-family: "Courier New", Courier, monospace;
-        flex-grow: 1;
       }
       .output span {
         transition: opacity 0.3s ease-in-out;
@@ -80,26 +142,37 @@
       .output span.finalized {
         opacity: 1;
       }
+      .spinner {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border: 2px solid var(--spinner-border);
+        border-top: 2px solid var(--spinner-top);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        vertical-align: middle;
+        margin-bottom: 2px;
+        margin-right: 5px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
     </style>
   </head>
   <body>
-    <h1>Live Transcription & Translation</h1>
-    <div class="main-container">
-      <div class="panel">
-        <h2>Transcription (Chinese)</h2>
-        <div id="transcription-status" class="status-bar connecting">
-          Connecting...
-        </div>
-        <pre id="transcription-output" class="output"></pre>
+    <div class="header-container">
+      <h1>Live Transcription & Translation</h1>
+      <div id="transcription-status" class="status-bar connecting">
+        Connecting to Transcription...
       </div>
-
-      <div class="panel">
-        <h2>Translation (English)</h2>
-        <div id="translation-status" class="status-bar connecting">
-          Connecting...
-        </div>
-        <pre id="translation-output" class="output"></pre>
+      <div id="translation-status" class="status-bar connecting">
+        Connecting to Translation...
       </div>
+    </div>
+    <div class="transcript-container">
+      <div id="linesTranscript" class="output"></div>
     </div>
 
     <script>
@@ -109,7 +182,7 @@
 
           ws.onopen = () => {
             console.log(`Connection opened for: ${config.url}`);
-            config.statusEl.textContent = "Connected";
+            config.statusEl.textContent = `Connected to ${config.name}`;
             config.statusEl.className = "status-bar connected";
           };
 
@@ -119,7 +192,7 @@
 
           ws.onclose = () => {
             console.log(`Connection closed for ${config.url}. Reconnecting...`);
-            config.statusEl.textContent = "Disconnected. Retrying...";
+            config.statusEl.textContent = `Disconnected from ${config.name}. Retrying...`;
             config.statusEl.className = "status-bar disconnected";
             setTimeout(() => connectWebSocket(config), 5000);
           };
@@ -129,34 +202,58 @@
             if (!message.id) return;
 
             let sentenceEl = document.getElementById(message.id);
+            let textNode;
 
             if (!sentenceEl) {
               sentenceEl = document.createElement("span");
               sentenceEl.id = message.id;
-              config.outputEl.appendChild(sentenceEl);
-              config.outputEl.appendChild(document.createTextNode(" "));
+
+              const lineContainer = document.createElement("p");
+
+              const label = document.createElement("strong");
+              label.textContent = `${config.name}: `;
+              lineContainer.appendChild(label);
+
+              const spinner = document.createElement("span");
+              spinner.className = "spinner";
+              sentenceEl.appendChild(spinner);
+
+              textNode = document.createElement("span");
+              sentenceEl.appendChild(textNode);
+
+              lineContainer.appendChild(sentenceEl);
+              config.outputEl.appendChild(lineContainer);
+            } else {
+              textNode = sentenceEl.lastChild;
             }
 
-            sentenceEl.textContent = message.data;
+            textNode.textContent = message.data;
 
             if (message.type === "final") {
               sentenceEl.classList.add("finalized");
+              const spinner = sentenceEl.querySelector(".spinner");
+              if (spinner) {
+                spinner.remove();
+              }
             }
 
-            config.outputEl.scrollTop = config.outputEl.scrollHeight;
+            config.outputEl.parentElement.scrollTop =
+              config.outputEl.parentElement.scrollHeight;
           };
         }
 
         connectWebSocket({
+          name: "Transcription",
           url: "ws://localhost:8000/ws/view_transcription",
           statusEl: document.getElementById("transcription-status"),
-          outputEl: document.getElementById("transcription-output"),
+          outputEl: document.getElementById("linesTranscript"),
         });
 
         connectWebSocket({
+          name: "Translation",
           url: "ws://localhost:8000/ws/view_translation",
           statusEl: document.getElementById("translation-status"),
-          outputEl: document.getElementById("translation-output"),
+          outputEl: document.getElementById("linesTranscript"),
         });
       });
     </script>

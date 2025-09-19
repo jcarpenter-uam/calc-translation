@@ -22,21 +22,15 @@ class QwenTranslationService:
             raise ValueError("The 'DASHSCOPE_API_KEY' environment variable is not set.")
 
     async def translate_stream(
-        self, text_to_translate: str, context: List[str]
+        self, text_to_translate: str
     ) -> AsyncGenerator[str, None]:
         """
-        Translates a block of text using the Qwen model and streams the results,
-        leveraging previous sentences for context.
+        Translates a block of text using the Qwen model and streams the results.
         """
         user_prompt = (
             "You are a Chinese-to-English translator. Your task is to translate the text in the [TEXT TO TRANSLATE] section. "
-            "Use the text in the [CONTEXT] section to maintain consistency. "
-            "Your response must contain ONLY the English translation of the [TEXT TO TRANSLATE] and nothing else. Do not include the context or any other text in your response."
+            "Your response must contain ONLY the English translation of the [TEXT TO TRANSLATE] and nothing else. Do not include any other text in your response."
         )
-
-        if context:
-            context_str = " ".join(context)
-            user_prompt += f"\n\n---\n[CONTEXT]\n{context_str}\n---"
 
         user_prompt += f"\n\n[TEXT TO TRANSLATE]\n{text_to_translate}"
 

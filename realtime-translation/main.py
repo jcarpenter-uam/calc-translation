@@ -76,23 +76,20 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
     loop = asyncio.get_running_loop()
     translation_service = QwenTranslationService()
     transcription_buffer = ""
-    context_buffer = deque(maxlen=2)
     transcription_sentence_id = 0
     translation_sentence_id = 0
     transcription_service = None
 
-    async def handle_translation(
-        sentence_to_translate: str, context_history: List[str]
-    ):
+    async def handle_translation(sentence_to_translate: str):
         nonlocal translation_sentence_id
         translation_sentence_id += 1
         current_translation_id = f"tr-{translation_sentence_id}"
 
-        print(f"Context: {context_history} | Translating: '{sentence_to_translate}'")
+        print(f"Translating: '{sentence_to_translate}'")
         full_translation = ""
 
         async for translated_chunk in translation_service.translate_stream(
-            text_to_translate=sentence_to_translate, context=context_history
+            text_to_translate=sentence_to_translate
         ):
             full_translation = translated_chunk
             interim_message = {
@@ -142,10 +139,7 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
                 await transcription_manager.broadcast(json.dumps(final_message))
-                asyncio.create_task(
-                    handle_translation(final_chunk, list(context_buffer))
-                )
-                context_buffer.append(final_chunk)
+                asyncio.create_task(handle_translation(final_chunk))
             transcription_buffer = ""
 
     async def on_service_error(error_message: str):

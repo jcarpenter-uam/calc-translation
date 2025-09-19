@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 import sys
 
 import numpy as np
@@ -8,6 +10,7 @@ import websockets
 
 # --- Configuration ---
 WEBSOCKET_URL = "ws://localhost:8000/ws/transcribe"
+SPEAKER_NAME = "Jonah"
 TARGET_SAMPLE_RATE = 16000
 CHUNK_BYTES = 1280
 SEND_INTERVAL_S = 0.04
@@ -60,8 +63,8 @@ async def receive_transcriptions(ws):
 
 async def send_audio(ws, stop_event: asyncio.Event):
     """
-    Pulls audio from the shared buffer in fixed-size chunks and sends it
-    at the required 40ms interval.
+    Pulls audio from the shared buffer, formats it as JSON,
+    and sends it at the required interval.
     """
     try:
         while not stop_event.is_set():
@@ -73,7 +76,11 @@ async def send_audio(ws, stop_event: asyncio.Event):
                     data_chunk = None
 
             if data_chunk:
-                await ws.send(data_chunk)
+                encoded_audio = base64.b64encode(data_chunk).decode("utf-8")
+
+                payload = {"userName": SPEAKER_NAME, "audio": encoded_audio}
+
+                await ws.send(json.dumps(payload))
 
             await asyncio.sleep(SEND_INTERVAL_S)
 

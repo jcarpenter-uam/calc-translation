@@ -1,6 +1,7 @@
 # PYTHON
 __pycache__/
 venv/
+debug/
 
 # NPM
 node_modules/

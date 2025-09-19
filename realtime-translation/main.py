@@ -1,12 +1,15 @@
 import asyncio
 import base64
 import json
+import os
 from collections import deque
 from datetime import datetime, timezone
 from typing import List
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from services.debug_service import save_audio_to_wav
 from services.transcription_service import (
     STATUS_CONTINUE_FRAME,
     STATUS_FIRST_FRAME,
@@ -16,10 +19,16 @@ from services.transcription_service import (
 from services.translation_service import QwenTranslationService
 from services.vad_service import VADService
 
+load_dotenv()
+
 app = FastAPI(
     title="Real-Time Transcription and Translation API",
     description="A WebSocket API to stream audio for real-time transcription (iFlyTek) and translation (Alibaba Qwen).",
 )
+
+# It defaults to "False" if the variable is not set.
+DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() == "true"
+print(f"  - Debug mode is: {'ON' if DEBUG_MODE else 'OFF'}")
 
 
 class ConnectionManager:
@@ -44,7 +53,6 @@ class ConnectionManager:
             await asyncio.gather(*tasks)
 
 
-# Managers for transcription and translation viewer endpoints
 transcription_manager = ConnectionManager()
 translation_manager = ConnectionManager()
 
@@ -82,14 +90,14 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
     transcription_service = None
     current_speaker = "Unknown"
 
+    audio_frames = [] if DEBUG_MODE else None
+
     async def handle_translation(sentence_to_translate: str, speaker_name: str):
         nonlocal translation_sentence_id
         translation_sentence_id += 1
         current_translation_id = f"tr-{translation_sentence_id}"
-
         print(f"Translating for {speaker_name}: '{sentence_to_translate}'")
         full_translation = ""
-
         async for translated_chunk in translation_service.translate_stream(
             text_to_translate=sentence_to_translate
         ):
@@ -101,7 +109,6 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
                 "userName": speaker_name,
             }
             await translation_manager.broadcast(json.dumps(interim_message))
-
         final_message = {
             "type": "final",
             "id": current_translation_id,
@@ -167,6 +174,9 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
             current_speaker = message.get("userName", "Unknown")
             audio_chunk = base64.b64decode(message.get("audio"))
 
+            if DEBUG_MODE:
+                audio_frames.append(audio_chunk)
+
             for event, data in vad_service.process_audio(audio_chunk):
                 if event == "start":
                     print(
@@ -194,6 +204,9 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"An unexpected error occurred in transcribe endpoint: {e}")
     finally:
+        if DEBUG_MODE:
+            save_audio_to_wav(audio_frames)
+
         if transcription_service:
             transcription_service.close()
         print("Cleaned up transcription service.")

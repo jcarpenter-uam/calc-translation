@@ -61,7 +61,11 @@ rtms.onWebhookEvent(({ event, payload }) => {
 
   zoomClient.onAudioData((data, size, timestamp, metadata) => {
     if (wsClient && wsClient.readyState === WebSocket.OPEN) {
-      wsClient.send(data);
+      const payload = {
+        userName: metadata.userName,
+        audio: data.toString("base64"),
+      };
+      wsClient.send(JSON.stringify(payload));
     }
   });
 

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 from collections import deque
 from datetime import datetime, timezone
@@ -79,13 +80,14 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
     transcription_sentence_id = 0
     translation_sentence_id = 0
     transcription_service = None
+    current_speaker = "Unknown"
 
-    async def handle_translation(sentence_to_translate: str):
+    async def handle_translation(sentence_to_translate: str, speaker_name: str):
         nonlocal translation_sentence_id
         translation_sentence_id += 1
         current_translation_id = f"tr-{translation_sentence_id}"
 
-        print(f"Translating: '{sentence_to_translate}'")
+        print(f"Translating for {speaker_name}: '{sentence_to_translate}'")
         full_translation = ""
 
         async for translated_chunk in translation_service.translate_stream(
@@ -96,6 +98,7 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
                 "type": "interim",
                 "id": current_translation_id,
                 "data": full_translation,
+                "userName": speaker_name,
             }
             await translation_manager.broadcast(json.dumps(interim_message))
 
@@ -104,6 +107,7 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
             "id": current_translation_id,
             "data": full_translation,
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "userName": speaker_name,
         }
         await translation_manager.broadcast(json.dumps(final_message))
         print(f"Translation complete: '{full_translation}'")
@@ -125,21 +129,25 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
             "type": "interim",
             "id": f"t-{transcription_sentence_id}",
             "data": full_sentence,
+            "userName": current_speaker,
         }
         await transcription_manager.broadcast(json.dumps(interim_message))
         transcription_buffer = full_sentence
         if result_data.get("ls"):
             final_chunk = transcription_buffer.strip()
             if final_chunk:
-                print(f"VAD-based final sentence detected: '{final_chunk}'")
+                print(
+                    f"VAD-based final sentence detected for {current_speaker}: '{final_chunk}'"
+                )
                 final_message = {
                     "type": "final",
                     "id": f"t-{transcription_sentence_id}",
                     "data": final_chunk,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "userName": current_speaker,
                 }
                 await transcription_manager.broadcast(json.dumps(final_message))
-                asyncio.create_task(handle_translation(final_chunk))
+                asyncio.create_task(handle_translation(final_chunk, current_speaker))
             transcription_buffer = ""
 
     async def on_service_error(error_message: str):
@@ -149,15 +157,21 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
     async def on_service_close():
         print("Transcription service connection closed as expected.")
 
-    # The ammount of time in seconds for a pause to be considered the end of a sentence
     vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
 
     try:
         while True:
-            audio_chunk = await websocket.receive_bytes()
+            raw_message = await websocket.receive_text()
+            message = json.loads(raw_message)
+
+            current_speaker = message.get("userName", "Unknown")
+            audio_chunk = base64.b64decode(message.get("audio"))
+
             for event, data in vad_service.process_audio(audio_chunk):
                 if event == "start":
-                    print("VAD: Speech started. Creating new transcription session.")
+                    print(
+                        f"VAD: Speech started for {current_speaker}. Creating new transcription session."
+                    )
                     transcription_buffer = ""
                     transcription_service = TranscriptionService(
                         on_message_callback=on_transcription_message,

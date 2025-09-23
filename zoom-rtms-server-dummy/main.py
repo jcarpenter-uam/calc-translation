@@ -12,8 +12,6 @@ import websockets
 WEBSOCKET_URL = "ws://localhost:8000/ws/transcribe"
 SPEAKER_NAME = "Jonah"
 TARGET_SAMPLE_RATE = 16000
-CHUNK_BYTES = 1280
-SEND_INTERVAL_S = 0.04
 
 # A shared buffer to hold resampled audio data
 audio_buffer = bytearray()
@@ -63,26 +61,27 @@ async def receive_transcriptions(ws):
 
 async def send_audio(ws, stop_event: asyncio.Event):
     """
-    Pulls audio from the shared buffer, formats it as JSON,
-    and sends it at the required interval.
+    Continuously sends raw audio data from the buffer as soon as it's available.
     """
     try:
         while not stop_event.is_set():
+            data_chunk = None
             async with buffer_lock:
-                if len(audio_buffer) >= CHUNK_BYTES:
-                    data_chunk = audio_buffer[:CHUNK_BYTES]
-                    del audio_buffer[:CHUNK_BYTES]
-                else:
-                    data_chunk = None
+                if audio_buffer:
+                    # Take all data currently in the buffer
+                    data_chunk = bytes(audio_buffer)
+                    audio_buffer.clear()
 
             if data_chunk:
+                # Log the size of the chunk being sent
+                print(f"Sending audio chunk of size: {len(data_chunk)} bytes")
+
                 encoded_audio = base64.b64encode(data_chunk).decode("utf-8")
-
                 payload = {"userName": SPEAKER_NAME, "audio": encoded_audio}
-
                 await ws.send(json.dumps(payload))
 
-            await asyncio.sleep(SEND_INTERVAL_S)
+            # A small sleep to prevent a tight loop when there's no audio
+            await asyncio.sleep(0.01)
 
     except websockets.exceptions.ConnectionClosed:
         print("\nSender task is stopping because connection closed.")
@@ -93,7 +92,6 @@ async def send_audio(ws, stop_event: asyncio.Event):
 async def main(device_name: str, native_rate: int):
     """Main function to set up audio capture and WebSocket communication."""
     stop_event = asyncio.Event()
-
     loop = asyncio.get_running_loop()
 
     def audio_callback(indata: np.ndarray, frames: int, time, status: sd.CallbackFlags):
@@ -101,12 +99,13 @@ async def main(device_name: str, native_rate: int):
         if status:
             print(status, file=sys.stderr)
 
-        mono_data = indata.flatten()
+        # Resample to the target rate and convert to 16-bit PCM bytes
         resampled_data = resampy.resample(
-            mono_data, sr_orig=native_rate, sr_new=TARGET_SAMPLE_RATE
+            indata.flatten(), sr_orig=native_rate, sr_new=TARGET_SAMPLE_RATE
         )
         audio_bytes = (resampled_data * 32767).astype(np.int16).tobytes()
 
+        # Add the captured audio to the buffer in a thread-safe manner
         asyncio.run_coroutine_threadsafe(add_to_buffer(audio_bytes), loop)
 
     async def add_to_buffer(data):
@@ -129,8 +128,10 @@ async def main(device_name: str, native_rate: int):
                 dtype="float32",
                 callback=audio_callback,
             ):
+                # Wait for the receiver to finish (e.g., connection closes)
                 await receiver_task
 
+            # Cleanly stop the sender task
             stop_event.set()
             await sender_task
 

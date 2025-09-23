@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from .buffer_service import AudioBufferService
 from .debug_service import save_audio_to_wav
 from .transcription_service import (
     STATUS_CONTINUE_FRAME,
@@ -34,6 +35,10 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
         current_speaker = "Unknown"
 
         audio_frames = [] if DEBUG_MODE else None
+
+        vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
+        # Match buffer settings to the VAD's required frame size (30ms)
+        buffer_service = AudioBufferService(frame_duration_ms=30)
 
         async def handle_translation(sentence_to_translate: str, speaker_name: str):
             nonlocal translation_sentence_id
@@ -117,8 +122,6 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
         async def on_service_close():
             print("Transcription service connection closed as expected.")
 
-        vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
-
         try:
             while True:
                 raw_message = await websocket.receive_text()
@@ -130,30 +133,33 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
                 if DEBUG_MODE:
                     audio_frames.append(audio_chunk)
 
-                for event, data in vad_service.process_audio(audio_chunk):
-                    if event == "start":
-                        print(
-                            f"VAD: Speech started for {current_speaker}. Creating new transcription session."
-                        )
-                        transcription_buffer = ""
-                        transcription_service = TranscriptionService(
-                            on_message_callback=on_transcription_message,
-                            on_error_callback=on_service_error,
-                            on_close_callback=on_service_close,
-                            loop=loop,
-                        )
-                        transcription_service.connect()
-                        transcription_service.send_audio(data, STATUS_FIRST_FRAME)
-                    elif event == "speech":
-                        if transcription_service:
-                            transcription_service.send_audio(
-                                data, STATUS_CONTINUE_FRAME
+                # Pass incoming audio to the buffer service
+                for frame in buffer_service.process_audio(audio_chunk):
+                    # Process each VAD-compatible frame
+                    for event, data in vad_service.process_audio(frame):
+                        if event == "start":
+                            print(
+                                f"VAD: Speech started for {current_speaker}. Creating new transcription session."
                             )
-                    elif event == "end":
-                        print("VAD: Speech ended. Closing transcription session.")
-                        if transcription_service:
-                            transcription_service.send_audio(b"", STATUS_LAST_FRAME)
-                            transcription_service = None
+                            transcription_buffer = ""
+                            transcription_service = TranscriptionService(
+                                on_message_callback=on_transcription_message,
+                                on_error_callback=on_service_error,
+                                on_close_callback=on_service_close,
+                                loop=loop,
+                            )
+                            transcription_service.connect()
+                            transcription_service.send_audio(data, STATUS_FIRST_FRAME)
+                        elif event == "speech":
+                            if transcription_service:
+                                transcription_service.send_audio(
+                                    data, STATUS_CONTINUE_FRAME
+                                )
+                        elif event == "end":
+                            print("VAD: Speech ended. Closing transcription session.")
+                            if transcription_service:
+                                transcription_service.send_audio(b"", STATUS_LAST_FRAME)
+                                transcription_service = None
         except WebSocketDisconnect:
             print("Transcription client disconnected.")
         except Exception as e:

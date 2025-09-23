@@ -1,10 +1,12 @@
 import asyncio
 import base64
 import json
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from .audio_processing_service import AudioProcessingService
 from .buffer_service import AudioBufferService
 from .debug_service import save_audio_to_wav
 from .transcription_service import (
@@ -18,7 +20,6 @@ from .vad_service import VADService
 
 
 def create_transcribe_router(transcription_manager, translation_manager, DEBUG_MODE):
-    """Creates and returns the WebSocket router, injecting dependencies."""
     router = APIRouter()
 
     @router.websocket("/ws/transcribe")
@@ -27,18 +28,56 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
         print("Transcription client connected.")
 
         loop = asyncio.get_running_loop()
+
+        # Instantiate services
+        audio_processor = AudioProcessingService()
+        vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
+        buffer_service = AudioBufferService(frame_duration_ms=30)
         translation_service = QwenTranslationService()
+
+        # State variables
         transcription_buffer = ""
         transcription_sentence_id = 0
         translation_sentence_id = 0
-        transcription_service = None
         current_speaker = "Unknown"
 
-        audio_frames = [] if DEBUG_MODE else None
+        # --- Session-based Debugging ---
+        session_debug_dir = None
+        # This list captures ALL incoming audio for the session
+        session_raw_audio_chunks = [] if DEBUG_MODE else None
+        # These lists capture only the detected utterances
+        session_before_utterances = [] if DEBUG_MODE else None
+        session_after_utterances = [] if DEBUG_MODE else None
 
-        vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
-        # Match buffer settings to the VAD's required frame size (30ms)
-        buffer_service = AudioBufferService(frame_duration_ms=30)
+        if DEBUG_MODE:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            session_debug_dir = os.path.join("debug", timestamp)
+
+        async def stream_processed_audio(audio_data: bytes, user_name: str):
+            """Chunks and streams the processed audio to the transcription service."""
+            nonlocal transcription_buffer
+
+            transcription_service = TranscriptionService(
+                on_message_callback=on_transcription_message,
+                on_error_callback=on_service_error,
+                on_close_callback=on_service_close,
+                loop=loop,
+            )
+            transcription_service.connect()
+            print(
+                f"Streaming {len(audio_data)} bytes of processed audio for transcription."
+            )
+
+            chunk_size = 1280
+            first_chunk = audio_data[:chunk_size]
+            transcription_service.send_audio(first_chunk, STATUS_FIRST_FRAME)
+
+            for i in range(chunk_size, len(audio_data), chunk_size):
+                chunk = audio_data[i : i + chunk_size]
+                transcription_service.send_audio(chunk, STATUS_CONTINUE_FRAME)
+                await asyncio.sleep(0.04)
+
+            transcription_service.send_audio(b"", STATUS_LAST_FRAME)
 
         async def handle_translation(sentence_to_translate: str, speaker_name: str):
             nonlocal translation_sentence_id
@@ -123,6 +162,7 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
             print("Transcription service connection closed as expected.")
 
         try:
+            is_first_chunk = True
             while True:
                 raw_message = await websocket.receive_text()
                 message = json.loads(raw_message)
@@ -131,45 +171,47 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
                 audio_chunk = base64.b64decode(message.get("audio"))
 
                 if DEBUG_MODE:
-                    audio_frames.append(audio_chunk)
+                    session_raw_audio_chunks.append(audio_chunk)
 
-                # Pass incoming audio to the buffer service
+                    if is_first_chunk and session_debug_dir:
+                        session_debug_dir = f"{session_debug_dir}"
+                        is_first_chunk = False
+
                 for frame in buffer_service.process_audio(audio_chunk):
-                    # Process each VAD-compatible frame
                     for event, data in vad_service.process_audio(frame):
-                        if event == "start":
-                            print(
-                                f"VAD: Speech started for {current_speaker}. Creating new transcription session."
-                            )
+                        if event == "end":
+                            print("VAD: Speech ended. Post-processing...")
+
+                            processed_audio = audio_processor.process(data)
+
+                            if DEBUG_MODE:
+                                session_before_utterances.append(data)
+                                session_after_utterances.append(processed_audio)
+
                             transcription_buffer = ""
-                            transcription_service = TranscriptionService(
-                                on_message_callback=on_transcription_message,
-                                on_error_callback=on_service_error,
-                                on_close_callback=on_service_close,
-                                loop=loop,
+                            asyncio.create_task(
+                                stream_processed_audio(processed_audio, current_speaker)
                             )
-                            transcription_service.connect()
-                            transcription_service.send_audio(data, STATUS_FIRST_FRAME)
-                        elif event == "speech":
-                            if transcription_service:
-                                transcription_service.send_audio(
-                                    data, STATUS_CONTINUE_FRAME
-                                )
-                        elif event == "end":
-                            print("VAD: Speech ended. Closing transcription session.")
-                            if transcription_service:
-                                transcription_service.send_audio(b"", STATUS_LAST_FRAME)
-                                transcription_service = None
+
         except WebSocketDisconnect:
             print("Transcription client disconnected.")
         except Exception as e:
             print(f"An unexpected error occurred in transcribe endpoint: {e}")
         finally:
-            if DEBUG_MODE:
-                save_audio_to_wav(audio_frames)
-
-            if transcription_service:
-                transcription_service.close()
-            print("Cleaned up transcription service.")
+            if DEBUG_MODE and session_debug_dir:
+                print("Session ended. Saving full audio files...")
+                save_audio_to_wav(
+                    session_raw_audio_chunks, session_debug_dir, "raw_session_audio.wav"
+                )
+                save_audio_to_wav(
+                    session_before_utterances,
+                    session_debug_dir,
+                    "before_processing_utterances.wav",
+                )
+                save_audio_to_wav(
+                    session_after_utterances,
+                    session_debug_dir,
+                    "after_processing_utterances.wav",
+                )
 
     return router

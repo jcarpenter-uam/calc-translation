@@ -138,10 +138,13 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
                                 asyncio.create_task(
                                     handle_translation(final_chunk, speaker_name)
                                 )
+
+                            if not transcription_done.is_set():
+                                transcription_done.set()
+
                             local_transcription_buffer = ""
 
                     async def on_service_close_local():
-                        print("iFlyTek connection closed for the utterance.")
                         if not transcription_done.is_set():
                             transcription_done.set()
 

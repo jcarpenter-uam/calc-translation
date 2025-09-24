@@ -75,7 +75,6 @@ class AudioProcessingService:
         if not audio_bytes:
             return b""
 
-        print("Audio Processor: Starting post-processing...")
         # Convert bytes to a numerical format
         audio_data = self._bytes_to_audio(audio_bytes)
 

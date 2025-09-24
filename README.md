@@ -1,1 +1,21 @@
 # Zoom RTMS realtime translation pipeline
+```mermaid
+graph TD
+    A["Zoom RTMS WebSocket<br>(raw 16-bit PCM chunks)"] --> B["RTMS Receiver (WS server)<br>- accept websocket frames<br>- speaker-id"];
+    B --> C["Buffer<br>- normalize chunk sizes<br>- output fixed 20-30ms frames"];
+    C --> D["VAD (voice activity detect)<br>- drop non-speech frames"];
+    D --> F["Encoder (optional)<br>- Opus / low-bitrate stream"];
+    F --> G["STT Router<br>- abstraction layer for easy changing of models"];
+    G --> H["STT Output"];
+    
+    H --> I["Immediate (low-lat) pipeline<br>- short-context (~0)<br>- Produce initial translation"];
+    H --> J["Correction pipeline (LLM)<br>- rolling context window<br>- disambiguate tone-based confusions<br>- output: corrected translation"];
+    
+    I --> K["Publish (low-latency)"];
+    J --> L["Re-translate corrected text<br>- Seperate Local Model"];
+    L --> M["Publish correction event to frontend<br>(edit/update message)"];
+    
+    K --> N["Frontend (Zoom embed / url)<br>- display live transcription/translation<br>- apply inline replacements"];
+    M -- "WebSocket updates" --> N;
+    
+    N --> O["( User sees immediate translation → then corrected revision )"];

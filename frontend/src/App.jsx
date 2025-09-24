@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import ThemeToggle from "./components/theme-toggle.jsx";
 import ConnectionIndicator from "./components/connection-indicator.jsx";
+import Transcript from "./components/transcript.jsx";
 
 export default function App() {
   const [transcriptionStatus, setTranscriptionStatus] = useState("connecting");
   const [translationStatus, setTranslationStatus] = useState("connecting");
 
-  //TODO: Implement real conn-status checks
+  // TODO: Implement real logic
   // Effect to cycle through statuses for demonstration purposes
   useEffect(() => {
     const statuses = ["connected", "disconnected", "connecting"];
@@ -44,7 +45,7 @@ export default function App() {
             {/* Title */}
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <h1 className="text-lg font-bold sm:text-xl whitespace-nowrap">
-                Live Zoom Translation
+                Live Transcription
               </h1>
             </div>
 
@@ -57,7 +58,26 @@ export default function App() {
       </header>
 
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-        {/* The rest of the page content will go here. */}
+        <div className="max-w-3xl mx-auto">
+          <Transcript
+            speaker="Jane Doe"
+            translation="Hola, ¿cómo estás hoy?"
+            transcription="Hello, how are you today?"
+            isFinalized={true}
+          />
+          <Transcript
+            speaker="John Smith"
+            translation="Estoy bien, gracias. ¿Y tú?"
+            transcription="I'm doing well, thanks. And you?"
+            isFinalized={true}
+          />
+          <Transcript
+            speaker="Jane Doe"
+            translation="Estoy un poco cansada, pero bien."
+            transcription="I'm a little tired, but I'm good."
+            isFinalized={false}
+          />
+        </div>
       </main>
     </div>
   );

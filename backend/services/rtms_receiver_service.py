@@ -10,7 +10,7 @@ from .audio_processing_service import AudioProcessingService
 from .buffer_service import AudioBufferService
 from .debug_service import save_audio_to_wav
 from .transcription_service import TranscriptionResult, TranscriptionService
-from .translation_service import QwenTranslationService
+from .translation_service import TranslationService
 from .vad_service import VADService
 
 
@@ -28,7 +28,7 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
         audio_processor = AudioProcessingService()
         vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
         buffer_service = AudioBufferService(frame_duration_ms=30)
-        translation_service = QwenTranslationService()
+        translation_service = TranslationService()
 
         # Global state variables
         global_sentence_id_counter = 0

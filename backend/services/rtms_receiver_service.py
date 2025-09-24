@@ -13,6 +13,7 @@ from .transcription_service import (
     STATUS_CONTINUE_FRAME,
     STATUS_FIRST_FRAME,
     STATUS_LAST_FRAME,
+    TranscriptionResult,
     TranscriptionService,
 )
 from .translation_service import QwenTranslationService
@@ -35,17 +36,14 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
         buffer_service = AudioBufferService(frame_duration_ms=30)
         translation_service = QwenTranslationService()
 
-        # State variables
-        transcription_buffer = ""
-        transcription_sentence_id = 0
+        # Global state variables
+        global_sentence_id_counter = 0
         translation_sentence_id = 0
-        current_speaker = "Unknown"
+        utterance_queue = asyncio.Queue()
 
-        # --- Session-based Debugging ---
+        # Session-based Debugging
         session_debug_dir = None
-        # This list captures ALL incoming audio for the session
         session_raw_audio_chunks = [] if DEBUG_MODE else None
-        # These lists capture only the detected utterances
         session_before_utterances = [] if DEBUG_MODE else None
         session_after_utterances = [] if DEBUG_MODE else None
 
@@ -53,31 +51,11 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             session_debug_dir = os.path.join("debug", timestamp)
 
-        async def stream_processed_audio(audio_data: bytes, user_name: str):
-            """Chunks and streams the processed audio to the transcription service."""
-            nonlocal transcription_buffer
-
-            transcription_service = TranscriptionService(
-                on_message_callback=on_transcription_message,
-                on_error_callback=on_service_error,
-                on_close_callback=on_service_close,
-                loop=loop,
+        async def on_service_error(error_message: str):
+            print(f"Transcription Error: {error_message}")
+            await websocket.close(
+                code=1011, reason=f"Transcription Error: {error_message}"
             )
-            transcription_service.connect()
-            print(
-                f"Streaming {len(audio_data)} bytes of processed audio for transcription."
-            )
-
-            chunk_size = 1280
-            first_chunk = audio_data[:chunk_size]
-            transcription_service.send_audio(first_chunk, STATUS_FIRST_FRAME)
-
-            for i in range(chunk_size, len(audio_data), chunk_size):
-                chunk = audio_data[i : i + chunk_size]
-                transcription_service.send_audio(chunk, STATUS_CONTINUE_FRAME)
-                await asyncio.sleep(0.04)
-
-            transcription_service.send_audio(b"", STATUS_LAST_FRAME)
 
         async def handle_translation(sentence_to_translate: str, speaker_name: str):
             nonlocal translation_sentence_id
@@ -106,91 +84,120 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
             await translation_manager.broadcast(json.dumps(final_message))
             print(f"Translation complete: '{full_translation}'")
 
-        async def on_transcription_message(data: dict):
-            nonlocal transcription_buffer, transcription_sentence_id
-            result_data = data.get("result", {})
-            is_new_utterance = (
-                not transcription_buffer and result_data.get("pgs") != "rpl"
-            )
-            if is_new_utterance:
-                transcription_sentence_id += 1
-            current_text = "".join(
-                cw.get("w", "")
-                for w in result_data.get("ws", [])
-                for cw in w.get("cw", [])
-            )
-            if result_data.get("pgs") == "rpl":
-                full_sentence = (
-                    transcription_buffer[: -len(current_text)] + current_text
-                )
-            else:
-                full_sentence = transcription_buffer + current_text
-            interim_message = {
-                "type": "interim",
-                "id": f"t-{transcription_sentence_id}",
-                "data": full_sentence,
-                "userName": current_speaker,
-            }
-            await transcription_manager.broadcast(json.dumps(interim_message))
-            transcription_buffer = full_sentence
-            if result_data.get("ls"):
-                final_chunk = transcription_buffer.strip()
-                if final_chunk:
-                    print(
-                        f"VAD-based final sentence detected for {current_speaker}: '{final_chunk}'"
+        async def transcription_worker():
+            nonlocal global_sentence_id_counter
+            while True:
+                try:
+                    audio_data, speaker_name = await utterance_queue.get()
+
+                    local_transcription_buffer = ""
+                    global_sentence_id_counter += 1
+                    local_sentence_id = global_sentence_id_counter
+                    transcription_done = asyncio.Event()
+
+                    async def on_transcription_message_local(
+                        result: TranscriptionResult,
+                    ):
+                        nonlocal local_transcription_buffer
+                        current_text = result.text
+
+                        if result.is_replace:
+                            local_transcription_buffer = (
+                                local_transcription_buffer[: -len(current_text)]
+                                + current_text
+                            )
+                        else:
+                            local_transcription_buffer += current_text
+
+                        interim_message = {
+                            "type": "interim",
+                            "id": f"t-{local_sentence_id}",
+                            "data": local_transcription_buffer,
+                            "userName": speaker_name,
+                        }
+                        await transcription_manager.broadcast(
+                            json.dumps(interim_message)
+                        )
+
+                        if result.is_final:
+                            final_chunk = local_transcription_buffer.strip()
+                            if final_chunk:
+                                print(
+                                    f"VAD-based final sentence detected for {speaker_name}: '{final_chunk}'"
+                                )
+                                final_message = {
+                                    "type": "final",
+                                    "id": f"t-{local_sentence_id}",
+                                    "data": final_chunk,
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "userName": speaker_name,
+                                }
+                                await transcription_manager.broadcast(
+                                    json.dumps(final_message)
+                                )
+                                asyncio.create_task(
+                                    handle_translation(final_chunk, speaker_name)
+                                )
+                            local_transcription_buffer = ""
+
+                    async def on_service_close_local():
+                        print("iFlyTek connection closed for the utterance.")
+                        if not transcription_done.is_set():
+                            transcription_done.set()
+
+                    transcription_service = TranscriptionService(
+                        on_message_callback=on_transcription_message_local,
+                        on_error_callback=on_service_error,
+                        on_close_callback=on_service_close_local,
+                        loop=loop,
                     )
-                    final_message = {
-                        "type": "final",
-                        "id": f"t-{transcription_sentence_id}",
-                        "data": final_chunk,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "userName": current_speaker,
-                    }
-                    await transcription_manager.broadcast(json.dumps(final_message))
-                    asyncio.create_task(
-                        handle_translation(final_chunk, current_speaker)
-                    )
-                transcription_buffer = ""
 
-        async def on_service_error(error_message: str):
-            print(f"Transcription Error: {error_message}")
-            await websocket.close(
-                code=1011, reason=f"Transcription Error: {error_message}"
-            )
+                    await loop.run_in_executor(None, transcription_service.connect)
 
-        async def on_service_close():
-            print("Transcription service connection closed as expected.")
+                    chunk_size = 1280
+                    if len(audio_data) > 0:
+                        transcription_service.send_audio(
+                            audio_data[:chunk_size], STATUS_FIRST_FRAME
+                        )
+                        for i in range(chunk_size, len(audio_data), chunk_size):
+                            chunk = audio_data[i : i + chunk_size]
+                            transcription_service.send_audio(
+                                chunk, STATUS_CONTINUE_FRAME
+                            )
+                            await asyncio.sleep(0.04)
+                        transcription_service.send_audio(b"", STATUS_LAST_FRAME)
 
+                    await transcription_done.wait()
+                    utterance_queue.task_done()
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    print(f"Error in transcription worker: {e}")
+
+        worker_task = asyncio.create_task(transcription_worker())
+        current_speaker = "Unknown"
         try:
-            is_first_chunk = True
             while True:
                 raw_message = await websocket.receive_text()
                 message = json.loads(raw_message)
-
                 current_speaker = message.get("userName", "Unknown")
                 audio_chunk = base64.b64decode(message.get("audio"))
 
                 if DEBUG_MODE:
                     session_raw_audio_chunks.append(audio_chunk)
 
-                    if is_first_chunk and session_debug_dir:
-                        session_debug_dir = f"{session_debug_dir}"
-                        is_first_chunk = False
-
                 for frame in buffer_service.process_audio(audio_chunk):
                     for event, data in vad_service.process_audio(frame):
                         if event == "end":
                             print("VAD: Speech ended. Post-processing...")
-
                             processed_audio = audio_processor.process(data)
 
                             if DEBUG_MODE:
                                 session_before_utterances.append(data)
                                 session_after_utterances.append(processed_audio)
 
-                            transcription_buffer = ""
-                            asyncio.create_task(
-                                stream_processed_audio(processed_audio, current_speaker)
+                            await utterance_queue.put(
+                                (processed_audio, current_speaker)
                             )
 
         except WebSocketDisconnect:
@@ -198,6 +205,9 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
         except Exception as e:
             print(f"An unexpected error occurred in transcribe endpoint: {e}")
         finally:
+            worker_task.cancel()
+            await asyncio.sleep(0.1)
+
             if DEBUG_MODE and session_debug_dir:
                 print("Session ended. Saving full audio files...")
                 save_audio_to_wav(

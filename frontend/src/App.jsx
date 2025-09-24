@@ -1,29 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import ThemeToggle from "./components/theme-toggle.jsx";
 import ConnectionIndicator from "./components/connection-indicator.jsx";
 import Transcript from "./components/transcript.jsx";
+import { useTranscriptStream } from "./hooks/use-transcript-stream.js";
 
 export default function App() {
-  const [transcriptionStatus, setTranscriptionStatus] = useState("connecting");
-  const [translationStatus, setTranslationStatus] = useState("connecting");
-
-  // TODO: Implement real logic
-  // Effect to cycle through statuses for demonstration purposes
-  useEffect(() => {
-    const statuses = ["connected", "disconnected", "connecting"];
-    let i = 0;
-    const interval = setInterval(() => {
-      i = (i + 1) % statuses.length;
-      setTranscriptionStatus(statuses[i]);
-
-      // Add a slight delay for the second indicator for visual effect
-      setTimeout(() => {
-        setTranslationStatus(statuses[i]);
-      }, 500);
-    }, 3000); // Change status every 3 seconds
-
-    return () => clearInterval(interval); // Cleanup on component unmount
-  }, []);
+  const { status: transcriptionStatus, transcripts } = useTranscriptStream(
+    "/ws/view_transcript",
+  );
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors">
@@ -35,10 +19,6 @@ export default function App() {
               <ConnectionIndicator
                 status={transcriptionStatus}
                 label="Transcription"
-              />
-              <ConnectionIndicator
-                status={translationStatus}
-                label="Translation"
               />
             </div>
 
@@ -59,24 +39,16 @@ export default function App() {
 
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-3xl mx-auto">
-          <Transcript
-            speaker="Jane Doe"
-            translation="Hola, ¿cómo estás hoy?"
-            transcription="Hello, how are you today?"
-            isFinalized={true}
-          />
-          <Transcript
-            speaker="John Smith"
-            translation="Estoy bien, gracias. ¿Y tú?"
-            transcription="I'm doing well, thanks. And you?"
-            isFinalized={true}
-          />
-          <Transcript
-            speaker="Jane Doe"
-            translation="Estoy un poco cansada, pero bien."
-            transcription="I'm a little tired, but I'm good."
-            isFinalized={false}
-          />
+          {/* Map over the transcripts array and render a component for each */}
+          {transcripts.map((t) => (
+            <Transcript
+              key={t.id}
+              speaker={t.speaker}
+              translation={t.translation}
+              transcription={t.transcription}
+              isFinalized={t.isFinalized}
+            />
+          ))}
         </div>
       </main>
     </div>

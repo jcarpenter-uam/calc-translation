@@ -14,7 +14,7 @@ from .translation_service import TranslationService
 from .vad_service import VADService
 
 
-def create_transcribe_router(transcription_manager, translation_manager, DEBUG_MODE):
+def create_transcribe_router(viewer_manager, DEBUG_MODE):
     router = APIRouter()
 
     @router.websocket("/ws/transcribe")
@@ -23,27 +23,19 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
         print("Transcription client connected.")
 
         loop = asyncio.get_running_loop()
-
-        # Instantiate services
         audio_processor = AudioProcessingService()
         vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
         buffer_service = AudioBufferService(frame_duration_ms=30)
         translation_service = TranslationService()
-
-        # Global state variables
-        global_sentence_id_counter = 0
-        translation_sentence_id = 0
         utterance_queue = asyncio.Queue()
 
-        # Session-based Debugging
         session_debug_dir = None
-        session_raw_audio_chunks = [] if DEBUG_MODE else None
-        session_before_utterances = [] if DEBUG_MODE else None
-        session_after_utterances = [] if DEBUG_MODE else None
-
         if DEBUG_MODE:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             session_debug_dir = os.path.join("debug", timestamp)
+            session_raw_audio_chunks = []
+            session_before_utterances = []
+            session_after_utterances = []
 
         async def on_service_error(error_message: str):
             print(f"Transcription Error: {error_message}")
@@ -52,41 +44,34 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
             )
 
         async def handle_translation(sentence_to_translate: str, speaker_name: str):
-            nonlocal translation_sentence_id
-            translation_sentence_id += 1
-            current_translation_id = f"tr-{translation_sentence_id}"
             print(f"Translating for {speaker_name}: '{sentence_to_translate}'")
             full_translation = ""
             async for translated_chunk in translation_service.translate_stream(
                 text_to_translate=sentence_to_translate
             ):
                 full_translation = translated_chunk
-                interim_message = {
-                    "type": "interim",
-                    "id": current_translation_id,
-                    "data": full_translation,
-                    "userName": speaker_name,
+                payload = {
+                    "transcription": sentence_to_translate,
+                    "translation": full_translation,
+                    "speaker": speaker_name,
+                    "isfinalize": False,
                 }
-                await translation_manager.broadcast(json.dumps(interim_message))
-            final_message = {
-                "type": "final",
-                "id": current_translation_id,
-                "data": full_translation,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "userName": speaker_name,
+                await viewer_manager.broadcast(payload)
+
+            payload = {
+                "transcription": sentence_to_translate,
+                "translation": full_translation,
+                "speaker": speaker_name,
+                "isfinalize": True,
             }
-            await translation_manager.broadcast(json.dumps(final_message))
+            await viewer_manager.broadcast(payload)
             print(f"Translation complete: '{full_translation}'")
 
         async def transcription_worker():
-            nonlocal global_sentence_id_counter
             while True:
                 try:
                     audio_data, speaker_name = await utterance_queue.get()
-
                     local_transcription_buffer = ""
-                    global_sentence_id_counter += 1
-                    local_sentence_id = global_sentence_id_counter
                     transcription_done = asyncio.Event()
 
                     async def on_transcription_message_local(
@@ -103,15 +88,13 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
                         else:
                             local_transcription_buffer += current_text
 
-                        interim_message = {
-                            "type": "interim",
-                            "id": f"t-{local_sentence_id}",
-                            "data": local_transcription_buffer,
-                            "userName": speaker_name,
+                        payload = {
+                            "transcription": local_transcription_buffer,
+                            "translation": "",
+                            "speaker": speaker_name,
+                            "isfinalize": False,
                         }
-                        await transcription_manager.broadcast(
-                            json.dumps(interim_message)
-                        )
+                        await viewer_manager.broadcast(payload)
 
                         if result.is_final:
                             final_chunk = local_transcription_buffer.strip()
@@ -119,15 +102,14 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
                                 print(
                                     f"VAD-based final sentence detected for {speaker_name}: '{final_chunk}'"
                                 )
-                                final_message = {
-                                    "type": "final",
-                                    "id": f"t-{local_sentence_id}",
-                                    "data": final_chunk,
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                                    "userName": speaker_name,
+                                final_transcription_payload = {
+                                    "transcription": final_chunk,
+                                    "translation": "",
+                                    "speaker": speaker_name,
+                                    "isfinalize": False,
                                 }
-                                await transcription_manager.broadcast(
-                                    json.dumps(final_message)
+                                await viewer_manager.broadcast(
+                                    final_transcription_payload
                                 )
                                 asyncio.create_task(
                                     handle_translation(final_chunk, speaker_name)
@@ -135,7 +117,6 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
 
                             if not transcription_done.is_set():
                                 transcription_done.set()
-
                             local_transcription_buffer = ""
 
                     async def on_service_close_local():
@@ -148,7 +129,6 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
                         on_close_callback=on_service_close_local,
                         loop=loop,
                     )
-
                     await loop.run_in_executor(None, transcription_service.connect)
 
                     chunk_size = 1280
@@ -157,9 +137,7 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
                             chunk = audio_data[i : i + chunk_size]
                             transcription_service.send_chunk(chunk)
                             await asyncio.sleep(0.04)
-
                     transcription_service.finalize_utterance()
-
                     await transcription_done.wait()
                     utterance_queue.task_done()
                 except asyncio.CancelledError:
@@ -182,13 +160,10 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
                 for frame in buffer_service.process_audio(audio_chunk):
                     for event, data in vad_service.process_audio(frame):
                         if event == "end":
-                            print("VAD: Speech ended. Post-processing...")
                             processed_audio = audio_processor.process(data)
-
                             if DEBUG_MODE:
                                 session_before_utterances.append(data)
                                 session_after_utterances.append(processed_audio)
-
                             await utterance_queue.put(
                                 (processed_audio, current_speaker)
                             )

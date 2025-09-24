@@ -15,7 +15,6 @@ from wsgiref.handlers import format_date_time
 import websocket
 from dotenv import load_dotenv
 
-# Status constants for audio frames
 STATUS_FIRST_FRAME = 0
 STATUS_CONTINUE_FRAME = 1
 STATUS_LAST_FRAME = 2
@@ -56,6 +55,7 @@ class IFlyTekTranscriptionService:
         }
         self.ws = None
         self.ws_thread = None
+        self._is_first_chunk = True
 
     def create_url(self):
         """Generates the authenticated URL for the WebSocket connection."""
@@ -104,8 +104,21 @@ class IFlyTekTranscriptionService:
             time.sleep(0.1)
         print("iFlyTek WebSocket connection established.")
 
-    def send_audio(self, audio_chunk, status):
-        """Sends an audio chunk to the iFlyTek service."""
+    def send_chunk(self, audio_chunk: bytes):
+        """Sends a single chunk of audio, managing the frame status internally."""
+        status = STATUS_CONTINUE_FRAME
+        if self._is_first_chunk:
+            status = STATUS_FIRST_FRAME
+            self._is_first_chunk = False
+        self._send_frame(audio_chunk, status)
+
+    def finalize_utterance(self):
+        """Sends the final frame to signal the end of the utterance."""
+        self._send_frame(b"", STATUS_LAST_FRAME)
+        self._is_first_chunk = True  # Reset for the next utterance
+
+    def _send_frame(self, audio_chunk, status):
+        """(Internal) Sends an audio frame with a specific status."""
         if not self.ws or not self.ws.sock or not self.ws.sock.connected:
             print("Error: iFlyTek WebSocket is not connected.")
             return
@@ -126,8 +139,8 @@ class IFlyTekTranscriptionService:
     def close(self):
         """Closes the WebSocket connection."""
         if self.ws and self.ws.sock and self.ws.sock.connected:
-            self.send_audio(b"", STATUS_LAST_FRAME)
-            time.sleep(1)
+            self.finalize_utterance()
+            time.sleep(0.1)
             self.ws.close()
             print("iFlyTek WebSocket connection closed.")
 

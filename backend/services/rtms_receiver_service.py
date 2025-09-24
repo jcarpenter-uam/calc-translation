@@ -9,13 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .audio_processing_service import AudioProcessingService
 from .buffer_service import AudioBufferService
 from .debug_service import save_audio_to_wav
-from .transcription_service import (
-    STATUS_CONTINUE_FRAME,
-    STATUS_FIRST_FRAME,
-    STATUS_LAST_FRAME,
-    TranscriptionResult,
-    TranscriptionService,
-)
+from .transcription_service import TranscriptionResult, TranscriptionService
 from .translation_service import QwenTranslationService
 from .vad_service import VADService
 
@@ -159,16 +153,12 @@ def create_transcribe_router(transcription_manager, translation_manager, DEBUG_M
 
                     chunk_size = 1280
                     if len(audio_data) > 0:
-                        transcription_service.send_audio(
-                            audio_data[:chunk_size], STATUS_FIRST_FRAME
-                        )
-                        for i in range(chunk_size, len(audio_data), chunk_size):
+                        for i in range(0, len(audio_data), chunk_size):
                             chunk = audio_data[i : i + chunk_size]
-                            transcription_service.send_audio(
-                                chunk, STATUS_CONTINUE_FRAME
-                            )
+                            transcription_service.send_chunk(chunk)
                             await asyncio.sleep(0.04)
-                        transcription_service.send_audio(b"", STATUS_LAST_FRAME)
+
+                    transcription_service.finalize_utterance()
 
                     await transcription_done.wait()
                     utterance_queue.task_done()

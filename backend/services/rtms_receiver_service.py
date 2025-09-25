@@ -1,11 +1,9 @@
-# rtms_receiver_service.py
-
 import asyncio
 import base64
 import json
 import os
-import uuid  # 👈 Import uuid
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -48,7 +46,6 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 code=1011, reason=f"Transcription Error: {error_message}"
             )
 
-        # 👇 Add a message_id to handle_translation
         async def handle_translation(
             sentence_to_translate: str, speaker_name: str, message_id: str
         ):
@@ -57,57 +54,54 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             async for translated_chunk in translation_service.translate_stream(
                 text_to_translate=sentence_to_translate
             ):
-                full_translation = translated_chunk  # Accumulate the streamed chunks
+                full_translation = translated_chunk
                 payload = {
-                    "message_id": message_id,  # 👈 Add message_id
+                    "message_id": message_id,
                     "transcription": sentence_to_translate,
                     "translation": full_translation,
                     "speaker": speaker_name,
-                    "type": "update",  # 👈 Use a 'type' field
+                    "type": "update",
                     "isfinalize": False,
                 }
                 await viewer_manager.broadcast(payload)
 
             payload = {
-                "message_id": message_id,  # 👈 Add message_id
+                "message_id": message_id,
                 "transcription": sentence_to_translate,
                 "translation": full_translation,
                 "speaker": speaker_name,
-                "type": "final",  # 👈 Use a 'type' field
+                "type": "final",
                 "isfinalize": True,
             }
             await viewer_manager.broadcast(payload)
             print(f"Translation complete: '{full_translation}'")
 
-        # 👇 NEW function to handle the correction pipeline
         async def handle_correction(
             original_transcription: str, speaker_name: str, message_id: str
         ):
-            # The original transcription is added to context for future corrections.
             correction_service.add_to_context(original_transcription)
 
             corrected_transcription = await correction_service.correct_text(
                 original_transcription
             )
 
-            # Only proceed if the text was actually changed
             if corrected_transcription != original_transcription:
                 print(f"Re-translating corrected text for message_id: {message_id}")
 
-                # Use the existing translation service to re-translate the corrected text
                 full_corrected_translation = ""
                 async for chunk in translation_service.translate_stream(
                     text_to_translate=corrected_transcription
                 ):
-                    full_corrected_translation += chunk
+                    full_corrected_translation = chunk
 
-                # Broadcast the correction to the frontend
+                print(f"Updated translation complete: '{full_corrected_translation}'")
+
                 payload = {
                     "message_id": message_id,
                     "transcription": corrected_transcription,
                     "translation": full_corrected_translation,
                     "speaker": speaker_name,
-                    "type": "correction",  # 👈 New type for frontend to handle
+                    "type": "correction",
                     "isfinalize": True,
                 }
                 await viewer_manager.broadcast(payload)
@@ -145,9 +139,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         if result.is_final:
                             final_chunk = local_transcription_buffer.strip()
                             if final_chunk:
-                                message_id = str(
-                                    uuid.uuid4()
-                                )  # 👈 Generate a unique ID
+                                message_id = str(uuid.uuid4())
 
                                 print(
                                     f"VAD-based final sentence ({message_id}) detected for {speaker_name}: '{final_chunk}'"

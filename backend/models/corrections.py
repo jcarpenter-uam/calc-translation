@@ -32,7 +32,6 @@ class OllamaCorrectionService:
         """
         context_str = "\n".join(self.context)
 
-        # 👇 This new prompt is more structured and less ambiguous for the model.
         prompt = f"""
         You are an expert in correcting Chinese speech-to-text transcription errors.
         

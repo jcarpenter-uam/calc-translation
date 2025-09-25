@@ -5,14 +5,21 @@ import { useState, useEffect, useRef } from "react";
  * @param {string} url The WebSocket URL to connect to.
  * @returns {{
  * status: 'connecting' | 'connected' | 'disconnected';
- * transcripts: Array<{id: number, speaker: string, translation: string, transcription: string, isFinalized: boolean}>;
+ * transcripts: Array<{
+ * id: string,
+ * speaker: string,
+ * translation: string,
+ * transcription: string,
+ * isFinalized: boolean,
+ * type: 'update' | 'final' | 'correction',
+ * original?: { translation: string, transcription: string }
+ * }>;
  * }}
  */
 export function useTranscriptStream(url) {
   const [status, setStatus] = useState("connecting");
   const [transcripts, setTranscripts] = useState([]);
   const ws = useRef(null);
-  const utteranceId = useRef(0);
 
   useEffect(() => {
     let reconnectTimeoutId;
@@ -48,29 +55,58 @@ export function useTranscriptStream(url) {
         try {
           const data = JSON.parse(event.data);
 
-          setTranscripts((prevTranscripts) => {
-            const lastTranscript = prevTranscripts[prevTranscripts.length - 1];
+          if (!data.message_id || !data.type) return;
 
-            if (lastTranscript && !lastTranscript.isFinalized) {
+          setTranscripts((prevTranscripts) => {
+            const existingIndex = prevTranscripts.findIndex(
+              (t) => t.id === data.message_id,
+            );
+
+            // Handle Correction: Find the existing message and update it
+            if (data.type === "correction") {
+              if (existingIndex !== -1) {
+                const originalTranscript = prevTranscripts[existingIndex];
+                const updatedTranscript = {
+                  ...originalTranscript,
+                  original: {
+                    // Store the old text
+                    transcription: originalTranscript.transcription,
+                    translation: originalTranscript.translation,
+                  },
+                  transcription: data.transcription, // Set the new text
+                  translation: data.translation,
+                  type: "correction",
+                };
+
+                const newTranscripts = [...prevTranscripts];
+                newTranscripts[existingIndex] = updatedTranscript;
+                return newTranscripts;
+              }
+              return prevTranscripts;
+            }
+
+            // Handle Update or Final: Update existing or add new
+            if (existingIndex !== -1) {
+              // Update an existing transcript (e.g., streaming updates)
               const updatedTranscript = {
-                id: lastTranscript.id,
-                speaker: data.speaker,
-                translation: data.translation,
+                ...prevTranscripts[existingIndex],
                 transcription: data.transcription,
+                translation: data.translation,
                 isFinalized: data.isfinalize,
+                type: data.type,
               };
-              const updatedTranscripts = [...prevTranscripts];
-              updatedTranscripts[prevTranscripts.length - 1] =
-                updatedTranscript;
-              return updatedTranscripts;
+              const newTranscripts = [...prevTranscripts];
+              newTranscripts[existingIndex] = updatedTranscript;
+              return newTranscripts;
             } else {
-              utteranceId.current++;
+              // Add a new transcript
               const newTranscript = {
-                id: utteranceId.current,
+                id: data.message_id,
                 speaker: data.speaker,
                 translation: data.translation,
                 transcription: data.transcription,
                 isFinalized: data.isfinalize,
+                type: data.type,
               };
               return [...prevTranscripts, newTranscript];
             }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import ThemeToggle from "./components/theme-toggle.jsx";
 import ConnectionIndicator from "./components/connection-indicator.jsx";
 import Transcript from "./components/transcript.jsx";
@@ -8,6 +8,14 @@ export default function App() {
   const { status: transcriptionStatus, transcripts } = useTranscriptStream(
     "/ws/view_transcript",
   );
+
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [transcripts]);
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors">
@@ -41,14 +49,10 @@ export default function App() {
         <div className="max-w-3xl mx-auto">
           {/* Map over the transcripts array and render a component for each */}
           {transcripts.map((t) => (
-            <Transcript
-              key={t.id}
-              speaker={t.speaker}
-              translation={t.translation}
-              transcription={t.transcription}
-              isFinalized={t.isFinalized}
-            />
+            <Transcript key={t.id} {...t} />
           ))}
+          {/* Auto scrolling */}
+          <div ref={scrollRef} />
         </div>
       </main>
     </div>

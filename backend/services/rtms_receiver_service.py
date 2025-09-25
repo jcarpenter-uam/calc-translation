@@ -69,13 +69,26 @@ class TranslationChunkAccumulator:
         previous = self._translation
         candidate = cleaned_chunk
 
-        if len(candidate) < len(previous) and previous.startswith(candidate.strip()):
+        normalized_previous = previous.strip()
+        normalized_candidate = candidate.strip()
+
+        if not normalized_candidate:
             return None
 
-        if candidate.startswith(previous):
-            remainder = candidate[len(previous) :]
-            remainder = self._trim_repeated_prefix(remainder, previous)
-            new_value = previous + remainder
+        if len(candidate) < len(previous) and previous.startswith(normalized_candidate):
+            return None
+
+        if normalized_candidate.startswith(normalized_previous):
+            if candidate.startswith(previous):
+                remainder = candidate[len(previous) :]
+                remainder = self._trim_repeated_prefix(remainder, previous)
+                new_value = previous + remainder
+            else:
+                alignment_index = candidate.find(normalized_previous)
+                if alignment_index == -1:
+                    new_value = normalized_candidate
+                else:
+                    new_value = candidate[alignment_index:]
         else:
             overlap = 0
             max_overlap = min(len(previous), len(candidate))

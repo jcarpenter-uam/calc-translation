@@ -23,10 +23,19 @@ STATUS_LAST_FRAME = 2
 class TranscriptionResult:
     """A standardized class to hold transcription results."""
 
-    def __init__(self, text, is_final=False, is_replace=False):
+    def __init__(
+        self,
+        text,
+        is_final=False,
+        is_replace=False,
+        sequence_number=None,
+        replacement_range=None,
+    ):
         self.text = text
         self.is_final = is_final
         self.is_replace = is_replace
+        self.sequence_number = sequence_number
+        self.replacement_range = replacement_range
 
 
 class IFlyTekTranscriptionService:
@@ -165,9 +174,25 @@ class IFlyTekTranscriptionService:
                     for cw in w.get("cw", [])
                 )
                 is_final = result_data.get("ls", False)
+                sequence_number = result_data.get("sn")
+                replacement_range = None
+
                 is_replace = result_data.get("pgs") == "rpl"
+                if is_replace:
+                    range_data = result_data.get("rg", [])
+                    if (
+                        isinstance(range_data, list)
+                        and len(range_data) == 2
+                        and all(isinstance(v, int) for v in range_data)
+                    ):
+                        replacement_range = (range_data[0], range_data[1])
+
                 result = TranscriptionResult(
-                    text=current_text, is_final=is_final, is_replace=is_replace
+                    text=current_text,
+                    is_final=is_final,
+                    is_replace=is_replace,
+                    sequence_number=sequence_number,
+                    replacement_range=replacement_range,
                 )
                 asyncio.run_coroutine_threadsafe(
                     self.on_message_callback(result), self.loop

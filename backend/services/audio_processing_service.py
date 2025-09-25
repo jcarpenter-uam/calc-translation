@@ -1,6 +1,8 @@
 import noisereduce as nr
 import numpy as np
 
+from .debug_service import log_pipeline_step
+
 
 class AudioProcessingService:
     """
@@ -73,19 +75,75 @@ class AudioProcessingService:
             bytes: The processed (denoised and normalized) audio utterance.
         """
         if not audio_bytes:
+            log_pipeline_step(
+                "AUDIO_PROCESSING",
+                "Received empty audio payload. Skipping post-processing.",
+                detailed=False,
+            )
             return b""
+
+        raw_sample_count = len(audio_bytes) // 2
+        log_pipeline_step(
+            "AUDIO_PROCESSING",
+            "Starting audio post-processing pipeline.",
+            extra={
+                "bytes_received": len(audio_bytes),
+                "estimated_samples": raw_sample_count,
+                "sample_rate": self.sample_rate,
+            },
+            detailed=True,
+        )
 
         # Convert bytes to a numerical format
         audio_data = self._bytes_to_audio(audio_bytes)
+        log_pipeline_step(
+            "AUDIO_PROCESSING",
+            "Converted raw bytes to numpy array.",
+            extra={
+                "dtype": str(audio_data.dtype),
+                "array_shape": audio_data.shape,
+                "min": int(audio_data.min()),
+                "max": int(audio_data.max()),
+            },
+            detailed=True,
+        )
 
         # Apply noise suppression
         denoised_audio = self.suppress_noise(audio_data)
+        log_pipeline_step(
+            "AUDIO_PROCESSING",
+            "Noise suppression complete.",
+            extra={
+                "dtype": str(denoised_audio.dtype),
+                "min": int(denoised_audio.min()),
+                "max": int(denoised_audio.max()),
+            },
+            detailed=True,
+        )
 
         # Normalize the volume
         normalized_audio = self.normalize_volume(denoised_audio)
+        log_pipeline_step(
+            "AUDIO_PROCESSING",
+            "Volume normalization complete.",
+            extra={
+                "dtype": str(normalized_audio.dtype),
+                "min": int(normalized_audio.min()),
+                "max": int(normalized_audio.max()),
+            },
+            detailed=True,
+        )
 
         # Convert back to bytes for sending
         processed_bytes = self._audio_to_bytes(normalized_audio)
-        print("Audio Processor: Post-processing complete.")
+        log_pipeline_step(
+            "AUDIO_PROCESSING",
+            "Audio Processor: Post-processing complete.",
+            extra={
+                "bytes_emitted": len(processed_bytes),
+                "sample_rate": self.sample_rate,
+            },
+            detailed=True,
+        )
 
         return processed_bytes

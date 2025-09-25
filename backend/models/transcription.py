@@ -15,6 +15,8 @@ from wsgiref.handlers import format_date_time
 import websocket
 from dotenv import load_dotenv
 
+from services.debug_service import log_pipeline_step
+
 STATUS_FIRST_FRAME = 0
 STATUS_CONTINUE_FRAME = 1
 STATUS_LAST_FRAME = 2
@@ -56,6 +58,16 @@ class IFlyTekTranscriptionService:
         self.ws = None
         self.ws_thread = None
         self._is_first_chunk = True
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "Initialized iFlyTek transcription client.",
+            extra={
+                "has_app_id": bool(self.APPID),
+                "language": self.BusinessArgs["language"],
+                "accent": self.BusinessArgs["accent"],
+            },
+            detailed=True,
+        )
 
     def create_url(self):
         """Generates the authenticated URL for the WebSocket connection."""
@@ -83,11 +95,22 @@ class IFlyTekTranscriptionService:
             "date": date,
             "host": "ist-api-sg.xf-yun.com",
         }
-        return f"{url}?{urlencode(v)}"
+        full_url = f"{url}?{urlencode(v)}"
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "Generated authenticated WebSocket URL.",
+            detailed=True,
+        )
+        return full_url
 
     def connect(self):
         """Establishes the WebSocket connection in a separate thread."""
         ws_url = self.create_url()
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "Connecting to iFlyTek WebSocket endpoint.",
+            detailed=False,
+        )
         self.ws = websocket.WebSocketApp(
             ws_url,
             on_message=self._on_message,
@@ -102,7 +125,11 @@ class IFlyTekTranscriptionService:
         self.ws_thread.start()
         while self.ws and (not self.ws.sock or not self.ws.sock.connected):
             time.sleep(0.1)
-        print("iFlyTek WebSocket connection established.")
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "iFlyTek WebSocket connection established.",
+            detailed=True,
+        )
 
     def send_chunk(self, audio_chunk: bytes):
         """Sends a single chunk of audio, managing the frame status internally."""
@@ -110,17 +137,32 @@ class IFlyTekTranscriptionService:
         if self._is_first_chunk:
             status = STATUS_FIRST_FRAME
             self._is_first_chunk = False
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "Sending audio frame to iFlyTek service.",
+            extra={"status": status, "chunk_bytes": len(audio_chunk)},
+            detailed=True,
+        )
         self._send_frame(audio_chunk, status)
 
     def finalize_utterance(self):
         """Sends the final frame to signal the end of the utterance."""
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "Finalizing utterance with closing frame.",
+            detailed=True,
+        )
         self._send_frame(b"", STATUS_LAST_FRAME)
         self._is_first_chunk = True  # Reset for the next utterance
 
     def _send_frame(self, audio_chunk, status):
         """(Internal) Sends an audio frame with a specific status."""
         if not self.ws or not self.ws.sock or not self.ws.sock.connected:
-            print("Error: iFlyTek WebSocket is not connected.")
+            log_pipeline_step(
+                "TRANSCRIPTION",
+                "Error: iFlyTek WebSocket is not connected.",
+                detailed=False,
+            )
             return
         common_args = {"app_id": self.APPID}
         data = {
@@ -134,7 +176,20 @@ class IFlyTekTranscriptionService:
         if status == STATUS_FIRST_FRAME:
             data["common"] = common_args
             data["business"] = self.BusinessArgs
-        self.ws.send(json.dumps(data))
+        payload = json.dumps(data)
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "Dispatching frame payload to WebSocket.",
+            extra={"status": status, "payload_bytes": len(payload)},
+            detailed=True,
+        )
+        self.ws.send(payload)
+        if status == STATUS_LAST_FRAME:
+            log_pipeline_step(
+                "TRANSCRIPTION",
+                "Sent final frame to transcription service.",
+                detailed=True,
+            )
 
     def close(self):
         """Closes the WebSocket connection."""
@@ -142,7 +197,11 @@ class IFlyTekTranscriptionService:
             self.finalize_utterance()
             time.sleep(0.1)
             self.ws.close()
-            print("iFlyTek WebSocket connection closed.")
+            log_pipeline_step(
+                "TRANSCRIPTION",
+                "iFlyTek WebSocket connection closed.",
+                detailed=True,
+            )
 
     def _on_message(self, ws, message):
         try:
@@ -152,6 +211,12 @@ class IFlyTekTranscriptionService:
             if code != 0:
                 errMsg = msg_json.get("message", "Unknown error")
                 error_message = f"iFlyTek Error (sid:{sid}): {errMsg} (code:{code})"
+                log_pipeline_step(
+                    "TRANSCRIPTION",
+                    "Non-success response received from iFlyTek service.",
+                    extra={"sid": sid, "code": code, "message": errMsg},
+                    detailed=False,
+                )
                 asyncio.run_coroutine_threadsafe(
                     self.on_error_callback(error_message), self.loop
                 )
@@ -169,6 +234,16 @@ class IFlyTekTranscriptionService:
                 result = TranscriptionResult(
                     text=current_text, is_final=is_final, is_replace=is_replace
                 )
+                log_pipeline_step(
+                    "TRANSCRIPTION",
+                    "Received transcription delta from iFlyTek.",
+                    extra={
+                        "chunk_length": len(current_text),
+                        "is_final": is_final,
+                        "is_replace": is_replace,
+                    },
+                    detailed=True,
+                )
                 asyncio.run_coroutine_threadsafe(
                     self.on_message_callback(result), self.loop
                 )
@@ -180,12 +255,36 @@ class IFlyTekTranscriptionService:
 
     def _on_error(self, ws, error):
         error_message = f"iFlyTek WebSocket error: {error}"
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "WebSocket error encountered.",
+            extra={"error": str(error)},
+            detailed=False,
+        )
         asyncio.run_coroutine_threadsafe(
             self.on_error_callback(error_message), self.loop
         )
 
     def _on_close(self, ws, close_status_code, close_msg):
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "WebSocket connection closed by server.",
+            extra={
+                "status_code": close_status_code,
+                "message": close_msg,
+            },
+            detailed=False,
+        )
         asyncio.run_coroutine_threadsafe(self.on_close_callback(), self.loop)
 
     def _on_open(self, ws):
-        print("Connection to iFlyTek opened.")
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "Connection to iFlyTek opened.",
+            detailed=True,
+        )
+        log_pipeline_step(
+            "TRANSCRIPTION",
+            "Initial handshake complete; ready to stream audio.",
+            detailed=False,
+        )

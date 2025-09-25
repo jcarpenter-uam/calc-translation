@@ -114,10 +114,12 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     local_transcription_buffer = ""
                     transcription_done = asyncio.Event()
 
+                    current_message_id = None
+
                     async def on_transcription_message_local(
                         result: TranscriptionResult,
                     ):
-                        nonlocal local_transcription_buffer
+                        nonlocal local_transcription_buffer, current_message_id
                         current_text = result.text
 
                         if result.is_replace:
@@ -128,10 +130,22 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         else:
                             local_transcription_buffer += current_text
 
+                        # Ensure we have an identifier for incremental updates.
+                        if (
+                            current_message_id is None
+                            and local_transcription_buffer.strip()
+                        ):
+                            current_message_id = str(uuid.uuid4())
+
+                        if not current_message_id:
+                            return
+
                         payload = {
+                            "message_id": current_message_id,
                             "transcription": local_transcription_buffer,
                             "translation": "",
                             "speaker": speaker_name,
+                            "type": "update",
                             "isfinalize": False,
                         }
                         await viewer_manager.broadcast(payload)
@@ -139,7 +153,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         if result.is_final:
                             final_chunk = local_transcription_buffer.strip()
                             if final_chunk:
-                                message_id = str(uuid.uuid4())
+                                message_id = current_message_id or str(uuid.uuid4())
 
                                 print(
                                     f"VAD-based final sentence ({message_id}) detected for {speaker_name}: '{final_chunk}'"
@@ -164,6 +178,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                             if not transcription_done.is_set():
                                 transcription_done.set()
                             local_transcription_buffer = ""
+                            current_message_id = None
 
                     async def on_service_close_local():
                         if not transcription_done.is_set():

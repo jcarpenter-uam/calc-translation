@@ -16,6 +16,24 @@ import { useState, useEffect, useRef } from "react";
  * }>;
  * }}
  */
+function resolveWebSocketUrl(target) {
+  if (typeof target !== "string" || target.length === 0) {
+    return null;
+  }
+
+  if (/^wss?:\/\//i.test(target)) {
+    return target;
+  }
+
+  if (typeof window === "undefined" || !window.location) {
+    return null;
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const path = target.startsWith("/") ? target : `/${target}`;
+  return `${protocol}://${window.location.host}${path}`;
+}
+
 export function useTranscriptStream(url) {
   const [status, setStatus] = useState("connecting");
   const [transcripts, setTranscripts] = useState([]);
@@ -25,18 +43,20 @@ export function useTranscriptStream(url) {
     let reconnectTimeoutId;
 
     function connect() {
-      if (typeof url !== "string") {
+      const resolvedUrl = resolveWebSocketUrl(url);
+
+      if (!resolvedUrl) {
         setStatus("disconnected");
         return;
       }
       if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
         ws.current.close();
       }
-      ws.current = new WebSocket(url);
+      ws.current = new WebSocket(resolvedUrl);
       setStatus("connecting");
 
       ws.current.onopen = () => {
-        console.log(`✅ WebSocket connected to ${url}`);
+        console.log(`✅ WebSocket connected to ${resolvedUrl}`);
         setStatus("connected");
       };
 
@@ -47,7 +67,7 @@ export function useTranscriptStream(url) {
       };
 
       ws.current.onerror = (error) => {
-        console.error(`WebSocket error on ${url}:`, error);
+        console.error(`WebSocket error on ${resolvedUrl}:`, error);
         ws.current.close();
       };
 

@@ -4,7 +4,7 @@ import json
 import os
 import uuid
 from collections import deque
-from typing import Dict
+from typing import Dict, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -16,6 +16,54 @@ from .debug_service import save_audio_to_wav
 from .transcription_service import TranscriptionResult, TranscriptionService
 from .translation_service import TranslationService
 from .vad_service import VADService
+
+
+class TranslationChunkAccumulator:
+    """Accumulate streamed translation chunks while filtering prompt leakage."""
+
+    PROMPT_MARKERS = (
+        "You are a Chinese-to-English translator",
+        "Your task is to translate the text",
+        "Your response must contain ONLY the English translation",
+        "[TEXT TO TRANSLATE]",
+    )
+
+    def __init__(self) -> None:
+        self._translation = ""
+
+    @staticmethod
+    def _sanitize(chunk: str) -> str:
+        if any(marker in chunk for marker in TranslationChunkAccumulator.PROMPT_MARKERS):
+            return ""
+        return chunk
+
+    @property
+    def value(self) -> str:
+        return self._translation
+
+    def push(self, chunk: str) -> Optional[str]:
+        cleaned_chunk = self._sanitize(chunk)
+        if not cleaned_chunk:
+            return None
+
+        if not self._translation:
+            self._translation = cleaned_chunk
+        elif cleaned_chunk.startswith(self._translation):
+            self._translation = cleaned_chunk
+        elif self._translation in cleaned_chunk:
+            self._translation = cleaned_chunk
+        elif self._translation.endswith(cleaned_chunk):
+            return None
+        else:
+            overlap = 0
+            max_overlap = min(len(self._translation), len(cleaned_chunk))
+            for i in range(max_overlap, 0, -1):
+                if self._translation.endswith(cleaned_chunk[:i]):
+                    overlap = i
+                    break
+            self._translation += cleaned_chunk[overlap:]
+
+        return self._translation
 
 
 def create_transcribe_router(viewer_manager, DEBUG_MODE):
@@ -127,57 +175,25 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             message_id: str,
         ):
             print(f"Translating for {speaker_name}: '{sentence_to_translate}'")
-            full_translation = ""
+            accumulator = TranslationChunkAccumulator()
             last_broadcasted_translation = ""
-
-            def sanitize_translation_chunk(chunk: str) -> str:
-                """Remove known prompt leakage and return cleaned text."""
-
-                prompt_markers = [
-                    "You are a Chinese-to-English translator",
-                    "Your task is to translate the text",
-                    "Your response must contain ONLY the English translation",
-                    "[TEXT TO TRANSLATE]",
-                ]
-
-                if any(marker in chunk for marker in prompt_markers):
-                    return ""
-
-                return chunk
 
             async for translated_chunk in translation_service.translate_stream(
                 text_to_translate=sentence_to_translate
             ):
-                translated_chunk = sanitize_translation_chunk(translated_chunk)
-                if not translated_chunk:
+                accumulated_translation = accumulator.push(translated_chunk)
+                if not accumulated_translation:
                     continue
 
-                if not full_translation:
-                    full_translation = translated_chunk
-                elif translated_chunk.startswith(full_translation):
-                    full_translation = translated_chunk
-                elif full_translation in translated_chunk:
-                    full_translation = translated_chunk
-                elif full_translation.endswith(translated_chunk):
-                    continue
-                else:
-                    overlap = 0
-                    max_overlap = min(len(full_translation), len(translated_chunk))
-                    for i in range(max_overlap, 0, -1):
-                        if full_translation.endswith(translated_chunk[:i]):
-                            overlap = i
-                            break
-                    full_translation += translated_chunk[overlap:]
-
-                if full_translation == last_broadcasted_translation:
+                if accumulated_translation == last_broadcasted_translation:
                     continue
 
-                last_broadcasted_translation = full_translation
+                last_broadcasted_translation = accumulated_translation
 
                 payload = {
                     "message_id": message_id,
                     "transcription": sentence_to_translate,
-                    "translation": full_translation,
+                    "translation": accumulated_translation,
                     "speaker": speaker_name,
                     "type": "update",
                     "isfinalize": False,
@@ -187,20 +203,20 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             payload = {
                 "message_id": message_id,
                 "transcription": sentence_to_translate,
-                "translation": full_translation,
+                "translation": accumulator.value,
                 "speaker": speaker_name,
                 "type": "final",
                 "isfinalize": True,
             }
             await viewer_manager.broadcast(payload)
-            print(f"Translation complete: '{full_translation}'")
+            print(f"Translation complete: '{accumulator.value}'")
 
             utterance_history.append(
                 {
                     "message_id": message_id,
                     "speaker": speaker_name,
                     "transcription": sentence_to_translate,
-                    "translation": full_translation,
+                    "translation": accumulator.value,
                     "correction_complete": False,
                 }
             )

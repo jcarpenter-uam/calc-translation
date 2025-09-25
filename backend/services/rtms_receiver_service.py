@@ -249,7 +249,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     continue
 
                 last_broadcasted_translation = accumulated_translation
-
+                
                 payload = {
                     "message_id": message_id,
                     "transcription": sentence_to_translate,

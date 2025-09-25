@@ -4,6 +4,7 @@ import json
 import os
 import uuid
 from collections import deque
+from typing import Dict
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -57,6 +58,9 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
             target_utterance = utterance_history[-CORRECTION_CONTEXT_THRESHOLD]
 
+            if target_utterance.get("correction_complete"):
+                return
+
             print(
                 f"Running contextual correction for: '{target_utterance['transcription']}'"
             )
@@ -73,7 +77,6 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             reason = response_data.get("reasoning", "No reason provided.")
 
             if is_needed:
-
                 print(f"Model decided a correction is needed. Reason: {reason}")
 
                 corrected_transcription = response_data.get("corrected_sentence")
@@ -83,17 +86,21 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     and corrected_transcription != target_utterance["transcription"]
                 ):
                     print(
-                        f"Re-translating contextually corrected text for message_id: {target_utterance['message_id']}"
+                        "Re-translating contextually corrected text for message_id: "
+                        f"{target_utterance['message_id']}"
                     )
                     full_corrected_translation = ""
                     async for chunk in translation_service.translate_stream(
                         text_to_translate=corrected_transcription
                     ):
-                        full_corrected_translation = chunk
+                        full_corrected_translation += chunk
 
                     print(
                         f"Updated translation complete: '{full_corrected_translation}'"
                     )
+
+                    target_utterance["transcription"] = corrected_transcription
+                    target_utterance["translation"] = full_corrected_translation
                     payload = {
                         "message_id": target_utterance["message_id"],
                         "transcription": corrected_transcription,
@@ -108,8 +115,11 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     )
             else:
                 print(
-                    f"Model decided no correction was needed. Reason: {reason}. Skipping broadcast."
+                    "Model decided no correction was needed. Reason: "
+                    f"{reason}. Skipping broadcast."
                 )
+
+            target_utterance["correction_complete"] = True
 
         async def handle_translation(
             sentence_to_translate: str,
@@ -118,10 +128,52 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
         ):
             print(f"Translating for {speaker_name}: '{sentence_to_translate}'")
             full_translation = ""
+            last_broadcasted_translation = ""
+
+            def sanitize_translation_chunk(chunk: str) -> str:
+                """Remove known prompt leakage and return cleaned text."""
+
+                prompt_markers = [
+                    "You are a Chinese-to-English translator",
+                    "Your task is to translate the text",
+                    "Your response must contain ONLY the English translation",
+                    "[TEXT TO TRANSLATE]",
+                ]
+
+                if any(marker in chunk for marker in prompt_markers):
+                    return ""
+
+                return chunk
+
             async for translated_chunk in translation_service.translate_stream(
                 text_to_translate=sentence_to_translate
             ):
-                full_translation = translated_chunk
+                translated_chunk = sanitize_translation_chunk(translated_chunk)
+                if not translated_chunk:
+                    continue
+
+                if not full_translation:
+                    full_translation = translated_chunk
+                elif translated_chunk.startswith(full_translation):
+                    full_translation = translated_chunk
+                elif full_translation in translated_chunk:
+                    full_translation = translated_chunk
+                elif full_translation.endswith(translated_chunk):
+                    continue
+                else:
+                    overlap = 0
+                    max_overlap = min(len(full_translation), len(translated_chunk))
+                    for i in range(max_overlap, 0, -1):
+                        if full_translation.endswith(translated_chunk[:i]):
+                            overlap = i
+                            break
+                    full_translation += translated_chunk[overlap:]
+
+                if full_translation == last_broadcasted_translation:
+                    continue
+
+                last_broadcasted_translation = full_translation
+
                 payload = {
                     "message_id": message_id,
                     "transcription": sentence_to_translate,
@@ -148,6 +200,8 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     "message_id": message_id,
                     "speaker": speaker_name,
                     "transcription": sentence_to_translate,
+                    "translation": full_translation,
+                    "correction_complete": False,
                 }
             )
 
@@ -159,21 +213,44 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     audio_data, speaker_name = await utterance_queue.get()
                     message_id = str(uuid.uuid4())
                     local_transcription_buffer = ""
+                    transcription_segments: Dict[int, str] = {}
+                    next_sequence_fallback = 0
                     transcription_done = asyncio.Event()
 
                     async def on_transcription_message_local(
                         result: TranscriptionResult,
                     ):
-                        nonlocal local_transcription_buffer
+                        nonlocal local_transcription_buffer, transcription_segments, next_sequence_fallback
                         current_text = result.text
 
-                        if result.is_replace:
-                            local_transcription_buffer = (
-                                local_transcription_buffer[: -len(current_text)]
-                                + current_text
-                            )
+                        sequence_number = result.sequence_number
+                        if sequence_number is None:
+                            sequence_number = next_sequence_fallback
+                            next_sequence_fallback += 1
                         else:
-                            local_transcription_buffer += current_text
+                            next_sequence_fallback = max(
+                                next_sequence_fallback, sequence_number + 1
+                            )
+
+                        if result.is_replace:
+                            start, end = result.replacement_range or (
+                                sequence_number,
+                                sequence_number,
+                            )
+                            if start > end:
+                                start, end = end, start
+                            for sn in range(start, end + 1):
+                                transcription_segments.pop(sn, None)
+
+                        if current_text:
+                            transcription_segments[sequence_number] = current_text
+                        else:
+                            transcription_segments.pop(sequence_number, None)
+
+                        local_transcription_buffer = "".join(
+                            transcription_segments[sn]
+                            for sn in sorted(transcription_segments.keys())
+                        )
 
                         payload = {
                             "message_id": message_id,
@@ -203,6 +280,8 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                             if not transcription_done.is_set():
                                 transcription_done.set()
                             local_transcription_buffer = ""
+                            transcription_segments.clear()
+                            next_sequence_fallback = 0
 
                     async def on_service_close_local():
                         if not transcription_done.is_set():

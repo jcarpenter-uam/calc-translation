@@ -4,6 +4,8 @@ from typing import AsyncGenerator
 from dotenv import load_dotenv
 from openai import APIError, AsyncOpenAI
 
+from services.debug_service import log_pipeline_step
+
 
 class QwenTranslationModel:
     """
@@ -20,6 +22,12 @@ class QwenTranslationModel:
             )
         except KeyError:
             raise ValueError("The 'DASHSCOPE_API_KEY' environment variable is not set.")
+        log_pipeline_step(
+            "TRANSLATION",
+            "Initialized Qwen translation client.",
+            extra={"base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"},
+            detailed=True,
+        )
 
     async def translate_stream(
         self, text_to_translate: str
@@ -33,6 +41,13 @@ class QwenTranslationModel:
         )
 
         user_prompt += f"\n\n[TEXT TO TRANSLATE]\n{text_to_translate}"
+
+        log_pipeline_step(
+            "TRANSLATION",
+            "Submitting text for translation.",
+            extra={"characters": len(text_to_translate)},
+            detailed=False,
+        )
 
         try:
             stream = await self.client.chat.completions.create(
@@ -51,11 +66,33 @@ class QwenTranslationModel:
             async for chunk in stream:
                 content = chunk.choices[0].delta.content or ""
                 if content:
+                    log_pipeline_step(
+                        "TRANSLATION",
+                        "Received translation delta from Qwen.",
+                        extra={
+                            "delta_length": len(content),
+                            "has_more": not chunk.choices[0].finish_reason,
+                        },
+                        detailed=True,
+                    )
                     yield content
+            log_pipeline_step(
+                "TRANSLATION",
+                "Translation stream completed successfully.",
+                detailed=False,
+            )
         except APIError as e:
             error_message = f"[Translation Error: {e.message}]"
-            print(f"Alibaba Qwen API error: {e}")
+            log_pipeline_step(
+                "TRANSLATION",
+                f"Alibaba Qwen API error: {e}",
+                detailed=False,
+            )
             yield error_message
         except Exception as e:
-            print(f"An unexpected error occurred during translation: {e}")
+            log_pipeline_step(
+                "TRANSLATION",
+                f"An unexpected error occurred during translation: {e}",
+                detailed=False,
+            )
             yield "[Translation Error]"

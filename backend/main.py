@@ -6,6 +6,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from services.rtms_receiver_service import create_transcribe_router
+from services.debug_service import log_pipeline_step
 
 load_dotenv()
 
@@ -15,7 +16,11 @@ app = FastAPI(
 )
 
 DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() == "true"
-print(f"  - Debug mode is: {'ON' if DEBUG_MODE else 'OFF'}")
+log_pipeline_step(
+    "SYSTEM",
+    f"Debug mode is: {'ON' if DEBUG_MODE else 'OFF'}",
+    detailed=False,
+)
 
 
 class ConnectionManager:
@@ -27,11 +32,21 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        print(f"Viewer connected. Total viewers: {len(self.active_connections)}")
+        log_pipeline_step(
+            "WEBSOCKET",
+            "Viewer connected.",
+            extra={"total_viewers": len(self.active_connections)},
+            detailed=False,
+        )
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
-        print(f"Viewer disconnected. Total viewers: {len(self.active_connections)}")
+        log_pipeline_step(
+            "WEBSOCKET",
+            "Viewer disconnected.",
+            extra={"total_viewers": len(self.active_connections)},
+            detailed=False,
+        )
 
     async def broadcast(self, data: Dict[str, Any]):
         """Broadcasts a JSON object to all connected viewers."""

@@ -1,3 +1,6 @@
+from .debug_service import log_pipeline_step
+
+
 class AudioBufferService:
     """
     Buffers incoming audio chunks and yields them in consistent frame sizes
@@ -18,6 +21,16 @@ class AudioBufferService:
             sample_rate * (frame_duration_ms / 1000.0) * sample_width
         )
         self.buffer = bytearray()
+        log_pipeline_step(
+            "BUFFER",
+            "Initialized audio buffer service.",
+            extra={
+                "frame_duration_ms": frame_duration_ms,
+                "sample_rate": sample_rate,
+                "frame_size_bytes": self.frame_size_bytes,
+            },
+            detailed=True,
+        )
 
     def process_audio(self, audio_chunk: bytes):
         """
@@ -31,9 +44,36 @@ class AudioBufferService:
         """
         # Add the new data to our internal buffer
         self.buffer.extend(audio_chunk)
+        log_pipeline_step(
+            "BUFFER",
+            "Buffered incoming audio chunk.",
+            extra={
+                "chunk_bytes": len(audio_chunk),
+                "buffer_size": len(self.buffer),
+                "frame_size": self.frame_size_bytes,
+            },
+            detailed=True,
+        )
 
         # Yield as many full frames as we can from the buffer
         while len(self.buffer) >= self.frame_size_bytes:
             frame = self.buffer[: self.frame_size_bytes]
             self.buffer = self.buffer[self.frame_size_bytes :]
+            log_pipeline_step(
+                "BUFFER",
+                "Emitting frame from buffer for VAD processing.",
+                extra={
+                    "emitted_frame_bytes": len(frame),
+                    "buffer_remaining": len(self.buffer),
+                },
+                detailed=True,
+            )
             yield frame
+
+        if self.buffer:
+            log_pipeline_step(
+                "BUFFER",
+                "Residual audio data retained in buffer awaiting next chunk.",
+                extra={"buffer_size": len(self.buffer)},
+                detailed=True,
+            )

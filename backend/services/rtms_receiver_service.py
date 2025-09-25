@@ -11,7 +11,13 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .audio_processing_service import AudioProcessingService
 from .buffer_service import AudioBufferService
 from .correction_service import CorrectionService
-from .debug_service import save_audio_to_wav
+from .debug_service import (
+    log_pipeline_step,
+    log_utterance_end,
+    log_utterance_start,
+    log_utterance_step,
+    save_audio_to_wav,
+)
 from .transcription_service import TranscriptionResult, TranscriptionService
 from .translation_service import TranslationService
 from .vad_service import VADService
@@ -23,7 +29,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
     @router.websocket("/ws/transcribe")
     async def websocket_transcribe_endpoint(websocket: WebSocket):
         await websocket.accept()
-        print("Transcription client connected.")
+        log_pipeline_step("SESSION", "Transcription client connected.", detailed=False)
 
         loop = asyncio.get_running_loop()
         audio_processor = AudioProcessingService()
@@ -42,9 +48,19 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             session_raw_audio_chunks = []
             session_before_utterances = []
             session_after_utterances = []
+            log_pipeline_step(
+                "SESSION",
+                "Debug session directory initialized.",
+                extra={"path": session_debug_dir},
+                detailed=True,
+            )
 
         async def on_service_error(error_message: str):
-            print(f"Transcription Error: {error_message}")
+            log_pipeline_step(
+                "TRANSCRIPTION",
+                f"Transcription Error: {error_message}",
+                detailed=False,
+            )
             await websocket.close(
                 code=1011, reason=f"Transcription Error: {error_message}"
             )
@@ -57,8 +73,15 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
             target_utterance = utterance_history[-CORRECTION_CONTEXT_THRESHOLD]
 
-            print(
-                f"Running contextual correction for: '{target_utterance['transcription']}'"
+            log_utterance_step(
+                "CORRECTION",
+                target_utterance["message_id"],
+                "Running contextual correction.",
+                speaker=target_utterance["speaker"],
+                extra={
+                    "target_transcription": target_utterance["transcription"],
+                    "history_size": len(utterance_history),
+                },
             )
 
             context_list = [u["transcription"] for u in utterance_history]
@@ -73,8 +96,13 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             reason = response_data.get("reasoning", "No reason provided.")
 
             if is_needed:
-
-                print(f"Model decided a correction is needed. Reason: {reason}")
+                log_utterance_step(
+                    "CORRECTION",
+                    target_utterance["message_id"],
+                    "Model decided a correction is needed.",
+                    speaker=target_utterance["speaker"],
+                    extra={"reason": reason},
+                )
 
                 corrected_transcription = response_data.get("corrected_sentence")
 
@@ -82,8 +110,12 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     corrected_transcription
                     and corrected_transcription != target_utterance["transcription"]
                 ):
-                    print(
-                        f"Re-translating contextually corrected text for message_id: {target_utterance['message_id']}"
+                    log_utterance_step(
+                        "CORRECTION",
+                        target_utterance["message_id"],
+                        "Re-translating contextually corrected text.",
+                        speaker=target_utterance["speaker"],
+                        detailed=False,
                     )
                     full_corrected_translation = ""
                     async for chunk in translation_service.translate_stream(
@@ -91,8 +123,16 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     ):
                         full_corrected_translation = chunk
 
-                    print(
-                        f"Updated translation complete: '{full_corrected_translation}'"
+                    log_utterance_step(
+                        "CORRECTION",
+                        target_utterance["message_id"],
+                        "Updated translation complete.",
+                        speaker=target_utterance["speaker"],
+                        extra={
+                            "corrected_transcription": corrected_transcription,
+                            "updated_translation": full_corrected_translation,
+                        },
+                        detailed=False,
                     )
                     payload = {
                         "message_id": target_utterance["message_id"],
@@ -103,12 +143,21 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         "isfinalize": True,
                     }
                     await viewer_manager.broadcast(payload)
-                    print(
-                        f"Correction broadcasted for message_id: {target_utterance['message_id']}"
+                    log_utterance_step(
+                        "CORRECTION",
+                        target_utterance["message_id"],
+                        "Correction broadcast complete.",
+                        speaker=target_utterance["speaker"],
+                        detailed=False,
                     )
             else:
-                print(
-                    f"Model decided no correction was needed. Reason: {reason}. Skipping broadcast."
+                log_utterance_step(
+                    "CORRECTION",
+                    target_utterance["message_id"],
+                    "Model decided no correction was needed.",
+                    speaker=target_utterance["speaker"],
+                    extra={"reason": reason},
+                    detailed=False,
                 )
 
         async def handle_translation(
@@ -116,12 +165,26 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             speaker_name: str,
             message_id: str,
         ):
-            print(f"Translating for {speaker_name}: '{sentence_to_translate}'")
+            log_utterance_step(
+                "TRANSLATION",
+                message_id,
+                "Starting translation for utterance.",
+                speaker=speaker_name,
+                extra={"text": sentence_to_translate},
+                detailed=False,
+            )
             full_translation = ""
             async for translated_chunk in translation_service.translate_stream(
                 text_to_translate=sentence_to_translate
             ):
                 full_translation = translated_chunk
+                log_utterance_step(
+                    "TRANSLATION",
+                    message_id,
+                    "Received translation chunk.",
+                    speaker=speaker_name,
+                    extra={"chunk": translated_chunk},
+                )
                 payload = {
                     "message_id": message_id,
                     "transcription": sentence_to_translate,
@@ -141,7 +204,14 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 "isfinalize": True,
             }
             await viewer_manager.broadcast(payload)
-            print(f"Translation complete: '{full_translation}'")
+            log_utterance_step(
+                "TRANSLATION",
+                message_id,
+                "Translation complete.",
+                speaker=speaker_name,
+                extra={"translation": full_translation},
+                detailed=False,
+            )
 
             utterance_history.append(
                 {
@@ -151,21 +221,53 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 }
             )
 
+            log_utterance_step(
+                "TRANSLATION",
+                message_id,
+                "Queued utterance for contextual correction history.",
+                speaker=speaker_name,
+                detailed=True,
+            )
+
             asyncio.create_task(run_contextual_correction())
 
         async def transcription_worker():
             while True:
                 try:
                     audio_data, speaker_name = await utterance_queue.get()
+                    log_pipeline_step(
+                        "QUEUE",
+                        "Transcription worker dequeued utterance for processing.",
+                        speaker=speaker_name,
+                        extra={
+                            "queue_depth": utterance_queue.qsize(),
+                            "utterance_bytes": len(audio_data),
+                        },
+                        detailed=True,
+                    )
                     message_id = str(uuid.uuid4())
                     local_transcription_buffer = ""
                     transcription_done = asyncio.Event()
+
+                    log_utterance_start(message_id, speaker_name)
 
                     async def on_transcription_message_local(
                         result: TranscriptionResult,
                     ):
                         nonlocal local_transcription_buffer
                         current_text = result.text
+
+                        log_utterance_step(
+                            "TRANSCRIPTION",
+                            message_id,
+                            "Received transcription chunk.",
+                            speaker=speaker_name,
+                            extra={
+                                "is_final": result.is_final,
+                                "is_replace": result.is_replace,
+                                "chunk": current_text,
+                            },
+                        )
 
                         if result.is_replace:
                             local_transcription_buffer = (
@@ -188,8 +290,13 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         if result.is_final:
                             final_chunk = local_transcription_buffer.strip()
                             if final_chunk:
-                                print(
-                                    f"VAD-based final sentence ({message_id}) detected for {speaker_name}: '{final_chunk}'"
+                                log_utterance_step(
+                                    "TRANSCRIPTION",
+                                    message_id,
+                                    "VAD-based final sentence detected.",
+                                    speaker=speaker_name,
+                                    extra={"final_chunk": final_chunk},
+                                    detailed=False,
                                 )
 
                                 asyncio.create_task(
@@ -201,11 +308,25 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                                 )
 
                             if not transcription_done.is_set():
+                                log_utterance_step(
+                                    "TRANSCRIPTION",
+                                    message_id,
+                                    "Transcription marked complete by service.",
+                                    speaker=speaker_name,
+                                    detailed=True,
+                                )
                                 transcription_done.set()
                             local_transcription_buffer = ""
 
                     async def on_service_close_local():
                         if not transcription_done.is_set():
+                            log_utterance_step(
+                                "TRANSCRIPTION",
+                                message_id,
+                                "Transcription service closed unexpectedly.",
+                                speaker=speaker_name,
+                                detailed=False,
+                            )
                             transcription_done.set()
 
                     transcription_service = TranscriptionService(
@@ -215,20 +336,50 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         loop=loop,
                     )
                     await loop.run_in_executor(None, transcription_service.connect)
+                    log_utterance_step(
+                        "TRANSCRIPTION",
+                        message_id,
+                        "Transcription service connected.",
+                        speaker=speaker_name,
+                        detailed=True,
+                    )
 
                     chunk_size = 1280
                     if len(audio_data) > 0:
                         for i in range(0, len(audio_data), chunk_size):
                             chunk = audio_data[i : i + chunk_size]
+                            log_utterance_step(
+                                "TRANSCRIPTION",
+                                message_id,
+                                "Sending audio chunk to transcription engine.",
+                                speaker=speaker_name,
+                                extra={
+                                    "offset": i,
+                                    "chunk_bytes": len(chunk),
+                                },
+                                detailed=True,
+                            )
                             transcription_service.send_chunk(chunk)
                             await asyncio.sleep(0.04)
+                    log_utterance_step(
+                        "TRANSCRIPTION",
+                        message_id,
+                        "Signaling end of audio stream to transcription engine.",
+                        speaker=speaker_name,
+                        detailed=True,
+                    )
                     transcription_service.finalize_utterance()
                     await transcription_done.wait()
+                    log_utterance_end(message_id, speaker_name)
                     utterance_queue.task_done()
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    print(f"Error in transcription worker: {e}")
+                    log_pipeline_step(
+                        "TRANSCRIPTION",
+                        f"Error in transcription worker: {e}",
+                        detailed=False,
+                    )
 
         worker_task = asyncio.create_task(transcription_worker())
         current_speaker = "Unknown"
@@ -238,31 +389,84 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 message = json.loads(raw_message)
                 current_speaker = message.get("userName", "Unknown")
                 audio_chunk = base64.b64decode(message.get("audio"))
+                log_pipeline_step(
+                    "SESSION",
+                    "Received audio chunk from client.",
+                    extra={
+                        "speaker": current_speaker,
+                        "chunk_bytes": len(audio_chunk),
+                    },
+                    detailed=True,
+                )
 
                 if DEBUG_MODE:
                     session_raw_audio_chunks.append(audio_chunk)
 
                 for frame in buffer_service.process_audio(audio_chunk):
                     for event, data in vad_service.process_audio(frame):
-                        if event == "end":
+                        if event == "start":
+                            log_pipeline_step(
+                                "VAD",
+                                "VAD detected speech start.",
+                                speaker=current_speaker,
+                                extra={"buffered_bytes": len(data)},
+                                detailed=False,
+                            )
+                        elif event == "speech":
+                            log_pipeline_step(
+                                "VAD",
+                                "Accumulating speech frame for utterance.",
+                                speaker=current_speaker,
+                                extra={"frame_bytes": len(data)},
+                                detailed=True,
+                            )
+                        elif event == "end":
                             processed_audio = audio_processor.process(data)
                             if DEBUG_MODE:
                                 session_before_utterances.append(data)
                                 session_after_utterances.append(processed_audio)
+                            log_pipeline_step(
+                                "VAD",
+                                "Utterance end detected and queued for processing.",
+                                speaker=current_speaker,
+                                detailed=False,
+                            )
                             await utterance_queue.put(
                                 (processed_audio, current_speaker)
                             )
+                            log_pipeline_step(
+                                "QUEUE",
+                                "Queued processed utterance for transcription worker.",
+                                speaker=current_speaker,
+                                extra={
+                                    "queue_depth": utterance_queue.qsize(),
+                                    "utterance_bytes": len(processed_audio),
+                                },
+                                detailed=True,
+                            )
 
         except WebSocketDisconnect:
-            print("Transcription client disconnected.")
+            log_pipeline_step(
+                "SESSION",
+                "Transcription client disconnected.",
+                detailed=False,
+            )
         except Exception as e:
-            print(f"An unexpected error occurred in transcribe endpoint: {e}")
+            log_pipeline_step(
+                "SESSION",
+                f"An unexpected error occurred in transcribe endpoint: {e}",
+                detailed=False,
+            )
         finally:
             worker_task.cancel()
             await asyncio.sleep(0.1)
 
             if DEBUG_MODE and session_debug_dir:
-                print("Session ended. Saving full audio files...")
+                log_pipeline_step(
+                    "SESSION",
+                    "Session ended. Saving full audio files...",
+                    detailed=False,
+                )
                 save_audio_to_wav(
                     session_raw_audio_chunks, session_debug_dir, "raw_session_audio.wav"
                 )

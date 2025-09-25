@@ -2,11 +2,18 @@ import asyncio
 import base64
 import json
 import sys
+from pathlib import Path
 
 import numpy as np
 import resampy
 import sounddevice as sd
 import websockets
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
+from services.debug_service import log_pipeline_step
 
 # --- Configuration ---
 WEBSOCKET_URL = "ws://localhost:8000/ws/transcribe"
@@ -20,16 +27,23 @@ buffer_lock = asyncio.Lock()
 
 def select_audio_device():
     """Lists available input devices and prompts the user to select one."""
-    print("Searching for available audio input devices...")
+    log_pipeline_step("CLI", "Searching for available audio input devices...", detailed=False)
     devices = sd.query_devices()
     input_devices = [device for device in devices if device["max_input_channels"] > 0]
     if not input_devices:
-        print("No audio input devices found.", file=sys.stderr)
+        log_pipeline_step(
+            "CLI",
+            "No audio input devices found.",
+            detailed=False,
+            stream=sys.stderr,
+        )
         return None, None
-    print("\nAvailable audio input devices:")
+    log_pipeline_step("CLI", "Available audio input devices:", detailed=False)
     for i, device in enumerate(input_devices):
-        print(
-            f"  [{i}] {device['name']} (default rate: {int(device['default_samplerate'])} Hz)"
+        log_pipeline_step(
+            "CLI",
+            f"[{i}] {device['name']} (default rate: {int(device['default_samplerate'])} Hz)",
+            detailed=False,
         )
     while True:
         try:
@@ -38,25 +52,51 @@ def select_audio_device():
                 selected_device = input_devices[choice]
                 device_name = selected_device["name"]
                 native_rate = int(selected_device["default_samplerate"])
-                print(f"You selected: '{device_name}' running at {native_rate} Hz")
+                log_pipeline_step(
+                    "CLI",
+                    f"You selected: '{device_name}' running at {native_rate} Hz",
+                    detailed=False,
+                )
                 return device_name, native_rate
             else:
-                print("Invalid number. Please try again.", file=sys.stderr)
+                log_pipeline_step(
+                    "CLI",
+                    "Invalid number. Please try again.",
+                    detailed=False,
+                    stream=sys.stderr,
+                )
         except (ValueError, IndexError):
-            print("Invalid input. Please enter a number.", file=sys.stderr)
+            log_pipeline_step(
+                "CLI",
+                "Invalid input. Please enter a number.",
+                detailed=False,
+                stream=sys.stderr,
+            )
         except KeyboardInterrupt:
-            print("\nSelection cancelled.")
+            log_pipeline_step(
+                "CLI",
+                "Selection cancelled.",
+                detailed=False,
+            )
             return None, None
 
 
 async def receive_transcriptions(ws):
     """Receives and prints transcription results from the server."""
-    print("--- Live Transcription Active (Press Ctrl+C to stop) 🎤 ---")
+    log_pipeline_step(
+        "CLI",
+        "--- Live Transcription Active (Press Ctrl+C to stop) 🎤 ---",
+        detailed=False,
+    )
     try:
         async for message in ws:
             pass
     except websockets.exceptions.ConnectionClosed as e:
-        print(f"\nConnection closed by server: {e.reason}")
+        log_pipeline_step(
+            "CLI",
+            f"Connection closed by server: {e.reason}",
+            detailed=False,
+        )
 
 
 async def send_audio(ws, stop_event: asyncio.Event):
@@ -74,7 +114,11 @@ async def send_audio(ws, stop_event: asyncio.Event):
 
             if data_chunk:
                 # Log the size of the chunk being sent
-                print(f"Sending audio chunk of size: {len(data_chunk)} bytes")
+                log_pipeline_step(
+                    "CLI",
+                    f"Sending audio chunk of size: {len(data_chunk)} bytes",
+                    detailed=True,
+                )
 
                 encoded_audio = base64.b64encode(data_chunk).decode("utf-8")
                 payload = {"userName": SPEAKER_NAME, "audio": encoded_audio}
@@ -84,7 +128,11 @@ async def send_audio(ws, stop_event: asyncio.Event):
             await asyncio.sleep(0.01)
 
     except websockets.exceptions.ConnectionClosed:
-        print("\nSender task is stopping because connection closed.")
+        log_pipeline_step(
+            "CLI",
+            "Sender task is stopping because connection closed.",
+            detailed=False,
+        )
     except asyncio.CancelledError:
         pass
 
@@ -97,7 +145,12 @@ async def main(device_name: str, native_rate: int):
     def audio_callback(indata: np.ndarray, frames: int, time, status: sd.CallbackFlags):
         """Captures, resamples, and adds audio data to the shared buffer."""
         if status:
-            print(status, file=sys.stderr)
+            log_pipeline_step(
+                "CLI",
+                f"Audio callback status: {status}",
+                detailed=True,
+                stream=sys.stderr,
+            )
 
         # Resample to the target rate and convert to 16-bit PCM bytes
         resampled_data = resampy.resample(
@@ -115,12 +168,20 @@ async def main(device_name: str, native_rate: int):
 
     try:
         async with websockets.connect(WEBSOCKET_URL) as ws:
-            print(f"\nConnected to {WEBSOCKET_URL}")
+            log_pipeline_step(
+                "CLI",
+                f"Connected to {WEBSOCKET_URL}",
+                detailed=False,
+            )
 
             receiver_task = asyncio.create_task(receive_transcriptions(ws))
             sender_task = asyncio.create_task(send_audio(ws, stop_event))
 
-            print(f"Starting audio stream from '{device_name}' at {native_rate} Hz...")
+            log_pipeline_step(
+                "CLI",
+                f"Starting audio stream from '{device_name}' at {native_rate} Hz...",
+                detailed=False,
+            )
             with sd.InputStream(
                 samplerate=native_rate,
                 device=device_name,
@@ -136,9 +197,17 @@ async def main(device_name: str, native_rate: int):
             await sender_task
 
     except websockets.exceptions.ConnectionClosedError:
-        print("\nCould not connect to the server. Is it running?")
+        log_pipeline_step(
+            "CLI",
+            "Could not connect to the server. Is it running?",
+            detailed=False,
+        )
     except Exception as e:
-        print(f"\nAn unexpected error occurred: {e}")
+        log_pipeline_step(
+            "CLI",
+            f"An unexpected error occurred: {e}",
+            detailed=False,
+        )
 
 
 if __name__ == "__main__":
@@ -149,4 +218,8 @@ if __name__ == "__main__":
                 main(device_name=selected_device, native_rate=native_samplerate)
             )
     except KeyboardInterrupt:
-        print("\n--- Shutting down gracefully ---")
+        log_pipeline_step(
+            "CLI",
+            "--- Shutting down gracefully ---",
+            detailed=False,
+        )

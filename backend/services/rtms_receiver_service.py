@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import uuid
+from collections import deque
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -26,11 +27,13 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
         loop = asyncio.get_running_loop()
         audio_processor = AudioProcessingService()
-        vad_service = VADService(aggressiveness=1, padding_duration_ms=550)
+        vad_service = VADService()
         buffer_service = AudioBufferService(frame_duration_ms=30)
         translation_service = TranslationService()
         correction_service = CorrectionService()
         utterance_queue = asyncio.Queue()
+
+        utterance_history = deque(maxlen=5)
 
         session_debug_dir = None
         if DEBUG_MODE:
@@ -46,8 +49,72 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 code=1011, reason=f"Transcription Error: {error_message}"
             )
 
+        async def run_contextual_correction():
+            CORRECTION_CONTEXT_THRESHOLD = 3
+
+            if len(utterance_history) < CORRECTION_CONTEXT_THRESHOLD:
+                return
+
+            target_utterance = utterance_history[-CORRECTION_CONTEXT_THRESHOLD]
+
+            print(
+                f"Running contextual correction for: '{target_utterance['transcription']}'"
+            )
+
+            context_list = [u["transcription"] for u in utterance_history]
+
+            response_data = await correction_service.correct_with_context(
+                text_to_correct=target_utterance["transcription"],
+                context_history=context_list,
+            )
+
+            is_needed = response_data.get("is_correction_needed", False)
+
+            reason = response_data.get("reasoning", "No reason provided.")
+
+            if is_needed:
+
+                print(f"Model decided a correction is needed. Reason: {reason}")
+
+                corrected_transcription = response_data.get("corrected_sentence")
+
+                if (
+                    corrected_transcription
+                    and corrected_transcription != target_utterance["transcription"]
+                ):
+                    print(
+                        f"Re-translating contextually corrected text for message_id: {target_utterance['message_id']}"
+                    )
+                    full_corrected_translation = ""
+                    async for chunk in translation_service.translate_stream(
+                        text_to_translate=corrected_transcription
+                    ):
+                        full_corrected_translation = chunk
+
+                    print(
+                        f"Updated translation complete: '{full_corrected_translation}'"
+                    )
+                    payload = {
+                        "message_id": target_utterance["message_id"],
+                        "transcription": corrected_transcription,
+                        "translation": full_corrected_translation,
+                        "speaker": target_utterance["speaker"],
+                        "type": "correction",
+                        "isfinalize": True,
+                    }
+                    await viewer_manager.broadcast(payload)
+                    print(
+                        f"Correction broadcasted for message_id: {target_utterance['message_id']}"
+                    )
+            else:
+                print(
+                    f"Model decided no correction was needed. Reason: {reason}. Skipping broadcast."
+                )
+
         async def handle_translation(
-            sentence_to_translate: str, speaker_name: str, message_id: str
+            sentence_to_translate: str,
+            speaker_name: str,
+            message_id: str,
         ):
             print(f"Translating for {speaker_name}: '{sentence_to_translate}'")
             full_translation = ""
@@ -76,41 +143,21 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             await viewer_manager.broadcast(payload)
             print(f"Translation complete: '{full_translation}'")
 
-        async def handle_correction(
-            original_transcription: str, speaker_name: str, message_id: str
-        ):
-            correction_service.add_to_context(original_transcription)
-
-            corrected_transcription = await correction_service.correct_text(
-                original_transcription
+            utterance_history.append(
+                {
+                    "message_id": message_id,
+                    "speaker": speaker_name,
+                    "transcription": sentence_to_translate,
+                }
             )
 
-            if corrected_transcription != original_transcription:
-                print(f"Re-translating corrected text for message_id: {message_id}")
-
-                full_corrected_translation = ""
-                async for chunk in translation_service.translate_stream(
-                    text_to_translate=corrected_transcription
-                ):
-                    full_corrected_translation = chunk
-
-                print(f"Updated translation complete: '{full_corrected_translation}'")
-
-                payload = {
-                    "message_id": message_id,
-                    "transcription": corrected_transcription,
-                    "translation": full_corrected_translation,
-                    "speaker": speaker_name,
-                    "type": "correction",
-                    "isfinalize": True,
-                }
-                await viewer_manager.broadcast(payload)
-                print(f"Correction broadcasted for message_id: {message_id}")
+            asyncio.create_task(run_contextual_correction())
 
         async def transcription_worker():
             while True:
                 try:
                     audio_data, speaker_name = await utterance_queue.get()
+                    message_id = str(uuid.uuid4())
                     local_transcription_buffer = ""
                     transcription_done = asyncio.Event()
 
@@ -129,9 +176,11 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                             local_transcription_buffer += current_text
 
                         payload = {
+                            "message_id": message_id,
                             "transcription": local_transcription_buffer,
                             "translation": "",
                             "speaker": speaker_name,
+                            "type": "partial",
                             "isfinalize": False,
                         }
                         await viewer_manager.broadcast(payload)
@@ -139,25 +188,15 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         if result.is_final:
                             final_chunk = local_transcription_buffer.strip()
                             if final_chunk:
-                                message_id = str(uuid.uuid4())
-
                                 print(
                                     f"VAD-based final sentence ({message_id}) detected for {speaker_name}: '{final_chunk}'"
                                 )
 
-                                # --- IMMEDIATE PIPELINE ---
-                                # Start the initial, low-latency translation immediately
                                 asyncio.create_task(
                                     handle_translation(
-                                        final_chunk, speaker_name, message_id
-                                    )
-                                )
-
-                                # --- CORRECTION PIPELINE ---
-                                # In parallel, start the correction task
-                                asyncio.create_task(
-                                    handle_correction(
-                                        final_chunk, speaker_name, message_id
+                                        final_chunk,
+                                        speaker_name,
+                                        message_id,
                                     )
                                 )
 

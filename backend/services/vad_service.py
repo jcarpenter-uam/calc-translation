@@ -23,7 +23,7 @@ class VADService:
         sample_rate=16000,
         frame_duration_ms=30,
         aggressiveness=1,
-        padding_duration_ms=300,
+        padding_duration_ms=550,
     ):
         if sample_rate not in [8000, 16000, 32000, 48000]:
             raise ValueError(f"VAD unsupported sample rate: {sample_rate}")

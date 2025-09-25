@@ -1,4 +1,4 @@
-from collections import deque
+import json
 
 import ollama
 
@@ -6,62 +6,66 @@ import ollama
 class OllamaCorrectionService:
     """
     Handles transcription correction using a local Ollama model.
-    Manages a rolling context window to improve correction accuracy.
     """
 
-    def __init__(self, model: str = "gemma3n:e4b", context_size: int = 5):
-        """
-        Initializes the service.
-
-        Args:
-            model (str): The name of the Ollama model to use.
-            context_size (int): The number of previous utterances to keep for context.
-        """
+    def __init__(self, model: str = "translation_correction"):
         print(f"Initializing Ollama Correction Service with model '{model}'...")
         self.model = model
         self.client = ollama.AsyncClient()
-        self.context = deque(maxlen=context_size)
 
-    def add_to_context(self, original_transcription: str):
-        """Adds a finalized transcription to the context window."""
-        self.context.append(original_transcription)
-
-    async def correct_text(self, text_to_correct: str) -> str:
+    async def correct_with_context(
+        self, text_to_correct: str, context_history: list[str]
+    ) -> dict:
         """
-        Corrects a given text using the Ollama model with conversation context.
+        Sends a transcript to the custom correction model and returns the parsed JSON response.
         """
-        context_str = "\n".join(self.context)
+        formatted_context = []
+        for sentence in context_history:
+            if sentence == text_to_correct:
+                formatted_context.append(f">> {sentence}")
+            else:
+                formatted_context.append(sentence)
+        context_str = "\n".join(formatted_context)
 
         prompt = f"""
-        You are an expert in correcting Chinese speech-to-text transcription errors.
-        
-        First, review the recent conversation history for context:
-        --- CONVERSATIONAL CONTEXT ---
+        --- CONVERSATION TRANSCRIPT ---
         {context_str}
-        --- END CONTEXT ---
-
-        Now, correct the following single sentence. It may contain common STT errors like homophones.
-        
-        SENTENCE TO CORRECT: "{text_to_correct}"
-        
-        Your task is to respond with ONLY the corrected version of the "SENTENCE TO CORRECT". Do not include the context, any explanation, or quotation marks in your output.
+        --- END TRANSCRIPT ---
         """
 
         try:
             response = await self.client.chat(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                options={"temperature": 0.2},
             )
-            corrected_text = response["message"]["content"].strip()
 
-            if corrected_text and corrected_text != text_to_correct:
-                print(f"Correction made: '{text_to_correct}' -> '{corrected_text}'")
-                return corrected_text
+            response_content = response["message"]["content"]
+
+            json_start_index = response_content.find("{")
+            json_end_index = response_content.rfind("}")
+
+            if json_start_index != -1 and json_end_index != -1:
+                json_string = response_content[json_start_index : json_end_index + 1]
+                response_data = json.loads(json_string)
+                return response_data
             else:
-                print("No correction needed.")
-                return text_to_correct
+                raise json.JSONDecodeError(
+                    "No JSON object found in response", response_content, 0
+                )
 
+        except json.JSONDecodeError:
+            print(
+                f"Error: Could not extract valid JSON from response. Full response: {response_content}"
+            )
+            return {
+                "is_correction_needed": False,
+                "corrected_sentence": text_to_correct,
+                "reasoning": "JSON decode error.",
+            }
         except Exception as e:
             print(f"Error calling Ollama: {e}")
-            return text_to_correct
+            return {
+                "is_correction_needed": False,
+                "corrected_sentence": text_to_correct,
+                "reasoning": "Ollama API error.",
+            }

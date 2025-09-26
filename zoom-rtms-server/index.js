@@ -1,7 +1,15 @@
 import "dotenv/config";
-
 import rtms from "@zoom/rtms";
 import { WebSocket } from "ws";
+import fs from "fs";
+
+const logDir = "logs";
+
+// Create the 'logs' directory if it does not exist
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+  console.log(`Created directory: ${logDir}`);
+}
 
 const TRANSCRIPTION_SERVER_URL = process.env.TRANSCRIPTION_SERVER_URL;
 const CHUNK_SIZE_BYTES = 1280;

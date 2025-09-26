@@ -1,7 +1,52 @@
 services:
+  zoom-rtms-server:
+    build: ./zoom-rtms-server
+    container_name: zoom-rtms-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
+      - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
+      - TRANSCRIPTION_SERVER_URL=${TRANSCRIPTION_SERVER_URL}
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - zoom-translation
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "4173:4173"
+    depends_on:
+      - backend
+    networks:
+      - zoom-translation
+
+  backend:
+    build: ./backend
+    container_name: backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APPID=${APPID}
+      - APISECRET=${APISECRET}
+      - APIKEY=${APIKEY}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DEBUG_MODE=True
+    depends_on:
+      - ollama
+    networks:
+      - zoom-translation
+
   ollama:
     image: ollama/ollama
     container_name: ollama
+    restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
@@ -13,7 +58,12 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    restart: unless-stopped
+    networks:
+      - zoom-translation
 
 volumes:
   ollama_data:
+
+networks:
+  zoom-translation:
+    driver: bridge

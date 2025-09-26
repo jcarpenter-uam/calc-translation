@@ -29,6 +29,7 @@ multidict==6.6.4
 noisereduce==3.0.3
 numba==0.62.0
 numpy==2.3.3
+ollama==0.5.4
 openai==1.107.3
 packaging==25.0
 pillow==11.3.0

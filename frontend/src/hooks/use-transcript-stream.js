@@ -62,6 +62,19 @@ export function useTranscriptStream(url) {
               (t) => t.id === data.message_id,
             );
 
+            if (data.type === "status_update") {
+              if (existingIndex !== -1) {
+                const updatedTranscript = {
+                  ...prevTranscripts[existingIndex],
+                  correctionStatus: data.correction_status, // e.g., 'checking', 'checked_ok'
+                };
+                const newTranscripts = [...prevTranscripts];
+                newTranscripts[existingIndex] = updatedTranscript;
+                return newTranscripts;
+              }
+              return prevTranscripts;
+            }
+
             // Handle Correction: Find the existing message and update it
             if (data.type === "correction") {
               if (existingIndex !== -1) {
@@ -76,6 +89,7 @@ export function useTranscriptStream(url) {
                   transcription: data.transcription, // Set the new text
                   translation: data.translation,
                   type: "correction",
+                  correctionStatus: "corrected",
                 };
 
                 const newTranscripts = [...prevTranscripts];
@@ -107,6 +121,7 @@ export function useTranscriptStream(url) {
                 transcription: data.transcription,
                 isFinalized: data.isfinalize,
                 type: data.type,
+                correctionStatus: null,
               };
               return [...prevTranscripts, newTranscript];
             }

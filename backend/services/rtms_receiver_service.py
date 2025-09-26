@@ -73,6 +73,14 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
             target_utterance = utterance_history[-CORRECTION_CONTEXT_THRESHOLD]
 
+            await viewer_manager.broadcast(
+                {
+                    "message_id": target_utterance["message_id"],
+                    "type": "status_update",
+                    "correction_status": "checking",
+                }
+            )
+
             log_utterance_step(
                 "CORRECTION",
                 target_utterance["message_id"],
@@ -96,6 +104,15 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             reason = response_data.get("reasoning", "No reason provided.")
 
             if is_needed:
+
+                await viewer_manager.broadcast(
+                    {
+                        "message_id": target_utterance["message_id"],
+                        "type": "status_update",
+                        "correction_status": "correcting",
+                    }
+                )
+
                 log_utterance_step(
                     "CORRECTION",
                     target_utterance["message_id"],
@@ -151,6 +168,14 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         detailed=False,
                     )
             else:
+                await viewer_manager.broadcast(
+                    {
+                        "message_id": target_utterance["message_id"],
+                        "type": "status_update",
+                        "correction_status": "checked_ok",
+                    }
+                )
+
                 log_utterance_step(
                     "CORRECTION",
                     target_utterance["message_id"],

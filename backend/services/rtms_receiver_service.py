@@ -318,12 +318,11 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                                 transcription_done.set()
                             local_transcription_buffer = ""
 
-                    async def on_service_close_local():
+                    async def on_service_close_local(code: int, reason: str):
                         if not transcription_done.is_set():
                             log_utterance_step(
                                 "TRANSCRIPTION",
-                                message_id,
-                                "Transcription service closed unexpectedly.",
+                                f"Transcription service closed unexpectedly. Code: {code}, Reason: {reason}",
                                 speaker=speaker_name,
                                 detailed=False,
                             )
@@ -359,7 +358,9 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                                 },
                                 detailed=True,
                             )
-                            transcription_service.send_chunk(chunk)
+                            await loop.run_in_executor(
+                                None, transcription_service.send_chunk, chunk
+                            )
                             await asyncio.sleep(0.04)
                     log_utterance_step(
                         "TRANSCRIPTION",
@@ -368,7 +369,9 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         speaker=speaker_name,
                         detailed=True,
                     )
-                    transcription_service.finalize_utterance()
+                    await loop.run_in_executor(
+                        None, transcription_service.finalize_utterance
+                    )
                     await transcription_done.wait()
                     log_utterance_end(message_id, speaker_name)
                     utterance_queue.task_done()

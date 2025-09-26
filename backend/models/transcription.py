@@ -14,7 +14,6 @@ from wsgiref.handlers import format_date_time
 
 import websocket
 from dotenv import load_dotenv
-
 from services.debug_service import log_pipeline_step
 
 STATUS_FIRST_FRAME = 0
@@ -275,7 +274,9 @@ class IFlyTekTranscriptionService:
             },
             detailed=False,
         )
-        asyncio.run_coroutine_threadsafe(self.on_close_callback(), self.loop)
+        asyncio.run_coroutine_threadsafe(
+            self.on_close_callback(close_status_code, close_msg), self.loop
+        )
 
     def _on_open(self, ws):
         log_pipeline_step(

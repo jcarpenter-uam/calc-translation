@@ -1,6 +1,0 @@
-.env
-.env.example
-setup.md
-node_modules/
-Dockerfile
-.dockerignore

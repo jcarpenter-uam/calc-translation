@@ -6,6 +6,7 @@ debug/
 # NPM
 node_modules/
 logs/
+dist/
 
 # SECRETS
 .env

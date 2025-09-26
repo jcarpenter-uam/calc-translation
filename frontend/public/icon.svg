@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="512" height="512">
+  <rect width="1024" height="1024" fill="black"/>
+  <text x="220" y="450" font-family="Arial, sans-serif" font-size="320" fill="white">文</text>
+  <text x="580" y="450" font-family="Arial, sans-serif" font-size="320" fill="white">A</text>
+  <polygon points="350,700 650,700 650,620 780,740 650,860 650,780 350,780" fill="white"/>
+</svg>

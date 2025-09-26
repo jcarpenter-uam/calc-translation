@@ -9,5 +9,8 @@ export default defineConfig({
       "/ws": "ws://localhost:8000",
     },
   },
+  preview: {
+    allowedHosts: ["translator.my-uam.com"],
+  },
   plugins: [react(), tailwindcss()],
 });

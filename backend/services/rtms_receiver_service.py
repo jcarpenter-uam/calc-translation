@@ -489,14 +489,17 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             worker_task.cancel()
             await asyncio.sleep(0.1)
 
+            # --- Save WAV files only in DEBUG_MODE ---
             if DEBUG_MODE and session_debug_dir:
                 log_pipeline_step(
                     "SESSION",
-                    "Session ended. Saving full audio files...",
+                    "Session ended. Saving debug audio files...",
                     detailed=False,
                 )
                 save_audio_to_wav(
-                    session_raw_audio_chunks, session_debug_dir, "raw_session_audio.wav"
+                    session_raw_audio_chunks,
+                    session_debug_dir,
+                    "raw_session_audio.wav",
                 )
                 save_audio_to_wav(
                     session_before_utterances,
@@ -508,25 +511,26 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     session_debug_dir,
                     "after_processing_utterances.wav",
                 )
-                log_pipeline_step(
-                    "SESSION",
-                    "Saving transcript cache history...",
-                    detailed=False,
-                )
-                try:
-                    # Get the history from the cache manager
-                    transcript_history = viewer_manager.cache.get_history()
-                    cache_filepath = os.path.join(
-                        session_debug_dir, "transcript_history.json"
-                    )
 
-                    # Write the history to a pretty-printed JSON file for readability
+            try:
+                # Always save session history
+                output_dir = "session_history"
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                file_name = f"history_{timestamp}.json"
+
+                # Ensure the directory exists
+                os.makedirs(output_dir, exist_ok=True)
+                cache_filepath = os.path.join(output_dir, file_name)
+
+                # Get and write the history, if it's not empty
+                transcript_history = viewer_manager.cache.get_history()
+                if transcript_history:
                     with open(cache_filepath, "w", encoding="utf-8") as f:
                         json.dump(transcript_history, f, indent=4, ensure_ascii=False)
 
                     log_pipeline_step(
                         "SESSION",
-                        "Transcript cache saved successfully.",
+                        "Transcript cache saved to file successfully.",
                         extra={
                             "path": cache_filepath,
                             "entries": len(transcript_history),
@@ -534,14 +538,14 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         detailed=True,
                     )
 
-                    # --- CLEAR THE CACHE ---
-                    viewer_manager.cache.clear()
+                # --- ALWAYS CLEAR THE CACHE ---
+                viewer_manager.cache.clear()
 
-                except Exception as e:
-                    log_pipeline_step(
-                        "SESSION",
-                        f"Failed to save or clear transcript cache: {e}",
-                        detailed=False,
-                    )
+            except Exception as e:
+                log_pipeline_step(
+                    "SESSION",
+                    f"Failed to save history or clear transcript cache: {e}",
+                    detailed=False,
+                )
 
     return router

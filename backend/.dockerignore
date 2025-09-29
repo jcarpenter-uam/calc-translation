@@ -2,6 +2,7 @@
 .env.example
 __pycache__/
 debug/
+session_history/
 venv/
 Dockerfile
 .dockerignore

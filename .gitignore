@@ -2,6 +2,7 @@
 __pycache__/
 venv/
 debug/
+session_history/
 
 # NPM
 node_modules/

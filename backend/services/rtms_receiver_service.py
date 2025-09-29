@@ -508,5 +508,40 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     session_debug_dir,
                     "after_processing_utterances.wav",
                 )
+                log_pipeline_step(
+                    "SESSION",
+                    "Saving transcript cache history...",
+                    detailed=False,
+                )
+                try:
+                    # Get the history from the cache manager
+                    transcript_history = viewer_manager.cache.get_history()
+                    cache_filepath = os.path.join(
+                        session_debug_dir, "transcript_history.json"
+                    )
+
+                    # Write the history to a pretty-printed JSON file for readability
+                    with open(cache_filepath, "w", encoding="utf-8") as f:
+                        json.dump(transcript_history, f, indent=4, ensure_ascii=False)
+
+                    log_pipeline_step(
+                        "SESSION",
+                        "Transcript cache saved successfully.",
+                        extra={
+                            "path": cache_filepath,
+                            "entries": len(transcript_history),
+                        },
+                        detailed=True,
+                    )
+
+                    # --- CLEAR THE CACHE ---
+                    viewer_manager.cache.clear()
+
+                except Exception as e:
+                    log_pipeline_step(
+                        "SESSION",
+                        f"Failed to save or clear transcript cache: {e}",
+                        detailed=False,
+                    )
 
     return router

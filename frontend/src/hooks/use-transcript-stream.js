@@ -11,8 +11,9 @@ import { useState, useEffect, useRef } from "react";
  * translation: string,
  * transcription: string,
  * isFinalized: boolean,
- * type: 'update' | 'final' | 'correction',
- * original?: { translation: string, transcription: string }
+ * type: 'update' | 'final' | 'correction' | 'status_update',
+ * original?: { translation: string, transcription: string },
+ * correctionStatus?: 'checking' | 'correcting' | 'checked_ok' | 'corrected' | null
  * }>;
  * }}
  */
@@ -32,6 +33,8 @@ export function useTranscriptStream(url) {
       if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
         ws.current.close();
       }
+
+      setTranscripts([]);
       ws.current = new WebSocket(url);
       setStatus("connecting");
 
@@ -62,58 +65,7 @@ export function useTranscriptStream(url) {
               (t) => t.id === data.message_id,
             );
 
-            if (data.type === "status_update") {
-              if (existingIndex !== -1) {
-                const updatedTranscript = {
-                  ...prevTranscripts[existingIndex],
-                  correctionStatus: data.correction_status, // e.g., 'checking', 'checked_ok'
-                };
-                const newTranscripts = [...prevTranscripts];
-                newTranscripts[existingIndex] = updatedTranscript;
-                return newTranscripts;
-              }
-              return prevTranscripts;
-            }
-
-            // Handle Correction: Find the existing message and update it
-            if (data.type === "correction") {
-              if (existingIndex !== -1) {
-                const originalTranscript = prevTranscripts[existingIndex];
-                const updatedTranscript = {
-                  ...originalTranscript,
-                  original: {
-                    // Store the old text
-                    transcription: originalTranscript.transcription,
-                    translation: originalTranscript.translation,
-                  },
-                  transcription: data.transcription, // Set the new text
-                  translation: data.translation,
-                  type: "correction",
-                  correctionStatus: "corrected",
-                };
-
-                const newTranscripts = [...prevTranscripts];
-                newTranscripts[existingIndex] = updatedTranscript;
-                return newTranscripts;
-              }
-              return prevTranscripts;
-            }
-
-            // Handle Update or Final: Update existing or add new
-            if (existingIndex !== -1) {
-              // Update an existing transcript (e.g., streaming updates)
-              const updatedTranscript = {
-                ...prevTranscripts[existingIndex],
-                transcription: data.transcription,
-                translation: data.translation,
-                isFinalized: data.isfinalize,
-                type: data.type,
-              };
-              const newTranscripts = [...prevTranscripts];
-              newTranscripts[existingIndex] = updatedTranscript;
-              return newTranscripts;
-            } else {
-              // Add a new transcript
+            if (existingIndex === -1) {
               const newTranscript = {
                 id: data.message_id,
                 speaker: data.speaker,
@@ -121,10 +73,50 @@ export function useTranscriptStream(url) {
                 transcription: data.transcription,
                 isFinalized: data.isfinalize,
                 type: data.type,
-                correctionStatus: null,
+                correctionStatus: data.correction_status || null,
               };
               return [...prevTranscripts, newTranscript];
             }
+
+            const newTranscripts = [...prevTranscripts];
+            const originalTranscript = prevTranscripts[existingIndex];
+            let updatedTranscript;
+
+            switch (data.type) {
+              case "status_update":
+                updatedTranscript = {
+                  ...originalTranscript,
+                  correctionStatus: data.correction_status,
+                };
+                break;
+
+              case "correction":
+                updatedTranscript = {
+                  ...originalTranscript,
+                  original: {
+                    transcription: originalTranscript.transcription,
+                    translation: originalTranscript.translation,
+                  },
+                  transcription: data.transcription,
+                  translation: data.translation,
+                  type: "correction",
+                  correctionStatus: "corrected",
+                };
+                break;
+
+              default:
+                updatedTranscript = {
+                  ...originalTranscript,
+                  transcription: data.transcription,
+                  translation: data.translation,
+                  isFinalized: data.isfinalize,
+                  type: data.type,
+                };
+                break;
+            }
+
+            newTranscripts[existingIndex] = updatedTranscript;
+            return newTranscripts;
           });
         } catch (error) {
           console.error("Failed to parse WebSocket message:", error);

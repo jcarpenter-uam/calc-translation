@@ -68,11 +68,11 @@ class ConnectionManager:
         )
 
     async def broadcast(self, data: Dict[str, Any]):
-        """Broadcasts a JSON object and caches it if it's a final payload."""
-
-        # Use the cache service to add the message.
-        if data.get("isfinalize"):
-            self.cache.add_message(data)
+        """
+        Broadcasts a JSON object and passes it to the cache service for processing.
+        """
+        if data.get("message_id"):
+            self.cache.process_message(data)
 
         # Broadcast the message to all currently connected viewers.
         if self.active_connections:

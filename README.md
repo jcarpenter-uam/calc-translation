@@ -25,4 +25,6 @@ graph TD
 ## Todo:
 
 - Better model, or system prompt to improve the correction pipeline
-- Blanks showing up on the frontend
+- Play with cache size, we want full history but at what point is too long?
+- Clean up seperation of concerns between files: logging, connection-manager, etc..
+- On session end, process the final utterances for correction before clearing cache and saving .json file

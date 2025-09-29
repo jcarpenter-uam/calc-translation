@@ -4,20 +4,38 @@ const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
   const [darkMode, setDarkMode] = useState(() => {
-    const stored = localStorage.getItem("theme");
+    // Read once on mount
+    const stored =
+      typeof window !== "undefined" && localStorage.getItem("theme");
     if (stored) return stored === "dark";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+    );
   });
 
+  // Apply class + persist whenever darkMode changes
   useEffect(() => {
+    const root = document.documentElement;
     if (darkMode) {
-      document.documentElement.classList.add("dark");
+      root.classList.add("dark");
       localStorage.setItem("theme", "dark");
     } else {
-      document.documentElement.classList.remove("dark");
+      root.classList.remove("dark");
       localStorage.setItem("theme", "light");
     }
   }, [darkMode]);
+
+  // Optional: keep in sync across tabs / other code paths
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "theme" && e.newValue) {
+        setDarkMode(e.newValue === "dark");
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ darkMode, setDarkMode }}>

@@ -31,6 +31,8 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
         await websocket.accept()
         log_pipeline_step("SESSION", "Transcription client connected.", detailed=False)
 
+        CORRECTION_CONTEXT_THRESHOLD = 3
+
         try:
             ollama_url = os.environ["OLLAMA_URL"]
             log_pipeline_step(
@@ -39,7 +41,6 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 detailed=False,
             )
         except KeyError:
-            # Log a fatal error and stop the application.
             log_pipeline_step(
                 "SYSTEM",
                 "FATAL: The 'OLLAMA_URL' environment variable is not set.",
@@ -83,14 +84,9 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 code=1011, reason=f"Transcription Error: {error_message}"
             )
 
-        async def run_contextual_correction():
-            CORRECTION_CONTEXT_THRESHOLD = 3
-
-            if len(utterance_history) < CORRECTION_CONTEXT_THRESHOLD:
-                return
-
-            target_utterance = utterance_history[-CORRECTION_CONTEXT_THRESHOLD]
-
+        # Correction logic is extracted into a reusable helper function.
+        async def _perform_correction(target_utterance: dict):
+            """Performs correction logic on a specific target utterance."""
             await viewer_manager.broadcast(
                 {
                     "message_id": target_utterance["message_id"],
@@ -118,11 +114,9 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             )
 
             is_needed = response_data.get("is_correction_needed", False)
-
             reason = response_data.get("reasoning", "No reason provided.")
 
             if is_needed:
-
                 await viewer_manager.broadcast(
                     {
                         "message_id": target_utterance["message_id"],
@@ -130,7 +124,6 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         "correction_status": "correcting",
                     }
                 )
-
                 log_utterance_step(
                     "CORRECTION",
                     target_utterance["message_id"],
@@ -193,13 +186,45 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         "correction_status": "checked_ok",
                     }
                 )
-
                 log_utterance_step(
                     "CORRECTION",
                     target_utterance["message_id"],
                     "Model decided no correction was needed.",
                     speaker=target_utterance["speaker"],
                     extra={"reason": reason},
+                    detailed=False,
+                )
+
+        async def run_contextual_correction():
+            if len(utterance_history) < CORRECTION_CONTEXT_THRESHOLD:
+                return
+
+            target_utterance = utterance_history[-CORRECTION_CONTEXT_THRESHOLD]
+            await _perform_correction(target_utterance)
+
+        # This function handles the final check before the session closes.
+        async def process_final_utterances_for_correction():
+            """
+            Processes the last few utterances in history that didn't get a
+            chance to be corrected during the live session.
+            """
+            # The number of utterances at the tail end that need checking is
+            # the threshold minus one.
+            num_final_to_check = CORRECTION_CONTEXT_THRESHOLD - 1
+
+            if len(utterance_history) >= CORRECTION_CONTEXT_THRESHOLD:
+                final_targets = list(utterance_history)[-num_final_to_check:]
+                log_pipeline_step(
+                    "SESSION",
+                    f"Performing final correction check on last {len(final_targets)} utterance(s).",
+                    detailed=False,
+                )
+                for utterance in final_targets:
+                    await _perform_correction(utterance)
+            else:
+                log_pipeline_step(
+                    "SESSION",
+                    f"Not enough history ({len(utterance_history)}) for final corrections check.",
                     detailed=False,
                 )
 
@@ -506,6 +531,9 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
         finally:
             worker_task.cancel()
             await asyncio.sleep(0.1)
+
+            # This ensures the cache is updated with all final corrections.
+            await process_final_utterances_for_correction()
 
             # --- Save WAV files only in DEBUG_MODE ---
             if DEBUG_MODE and session_debug_dir:

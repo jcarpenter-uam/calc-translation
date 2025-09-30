@@ -1,8 +1,10 @@
 cffi==2.0.0
+dotenv==0.9.9
 llvmlite==0.44.0
 numba==0.61.2
 numpy==2.2.6
 pycparser==2.23
+python-dotenv==1.1.1
 resampy==0.4.3
 sounddevice==0.5.2
 websockets==15.0.1

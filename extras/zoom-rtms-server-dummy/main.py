@@ -1,15 +1,19 @@
 import asyncio
 import base64
 import json
+import os
 import sys
 
 import numpy as np
 import resampy
 import sounddevice as sd
 import websockets
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- Configuration ---
-WEBSOCKET_URL = "ws://localhost:8000/ws/transcribe"
+WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe")
 SPEAKER_NAME = "Jonah"
 TARGET_SAMPLE_RATE = 16000
 

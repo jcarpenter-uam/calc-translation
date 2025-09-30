@@ -1,0 +1,26 @@
+[
+  {
+    "input": "CONTEXT:\n晚饭后，我们去公园散步。那里的风景很优美，空气也很新鲜。\n\nTARGET SENTENCE:\n真是个锻练身体的好地方。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "真是个锻炼身体的好地方。",
+      "reasoning": "In modern Chinese, the correct term for 'exercise' is '锻炼', not '锻练'. This is a common character error."
+    }
+  },
+  {
+    "input": "CONTEXT:\n明天是周末，你有什么计划吗？\n\nTARGET SENTENCE:\n我打算和朋友一起去看电影。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我打算和朋友一起去看电影。",
+      "reasoning": "The sentence is grammatically correct and fits the context. No changes are needed."
+    }
+  },
+  {
+    "input": "CONTEXT:\n会议将于下午三点准时开始。\n\nTARGET SENTENCE:\n请大家务必一定提前到达会场。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "请大家务必提前到达会场。",
+      "reasoning": "The words '务必' (must) and '一定' (definitely) are redundant when used together. One should be removed to make the sentence concise."
+    }
+  }
+]

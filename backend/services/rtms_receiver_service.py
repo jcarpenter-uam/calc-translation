@@ -31,12 +31,30 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
         await websocket.accept()
         log_pipeline_step("SESSION", "Transcription client connected.", detailed=False)
 
+        try:
+            ollama_url = os.environ["OLLAMA_URL"]
+            log_pipeline_step(
+                "SYSTEM",
+                f"Ollama Correction Service URL: {ollama_url}",
+                detailed=False,
+            )
+        except KeyError:
+            # Log a fatal error and stop the application.
+            log_pipeline_step(
+                "SYSTEM",
+                "FATAL: The 'OLLAMA_URL' environment variable is not set.",
+                detailed=False,
+            )
+            raise ValueError(
+                "To run the application, you must set the OLLAMA_URL in your .env file. If your're not using corrections you can just leave localhost."
+            )
+
         loop = asyncio.get_running_loop()
         audio_processor = AudioProcessingService()
         vad_service = VADService()
         buffer_service = AudioBufferService(frame_duration_ms=30)
         translation_service = TranslationService()
-        correction_service = CorrectionService()
+        correction_service = CorrectionService(ollama_url=ollama_url)
         utterance_queue = asyncio.Queue()
 
         utterance_history = deque(maxlen=5)

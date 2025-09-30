@@ -9,18 +9,25 @@ class OllamaCorrectionService:
     Handles transcription correction using a local Ollama model.
     """
 
-    def __init__(self, model: str = "translation_correction"):
+    def __init__(self, ollama_url: str, model: str = "translation_correction"):
+        """
+        Initializes the service.
+
+        Args:
+            ollama_url (str): The base URL for the Ollama API.
+            model (str): The name of the model to use for corrections.
+        """
         log_pipeline_step(
             "CORRECTION",
-            f"Initializing Ollama Correction Service with model '{model}'...",
+            f"Initializing Ollama Correction Service with model '{model}' at {ollama_url}...",
             detailed=False,
         )
         self.model = model
-        self.client = ollama.AsyncClient()
+        self.client = ollama.AsyncClient(host=ollama_url)
         log_pipeline_step(
             "CORRECTION",
             "Ollama correction client initialized.",
-            extra={"model": model},
+            extra={"model": model, "host": ollama_url},
             detailed=True,
         )
 

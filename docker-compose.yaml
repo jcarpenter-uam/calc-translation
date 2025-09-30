@@ -40,6 +40,7 @@ services:
       - APISECRET=${APISECRET}
       - APIKEY=${APIKEY}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - OLLAMA_URL=${OLLAMA_URL}
       - DEBUG_MODE=${DEBUG_MODE}
     # depends_on:
     #   - ollama

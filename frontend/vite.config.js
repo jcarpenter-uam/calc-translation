@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   preview: {
-    allowedHosts: ["translator.my-uam.com"],
+    allowedHosts: ["translator.my-uam.com", "translator.home.my-uam.com"],
   },
   plugins: [react(), tailwindcss()],
 });

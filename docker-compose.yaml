@@ -1,6 +1,7 @@
 services:
   zoom-rtms-server:
     build: ./zoom-rtms-server
+    pull_policy: build
     container_name: zoom-rtms-server
     restart: unless-stopped
     ports:
@@ -17,6 +18,7 @@ services:
 
   frontend:
     build: ./frontend
+    pull_policy: build
     container_name: frontend
     restart: unless-stopped
     ports:
@@ -28,6 +30,7 @@ services:
 
   backend:
     build: ./backend
+    pull_policy: build
     container_name: backend
     restart: unless-stopped
     ports:

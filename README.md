@@ -1,5 +1,11 @@
 # Zoom Real-time Translation
 
+## About This Project
+
+This project develops a real-time translation pipeline that integrates directly with Zoom meetings using its RTMS functionality. It captures live audio and processes it through an automated workflow that transcribes, translates, and corrects the content in real time. The final output is displayed on an intuitive frontend where visual indicators clearly highlight any corrections, ensuring participants can follow the conversation accurately and seamlessly.
+
+## How It Works
+
 ```mermaid
 graph TD
     A["Zoom RTMS WebSocket<br>(raw 16-bit PCM chunks)"] --> B["RTMS Receiver (WS server)<br>- accept websocket frames<br>- speaker-id"];
@@ -20,6 +26,26 @@ graph TD
     M -- "WebSocket updates" --> N;
 
     N --> O["( User sees immediate translation → then corrected revision )"];
+```
+
+## Prerequisites
+
+- **Ollama:** Used to handle the text correction logic. To enable this feature, you must create the translation_correction model using the Modelfile located at extras/ollama/Modelfile. If you prefer to use a different model, you can change it in the init function within backend/models/correction.
+- **iFlyTech API Key:** Used as the current ASR (STT) model. The credentials can be gathered [here](https://global.xfyun.cn/doc/rtasr/rtasr/API.html#description-of-the-interface)
+- **Alibaba:** Used as the current translation model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
+
+## Installation
+
+**1. Create your .env**
+
+```bash
+cp .env.example .env
+```
+
+**2. Run the Server**
+
+```bash
+docker compose up -d
 ```
 
 ## Todo:

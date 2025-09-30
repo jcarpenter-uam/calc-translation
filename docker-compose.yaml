@@ -37,32 +37,32 @@ services:
       - APISECRET=${APISECRET}
       - APIKEY=${APIKEY}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
-      - DEBUG_MODE=True
+      - DEBUG_MODE=${DEBUG_MODE}
     depends_on:
       - ollama
     networks:
       - zoom-translation
 
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    networks:
-      - zoom-translation
-
-volumes:
-  ollama_data:
+#   ollama:
+#     image: ollama/ollama
+#     container_name: ollama
+#     restart: unless-stopped
+#     ports:
+#       - "11434:11434"
+#     volumes:
+#       - ollama_data:/root/.ollama
+#     deploy:
+#       resources:
+#         reservations:
+#           devices:
+#             - driver: nvidia
+#               count: 1
+#               capabilities: [gpu]
+#     networks:
+#       - zoom-translation
+#
+# volumes:
+#   ollama_data:
 
 networks:
   zoom-translation:

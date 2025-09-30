@@ -1,7 +1,5 @@
 FROM node:24-slim
 
-RUN addgroup -S node && adduser -S -G node node
-
 WORKDIR /app
 
 COPY package*.json ./

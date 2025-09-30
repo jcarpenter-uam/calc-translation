@@ -41,8 +41,8 @@ services:
       - APIKEY=${APIKEY}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - DEBUG_MODE=${DEBUG_MODE}
-    depends_on:
-      - ollama
+    # depends_on:
+    #   - ollama
     networks:
       - zoom-translation
 

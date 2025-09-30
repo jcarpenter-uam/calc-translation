@@ -55,3 +55,4 @@ docker compose up -d
 - Clean up seperation of concerns between files: logging, connection-manager, etc..
 - On session end, process the final utterances for correction before clearing cache and saving .json file
 - Serve frontend build files from backend, take into account zoom security headers
+- Alter frontend auto scrolling to be less forceful

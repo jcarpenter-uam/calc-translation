@@ -106,7 +106,32 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 },
             )
 
-            context_list = [u["transcription"] for u in utterance_history]
+            history_as_list = list(utterance_history)
+            context_list = []
+            try:
+                # Find the index by matching the unique message_id
+                target_index = next(
+                    i
+                    for i, u in enumerate(history_as_list)
+                    if u["message_id"] == target_utterance["message_id"]
+                )
+
+                # Slice the list to get the next two items after the target's index
+                context_utterances = history_as_list[
+                    target_index + 1 : target_index + 3
+                ]
+
+                # Extract just the transcription text for the context
+                context_list = [u["transcription"] for u in context_utterances]
+
+            except StopIteration:
+                # This is a fallback in case the target is not found in the history
+                log_utterance_step(
+                    "CORRECTION",
+                    target_utterance["message_id"],
+                    "Target utterance not found in history; sending without context.",
+                    speaker=target_utterance["speaker"],
+                )
 
             response_data = await correction_service.correct_with_context(
                 text_to_correct=target_utterance["transcription"],
@@ -115,8 +140,15 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
             is_needed = response_data.get("is_correction_needed", False)
             reason = response_data.get("reasoning", "No reason provided.")
+            corrected_transcription = response_data.get("corrected_sentence")
 
-            if is_needed:
+            if (
+                is_needed
+                and corrected_transcription
+                and corrected_transcription.strip()
+                != target_utterance["transcription"].strip()
+            ):
+                # --- A valid correction was found ---
                 await viewer_manager.broadcast(
                     {
                         "message_id": target_utterance["message_id"],
@@ -127,58 +159,37 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 log_utterance_step(
                     "CORRECTION",
                     target_utterance["message_id"],
-                    "Model decided a correction is needed.",
+                    "Correction is needed and will be applied.",
                     speaker=target_utterance["speaker"],
-                    extra={"reason": reason},
+                    extra={"reason": reason, "corrected_text": corrected_transcription},
                 )
 
-                corrected_transcription = response_data.get("corrected_sentence")
-
-                if (
-                    corrected_transcription
-                    and corrected_transcription != target_utterance["transcription"]
+                # Re-translate the corrected text
+                full_corrected_translation = ""
+                async for chunk in translation_service.translate_stream(
+                    text_to_translate=corrected_transcription
                 ):
-                    log_utterance_step(
-                        "CORRECTION",
-                        target_utterance["message_id"],
-                        "Re-translating contextually corrected text.",
-                        speaker=target_utterance["speaker"],
-                        detailed=False,
-                    )
-                    full_corrected_translation = ""
-                    async for chunk in translation_service.translate_stream(
-                        text_to_translate=corrected_transcription
-                    ):
-                        full_corrected_translation = chunk
+                    full_corrected_translation = chunk
 
-                    log_utterance_step(
-                        "CORRECTION",
-                        target_utterance["message_id"],
-                        "Updated translation complete.",
-                        speaker=target_utterance["speaker"],
-                        extra={
-                            "corrected_transcription": corrected_transcription,
-                            "updated_translation": full_corrected_translation,
-                        },
-                        detailed=False,
-                    )
-                    payload = {
-                        "message_id": target_utterance["message_id"],
-                        "transcription": corrected_transcription,
-                        "translation": full_corrected_translation,
-                        "speaker": target_utterance["speaker"],
-                        "type": "correction",
-                        "isfinalize": True,
-                    }
-                    await viewer_manager.broadcast(payload)
-                    log_utterance_step(
-                        "CORRECTION",
-                        target_utterance["message_id"],
-                        "Correction broadcast complete.",
-                        speaker=target_utterance["speaker"],
-                        detailed=False,
-                    )
+                # Broadcast the final corrected payload
+                payload = {
+                    "message_id": target_utterance["message_id"],
+                    "transcription": corrected_transcription,
+                    "translation": full_corrected_translation,
+                    "speaker": target_utterance["speaker"],
+                    "type": "correction",
+                    "isfinalize": True,
+                }
+                await viewer_manager.broadcast(payload)
+                log_utterance_step(
+                    "CORRECTION",
+                    target_utterance["message_id"],
+                    "Correction broadcast complete.",
+                    speaker=target_utterance["speaker"],
+                    detailed=False,
+                )
             else:
+                # --- No valid correction was found ---
                 await viewer_manager.broadcast(
                     {
                         "message_id": target_utterance["message_id"],
@@ -186,12 +197,17 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         "correction_status": "checked_ok",
                     }
                 )
+                log_reason = (
+                    reason
+                    if not is_needed
+                    else "Model suggested a correction, but it was empty or identical to the original."
+                )
                 log_utterance_step(
                     "CORRECTION",
                     target_utterance["message_id"],
-                    "Model decided no correction was needed.",
+                    "No correction applied.",
                     speaker=target_utterance["speaker"],
-                    extra={"reason": reason},
+                    extra={"reason": log_reason},
                     detailed=False,
                 )
 

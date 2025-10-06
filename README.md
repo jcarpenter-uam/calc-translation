@@ -30,7 +30,7 @@ graph TD
 
 ## Prerequisites
 
-- **Ollama:** Used to handle the text correction logic. To enable this feature, you must create the translation_correction model using the Modelfile located at extras/ollama/Modelfile. If you prefer to use a different model, you can change it in the init function within backend/models/correction.
+- **Ollama:** Used to handle the text correction logic. To enable this feature, you must train a model using the colab notebook and dataset [here](https://github.com/jcarpenter-uam/zoom-translation/tree/master/extras/ollama/correction)
 - **iFlyTech API Key:** Used as the current ASR (STT) model. The credentials can be gathered [here](https://global.xfyun.cn/doc/rtasr/rtasr/API.html#description-of-the-interface)
 - **Alibaba:** Used as the current translation model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
 
@@ -50,8 +50,7 @@ docker compose up -d
 
 ## Todo:
 
-- Better model, or system prompt to improve the correction pipeline
+- Keep tweaking the fine tuned model to get the best results
 - Play with cache size, we want full history but at what point is too long?
 - Clean up seperation of concerns between files: logging, connection-manager, etc..
 - Serve frontend build files from backend, take into account zoom security headers
-- When DEBUG_TRUE=False the logs should be less verbose

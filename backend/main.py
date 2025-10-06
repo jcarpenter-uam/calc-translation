@@ -2,13 +2,14 @@ import os
 
 import uvicorn
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from services.cache_service import TranscriptCache
 from services.connection_manager_service import ConnectionManager
 from services.debug_service import log_pipeline_step
 from services.rtms_receiver_service import create_transcribe_router
-
-load_dotenv()
 
 app = FastAPI(
     title="Real-Time Transcription and Translation API",

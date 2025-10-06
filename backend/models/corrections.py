@@ -9,7 +9,7 @@ class OllamaCorrectionService:
     Handles transcription correction using a local Ollama model.
     """
 
-    def __init__(self, ollama_url: str, model: str = "translation_correction"):
+    def __init__(self, ollama_url: str, model: str = "correction"):
         """
         Initializes the service.
 
@@ -37,18 +37,19 @@ class OllamaCorrectionService:
         """
         Sends a transcript to the custom correction model and returns the parsed JSON response.
         """
-        context_str = "\n".join(context_history)
-
-        prompt = f"""
-        --- CONVERSATION CONTEXT ---
-        {context_str}
-        --- TARGET SENTENCE ---
-        {text_to_correct}
-        """
+        prompt_data = {
+            "context": " ".join(context_history),
+            "target_sentence": text_to_correct,
+        }
+        prompt = json.dumps(prompt_data, ensure_ascii=False)
 
         response_content = ""
 
-        print(f"{prompt}")
+        log_pipeline_step(
+            "CORRECTION",
+            f"Sending prompt to Ollama: {prompt}",
+            detailed=True,
+        )
 
         try:
             response = await self.client.chat(
@@ -80,7 +81,7 @@ class OllamaCorrectionService:
                 response_data = json.loads(json_string)
                 log_pipeline_step(
                     "CORRECTION",
-                    "Parsed correction response JSON.",
+                    f"Parsed correction response JSON. '{response_data}'",
                     extra={
                         "is_correction_needed": response_data.get(
                             "is_correction_needed", False

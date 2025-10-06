@@ -4,6 +4,9 @@ venv/
 debug/
 session_history/
 
+# Correction Model
+*.gguf
+
 # NPM
 node_modules/
 logs/

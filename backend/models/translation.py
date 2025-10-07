@@ -3,7 +3,6 @@ from typing import AsyncGenerator
 
 from dotenv import load_dotenv
 from openai import APIError, AsyncOpenAI
-
 from services.debug_service import log_pipeline_step
 
 
@@ -25,7 +24,9 @@ class QwenTranslationModel:
         log_pipeline_step(
             "TRANSLATION",
             "Initialized Qwen translation client.",
-            extra={"base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"},
+            extra={
+                "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+            },
             detailed=True,
         )
 

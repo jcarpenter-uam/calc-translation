@@ -48,7 +48,7 @@ class OllamaCorrectionService:
         log_pipeline_step(
             "CORRECTION",
             f"Sending prompt to Ollama: {prompt}",
-            detailed=True,
+            detailed=False,
         )
 
         try:

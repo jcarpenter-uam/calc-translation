@@ -1,0 +1,66 @@
+name: Docker Image CI
+
+on:
+  release:
+    types: [published] # This workflow runs only when a new release is published
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for backend
+        id: meta_backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/zoom-translation-backend
+
+      - name: Build and push backend docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta_backend.outputs.tags }}
+          labels: ${{ steps.meta_backend.outputs.labels }}
+
+      - name: Extract metadata for frontend
+        id: meta_frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/zoom-translation-frontend
+
+      - name: Build and push frontend docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.meta_frontend.outputs.tags }}
+          labels: ${{ steps.meta_frontend.outputs.labels }}
+
+      - name: Extract metadata for rtms
+        id: meta_rtms
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/zoom-translation-rtms
+
+      - name: Build and push rtms docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./zoom-rtms-server
+          push: true
+          tags: ${{ steps.meta_rtms.outputs.tags }}
+          labels: ${{ steps.meta_rtms.outputs.labels }}
+

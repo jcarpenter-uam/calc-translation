@@ -1,5 +1,7 @@
 FROM node:24-slim
 
+LABEL org.opencontainers.image.source="https://github.com/jcarpenter-uam/zoom-translation"
+
 WORKDIR /app
 
 COPY package*.json ./

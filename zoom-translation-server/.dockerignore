@@ -6,3 +6,5 @@ session_history/
 venv/
 Dockerfile
 .dockerignore
+node_modules/
+dist/

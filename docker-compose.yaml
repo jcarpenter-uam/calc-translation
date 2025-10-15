@@ -1,4 +1,21 @@
 services:
+  zoom-translation-server:
+    build: ./zoom-translation-server
+    pull_policy: build
+    container_name: zoom-translation-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APPID=${APPID}
+      - APISECRET=${APISECRET}
+      - APIKEY=${APIKEY}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - OLLAMA_URL=${OLLAMA_URL}
+      - DEBUG_MODE=${DEBUG_MODE}
+    networks:
+      - zoom-translation
+
   zoom-rtms-server:
     build: ./zoom-rtms-server
     pull_policy: build
@@ -11,37 +28,7 @@ services:
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - TRANSCRIPTION_SERVER_URL=${TRANSCRIPTION_SERVER_URL}
     depends_on:
-      - backend
-      - frontend
-    networks:
-      - zoom-translation
-
-  frontend:
-    build: ./frontend
-    pull_policy: build
-    container_name: frontend
-    restart: unless-stopped
-    ports:
-      - "4173:4173"
-    depends_on:
-      - backend
-    networks:
-      - zoom-translation
-
-  backend:
-    build: ./backend
-    pull_policy: build
-    container_name: backend
-    restart: unless-stopped
-    ports:
-      - "8001:8000"
-    environment:
-      - APPID=${APPID}
-      - APISECRET=${APISECRET}
-      - APIKEY=${APIKEY}
-      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
-      - OLLAMA_URL=${OLLAMA_URL}
-      - DEBUG_MODE=${DEBUG_MODE}
+      - zoom-translation-server
     networks:
       - zoom-translation
 

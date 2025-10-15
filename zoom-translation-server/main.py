@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 from services.cache_service import TranscriptCache
 from services.connection_manager_service import ConnectionManager
 from services.debug_service import log_pipeline_step
@@ -43,6 +44,10 @@ async def websocket_viewer_endpoint(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         viewer_manager.disconnect(websocket)
+
+
+# Web static files
+app.mount("/", StaticFiles(directory="web/dist", html=True), name="web")
 
 
 if __name__ == "__main__":

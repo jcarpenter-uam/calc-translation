@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vite/dist/node";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -8,9 +8,6 @@ export default defineConfig({
     proxy: {
       "/ws": "ws://localhost:8000",
     },
-  },
-  preview: {
-    allowedHosts: ["translator.my-uam.com", "translator.home.my-uam.com"],
   },
   plugins: [react(), tailwindcss()],
 });

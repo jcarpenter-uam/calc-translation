@@ -22,33 +22,19 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for backend
-        id: meta_backend
+      - name: Extract metadata for server
+        id: meta_server
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/zoom-translation-backend
+          images: ghcr.io/${{ github.repository }}/zoom-translation-server
 
-      - name: Build and push backend docker image
+      - name: Build and push server docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: ./zoom-translation-server
           push: true
-          tags: ${{ steps.meta_backend.outputs.tags }}
-          labels: ${{ steps.meta_backend.outputs.labels }}
-
-      - name: Extract metadata for frontend
-        id: meta_frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}/zoom-translation-frontend
-
-      - name: Build and push frontend docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: ${{ steps.meta_frontend.outputs.tags }}
-          labels: ${{ steps.meta_frontend.outputs.labels }}
+          tags: ${{ steps.meta_server.outputs.tags }}
+          labels: ${{ steps.meta_server.outputs.labels }}
 
       - name: Extract metadata for rtms
         id: meta_rtms

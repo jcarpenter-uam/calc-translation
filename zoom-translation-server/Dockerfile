@@ -28,7 +28,11 @@ RUN pip install -r requirements.txt
 
 RUN addgroup --system zoom-translator && adduser --system --ingroup zoom-translator --shell /bin/sh zoom-translator
 
-COPY . .
+COPY --from=builder /app/web/dist ./web/dist
+
+COPY main.py ./
+COPY models ./models/
+COPY services ./services/
 
 RUN chown -R zoom-translator:zoom-translator /app
 

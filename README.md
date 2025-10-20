@@ -50,7 +50,9 @@ docker compose up -d
 
 ## Todo:
 
+- IaC for datacrunch GPU server based on zoom meeting calender?
+- Send final transcript to all meeting participants
+- Empty responses in frontend?
 - Keep tweaking the fine tuned model to get the best results
 - Play with cache size, we want full history but at what point is too long?
 - Clean up seperation of concerns between files: logging, connection-manager, etc..
-- Serve frontend build files from backend, take into account zoom security headers

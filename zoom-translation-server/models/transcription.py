@@ -37,9 +37,9 @@ class IFlyTekTranscriptionService:
 
     def __init__(self, on_message_callback, on_error_callback, on_close_callback, loop):
         load_dotenv()
-        self.APPID = os.getenv("APPID")
-        self.APIKey = os.getenv("APIKEY")
-        self.APISecret = os.getenv("APISECRET")
+        self.APPID = os.getenv("IFLY_APPID")
+        self.APIKey = os.getenv("IFLY_APIKEY")
+        self.APISecret = os.getenv("IFLY_APISECRET")
 
         if not all([self.APPID, self.APIKey, self.APISecret]):
             raise ValueError("Missing iFlyTek API credentials in .env file.")

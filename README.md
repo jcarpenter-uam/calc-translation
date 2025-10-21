@@ -50,6 +50,7 @@ docker compose up -d
 
 ## Todo:
 
+- auto select translation/transcription model based on which .env vars are present
 - IaC for datacrunch GPU server based on zoom meeting calender?
 - Send final transcript to all meeting participants
 - Empty responses in frontend?

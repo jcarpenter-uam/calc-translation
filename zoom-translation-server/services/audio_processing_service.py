@@ -36,7 +36,6 @@ class AudioProcessingService:
         Returns:
             np.ndarray: Audio data with noise reduced.
         """
-        # The noisereduce library works on floating-point audio
         audio_float = audio_data.astype(np.float32)
         reduced_noise_audio = nr.reduce_noise(y=audio_float, sr=self.sample_rate)
         return reduced_noise_audio.astype(np.int16)
@@ -52,15 +51,12 @@ class AudioProcessingService:
         Returns:
             np.ndarray: Normalized audio data.
         """
-        # Find the maximum absolute value in the audio
         max_val = np.max(np.abs(audio_data))
         if max_val == 0:
-            return audio_data  # Avoid division by zero for silence
+            return audio_data
 
-        # Calculate the gain needed to reach the target peak
         gain = (target_peak * 32767) / max_val
 
-        # Apply the gain, ensuring we don't exceed 16-bit integer limits
         normalized_audio = np.clip(audio_data * gain, -32768, 32767)
         return normalized_audio.astype(np.int16)
 
@@ -94,7 +90,6 @@ class AudioProcessingService:
             detailed=True,
         )
 
-        # Convert bytes to a numerical format
         audio_data = self._bytes_to_audio(audio_bytes)
         log_pipeline_step(
             "AUDIO_PROCESSING",
@@ -108,7 +103,6 @@ class AudioProcessingService:
             detailed=True,
         )
 
-        # Apply noise suppression
         denoised_audio = self.suppress_noise(audio_data)
         log_pipeline_step(
             "AUDIO_PROCESSING",
@@ -121,7 +115,6 @@ class AudioProcessingService:
             detailed=True,
         )
 
-        # Normalize the volume
         normalized_audio = self.normalize_volume(denoised_audio)
         log_pipeline_step(
             "AUDIO_PROCESSING",
@@ -134,7 +127,6 @@ class AudioProcessingService:
             detailed=True,
         )
 
-        # Convert back to bytes for sending
         processed_bytes = self._audio_to_bytes(normalized_audio)
         log_pipeline_step(
             "AUDIO_PROCESSING",

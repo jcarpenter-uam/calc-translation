@@ -72,13 +72,11 @@ class OllamaCorrectionService:
             json_end_index = response_content.rfind("}")
 
             if json_start_index != -1:
-                # If a closing brace is found, extract the substring.
                 if json_end_index != -1 and json_end_index > json_start_index:
                     json_string = response_content[
                         json_start_index : json_end_index + 1
                     ]
                 else:
-                    # If no closing brace is found, assume it's missing and add it.
                     json_string = response_content[json_start_index:] + "}"
 
                 response_data = json.loads(json_string)

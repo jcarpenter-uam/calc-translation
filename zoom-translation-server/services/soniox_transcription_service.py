@@ -4,9 +4,10 @@ import os
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from services.debug_service import log_pipeline_step
 from websockets import ConnectionClosedOK
 from websockets.sync.client import connect
+
+from .debug_service import log_pipeline_step
 
 
 @dataclass
@@ -67,10 +68,10 @@ class SonioxTranscriptionService:
             # See: soniox.com/docs/stt/concepts/speaker-diarization
             "enable_speaker_diarization": False,
             #
-            # Use endpointing to detect when the speaker stops.
-            # It finalizes all non-final tokens right away, minimizing latency.
+            # **IMPORTANT: Enable Soniox endpoint detection.**
+            # This allows Soniox to detect utterances automatically.
             # See: soniox.com/docs/stt/rt/endpoint-detection
-            "enable_endpoint_detection": False,
+            "enable_endpoint_detection": True,
             # Audio format.
             # See: soniox.com/docs/stt/rt/real-time-transcription#audio-formats
             "audio_format": "pcm_s16le",
@@ -107,17 +108,16 @@ class SonioxTranscriptionService:
 
                 non_final_transcription_tokens = []
                 non_final_translation_tokens = []
-                is_fin_token = False
+                is_end_token = False
 
                 for token in res.get("tokens", []):
                     text = token.get("text")
                     if not text:
                         continue
 
-                    # Check for manual finalization marker
-                    if text == "<fin>" and token.get("is_final"):
-                        is_fin_token = True
-                        continue  # Do not append <fin> to output
+                    if text == "<end>" and token.get("is_final"):
+                        is_end_token = True
+                        continue
 
                     is_translation = token.get("translation_status") == "translation"
 
@@ -144,7 +144,6 @@ class SonioxTranscriptionService:
                     f"{final_translation} {non_final_translation}".strip()
                 )
 
-                # Send partial result
                 await self.on_message_callback(
                     SonioxTranscriptionResult(
                         transcription=full_transcription,
@@ -153,11 +152,10 @@ class SonioxTranscriptionService:
                     )
                 )
 
-                # Handle manual finalization (<fin> token)
-                if is_fin_token:
+                if is_end_token:
                     log_pipeline_step(
                         "TRANSCRIPTION",
-                        "Received <fin> token, sending final utterance result.",
+                        "Received <end> token, sending final utterance result.",
                         detailed=True,
                     )
                     await self.on_message_callback(
@@ -169,11 +167,9 @@ class SonioxTranscriptionService:
                             is_final=True,
                         )
                     )
-                    # Reset token lists for the next utterance
                     self.final_transcription_tokens = []
                     self.final_translation_tokens = []
 
-                # Handle end of *stream*
                 if res.get("finished"):
                     log_pipeline_step(
                         "TRANSCRIPTION",
@@ -195,7 +191,6 @@ class SonioxTranscriptionService:
             log_pipeline_step(
                 "TRANSCRIPTION", "Soniox connection closed normally.", detailed=True
             )
-            # Send any remaining tokens as final
             await self.on_message_callback(
                 SonioxTranscriptionResult(
                     transcription="".join(self.final_transcription_tokens).strip(),
@@ -239,20 +234,6 @@ class SonioxTranscriptionService:
         """
         if self.ws:
             self.ws.send(chunk)
-
-    def manually_finalize_utterance(self):
-        """
-        * Sends a manual finalization message to Soniox.
-        * This is run in an executor by the caller.
-        """
-        if self.ws:
-            finalize_msg = json.dumps({"type": "finalize"})
-            self.ws.send(finalize_msg)
-            log_pipeline_step(
-                "TRANSCRIPTION",
-                "Sent manual utterance finalization.",
-                detailed=True,
-            )
 
     def finalize_stream(self):
         """

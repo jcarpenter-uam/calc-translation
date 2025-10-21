@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Deque, Dict, List
 
 from .debug_service import log_pipeline_step
 
@@ -17,9 +17,7 @@ class TranscriptCache:
         if max_size <= 0:
             raise ValueError("max_size must be a positive integer.")
         self._max_size = max_size
-        # Dictionary for O(1) lookup, update, and deletion
         self._cache_dict: Dict[str, Dict[str, Any]] = {}
-        # Deque to maintain insertion order and handle eviction
         self._order_queue: Deque[str] = deque(maxlen=max_size)
 
     def clear(self):

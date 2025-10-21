@@ -115,19 +115,19 @@ class AudioProcessingService:
             detailed=True,
         )
 
-        normalized_audio = self.normalize_volume(denoised_audio)
-        log_pipeline_step(
-            "AUDIO_PROCESSING",
-            "Volume normalization complete.",
-            extra={
-                "dtype": str(normalized_audio.dtype),
-                "min": int(normalized_audio.min()),
-                "max": int(normalized_audio.max()),
-            },
-            detailed=True,
-        )
+        # normalized_audio = self.normalize_volume(denoised_audio)
+        # log_pipeline_step(
+        #     "AUDIO_PROCESSING",
+        #     "Volume normalization complete.",
+        #     extra={
+        #         "dtype": str(normalized_audio.dtype),
+        #         "min": int(normalized_audio.min()),
+        #         "max": int(normalized_audio.max()),
+        #     },
+        #     detailed=True,
+        # )
 
-        processed_bytes = self._audio_to_bytes(normalized_audio)
+        processed_bytes = self._audio_to_bytes(denoised_audio)
         log_pipeline_step(
             "AUDIO_PROCESSING",
             "Audio Processor: Post-processing complete.",

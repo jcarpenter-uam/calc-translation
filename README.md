@@ -46,6 +46,7 @@ docker compose up -d
 
 ## Todo:
 
+- Denoising and Normalizing audio needs improvements. Though for zoom calls a simple noise floor should do the trick
 - IaC for datacrunch GPU server based on zoom meeting calender?
 - Send final transcript to all meeting participants
 - Keep tweaking the fine tuned model to get the best results

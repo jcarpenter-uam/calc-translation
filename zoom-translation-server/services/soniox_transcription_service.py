@@ -70,7 +70,7 @@ class SonioxTranscriptionService:
             # Use endpointing to detect when the speaker stops.
             # It finalizes all non-final tokens right away, minimizing latency.
             # See: soniox.com/docs/stt/rt/endpoint-detection
-            "enable_endpoint_detection": True,
+            "enable_endpoint_detection": False,
             # Audio format.
             # See: soniox.com/docs/stt/rt/real-time-transcription#audio-formats
             "audio_format": "pcm_s16le",
@@ -107,11 +107,17 @@ class SonioxTranscriptionService:
 
                 non_final_transcription_tokens = []
                 non_final_translation_tokens = []
+                is_fin_token = False
 
                 for token in res.get("tokens", []):
                     text = token.get("text")
                     if not text:
                         continue
+
+                    # Check for manual finalization marker
+                    if text == "<fin>" and token.get("is_final"):
+                        is_fin_token = True
+                        continue  # Do not append <fin> to output
 
                     is_translation = token.get("translation_status") == "translation"
 
@@ -138,6 +144,7 @@ class SonioxTranscriptionService:
                     f"{final_translation} {non_final_translation}".strip()
                 )
 
+                # Send partial result
                 await self.on_message_callback(
                     SonioxTranscriptionResult(
                         transcription=full_transcription,
@@ -146,6 +153,27 @@ class SonioxTranscriptionService:
                     )
                 )
 
+                # Handle manual finalization (<fin> token)
+                if is_fin_token:
+                    log_pipeline_step(
+                        "TRANSCRIPTION",
+                        "Received <fin> token, sending final utterance result.",
+                        detailed=True,
+                    )
+                    await self.on_message_callback(
+                        SonioxTranscriptionResult(
+                            transcription="".join(
+                                self.final_transcription_tokens
+                            ).strip(),
+                            translation="".join(self.final_translation_tokens).strip(),
+                            is_final=True,
+                        )
+                    )
+                    # Reset token lists for the next utterance
+                    self.final_transcription_tokens = []
+                    self.final_translation_tokens = []
+
+                # Handle end of *stream*
                 if res.get("finished"):
                     log_pipeline_step(
                         "TRANSCRIPTION",
@@ -154,8 +182,10 @@ class SonioxTranscriptionService:
                     )
                     await self.on_message_callback(
                         SonioxTranscriptionResult(
-                            transcription=final_transcription.strip(),
-                            translation=final_translation.strip(),
+                            transcription="".join(
+                                self.final_transcription_tokens
+                            ).strip(),
+                            translation="".join(self.final_translation_tokens).strip(),
                             is_final=True,
                         )
                     )
@@ -165,10 +195,11 @@ class SonioxTranscriptionService:
             log_pipeline_step(
                 "TRANSCRIPTION", "Soniox connection closed normally.", detailed=True
             )
+            # Send any remaining tokens as final
             await self.on_message_callback(
                 SonioxTranscriptionResult(
-                    transcription=" ".join(self.final_transcription_tokens).strip(),
-                    translation=" ".join(self.final_translation_tokens).strip(),
+                    transcription="".join(self.final_transcription_tokens).strip(),
+                    translation="".join(self.final_translation_tokens).strip(),
                     is_final=True,
                 )
             )
@@ -209,13 +240,29 @@ class SonioxTranscriptionService:
         if self.ws:
             self.ws.send(chunk)
 
-    def finalize_utterance(self):
+    def manually_finalize_utterance(self):
         """
-        * Signals the end of the audio stream.
+        * Sends a manual finalization message to Soniox.
+        * This is run in an executor by the caller.
+        """
+        if self.ws:
+            finalize_msg = json.dumps({"type": "finalize"})
+            self.ws.send(finalize_msg)
+            log_pipeline_step(
+                "TRANSCRIPTION",
+                "Sent manual utterance finalization.",
+                detailed=True,
+            )
+
+    def finalize_stream(self):
+        """
+        * Signals the end of the *entire* audio stream (session end).
         * This is run in an executor by the caller.
         """
         if self.ws:
             self.ws.send("")
             log_pipeline_step(
-                "TRANSCRIPTION", "Soniox utterance finalized.", detailed=True
+                "TRANSCRIPTION",
+                "Soniox stream finalized (session end).",
+                detailed=True,
             )

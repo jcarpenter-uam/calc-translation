@@ -23,6 +23,13 @@ from .soniox_transcription_service import (
 from .vad_service import VADService
 
 
+class UtteranceContext:
+    def __init__(self):
+        self.message_id = None
+        self.speaker_name = None
+        self.lock = asyncio.Lock()
+
+
 def create_transcribe_router(viewer_manager, DEBUG_MODE):
     router = APIRouter()
 
@@ -36,6 +43,11 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
         vad_service = VADService()
         buffer_service = AudioBufferService(frame_duration_ms=30)
         utterance_queue = asyncio.Queue()
+        transcription_service = None
+
+        context = UtteranceContext()
+        utterance_finalized_event = asyncio.Event()
+        utterance_finalized_event.set()
 
         session_debug_dir = None
         if DEBUG_MODE:
@@ -61,146 +73,149 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 code=1011, reason=f"Transcription Error: {error_message}"
             )
 
-        async def transcription_worker():
-            while True:
-                try:
-                    audio_data, speaker_name = await utterance_queue.get()
-                    log_pipeline_step(
-                        "QUEUE",
-                        "Transcription worker dequeued utterance for processing.",
-                        speaker=speaker_name,
-                        extra={
-                            "queue_depth": utterance_queue.qsize(),
-                            "utterance_bytes": len(audio_data),
-                        },
+        async def on_transcription_message_local(
+            result: SonioxTranscriptionResult,
+        ):
+            """
+            Handles all T&T results from the single Soniox service.
+            Uses the shared context to apply the correct message_id.
+            """
+            async with context.lock:
+                if not context.message_id:
+                    log_utterance_step(
+                        "TRANSCRIPTION",
+                        "UNKNOWN",
+                        "Received result with no active utterance context, dropping.",
+                        extra={"is_final": result.is_final},
                         detailed=True,
                     )
-                    message_id = str(uuid.uuid4())
-                    transcription_done = asyncio.Event()
+                    return
 
-                    log_utterance_start(message_id, speaker_name)
+                log_utterance_step(
+                    "TRANSCRIPTION",
+                    context.message_id,
+                    "Received consolidated T&T chunk.",
+                    speaker=context.speaker_name,
+                    extra={
+                        "is_final": result.is_final,
+                        "transcription": result.transcription,
+                        "translation": result.translation,
+                    },
+                )
 
-                    async def on_transcription_message_local(
-                        result: SonioxTranscriptionResult,
-                    ):
-                        """
-                        Handles the consolidated T&T result from the Soniox service.
-                        """
-                        log_utterance_step(
-                            "TRANSCRIPTION",
-                            message_id,
-                            "Received consolidated T&T chunk.",
+                payload_type = "final" if result.is_final else "partial"
+                payload = {
+                    "message_id": context.message_id,
+                    "transcription": result.transcription,
+                    "translation": result.translation,
+                    "speaker": context.speaker_name,
+                    "type": payload_type,
+                    "isfinalize": result.is_final,
+                }
+                await viewer_manager.broadcast(payload)
+
+                if result.is_final:
+                    log_utterance_end(context.message_id, context.speaker_name)
+                    context.message_id = None
+                    context.speaker_name = None
+                    utterance_finalized_event.set()
+
+        async def on_service_close_local(code: int, reason: str):
+            """
+            Handles the Soniox service closing unexpectedly.
+            """
+            log_pipeline_step(
+                "TRANSCRIPTION",
+                f"Transcription service closed. Code: {code}, Reason: {reason}",
+                detailed=False,
+            )
+            utterance_finalized_event.set()
+
+        try:
+            transcription_service = SonioxTranscriptionService(
+                on_message_callback=on_transcription_message_local,
+                on_error_callback=on_service_error,
+                on_close_callback=on_service_close_local,
+                loop=loop,
+            )
+            await loop.run_in_executor(None, transcription_service.connect)
+            log_pipeline_step(
+                "SESSION",
+                "Transcription service connected for session.",
+                detailed=True,
+            )
+
+            async def transcription_worker():
+                while True:
+                    try:
+                        audio_data, speaker_name = await utterance_queue.get()
+
+                        await utterance_finalized_event.wait()
+                        utterance_finalized_event.clear()
+
+                        message_id = str(uuid.uuid4())
+
+                        async with context.lock:
+                            context.message_id = message_id
+                            context.speaker_name = speaker_name
+
+                        log_pipeline_step(
+                            "QUEUE",
+                            "Transcription worker dequeued utterance for processing.",
                             speaker=speaker_name,
                             extra={
-                                "is_final": result.is_final,
-                                "transcription": result.transcription,
-                                "translation": result.translation,
+                                "queue_depth": utterance_queue.qsize(),
+                                "utterance_bytes": len(audio_data),
                             },
+                            detailed=True,
                         )
+                        log_utterance_start(message_id, speaker_name)
 
-                        if result.is_final:
-                            # Send final payload
-                            payload = {
-                                "message_id": message_id,
-                                "transcription": result.transcription,
-                                "translation": result.translation,
-                                "speaker": speaker_name,
-                                "type": "final",
-                                "isfinalize": True,
-                            }
-                            await viewer_manager.broadcast(payload)
-
-                            if not transcription_done.is_set():
+                        chunk_size = 1280
+                        if len(audio_data) > 0:
+                            for i in range(0, len(audio_data), chunk_size):
+                                chunk = audio_data[i : i + chunk_size]
                                 log_utterance_step(
                                     "TRANSCRIPTION",
                                     message_id,
-                                    "Transcription marked complete by service.",
+                                    "Sending audio chunk to transcription engine.",
                                     speaker=speaker_name,
+                                    extra={
+                                        "offset": i,
+                                        "chunk_bytes": len(chunk),
+                                    },
                                     detailed=True,
                                 )
-                                transcription_done.set()
-                        else:
-                            # Send partial payload
-                            payload = {
-                                "message_id": message_id,
-                                "transcription": result.transcription,
-                                "translation": result.translation,
-                                "speaker": speaker_name,
-                                "type": "partial",
-                                "isfinalize": False,
-                            }
-                            await viewer_manager.broadcast(payload)
+                                await loop.run_in_executor(
+                                    None, transcription_service.send_chunk, chunk
+                                )
+                                await asyncio.sleep(0.04)
 
-                    async def on_service_close_local(code: int, reason: str):
-                        if not transcription_done.is_set():
-                            log_utterance_step(
-                                "TRANSCRIPTION",
-                                f"Transcription service closed unexpectedly. Code: {code}, Reason: {reason}",
-                                speaker=speaker_name,
-                                detailed=False,
-                            )
-                            transcription_done.set()
+                        log_utterance_step(
+                            "TRANSCRIPTION",
+                            message_id,
+                            "Signaling manual end of utterance to transcription engine.",
+                            speaker=speaker_name,
+                            detailed=True,
+                        )
+                        await loop.run_in_executor(
+                            None, transcription_service.manually_finalize_utterance
+                        )
 
-                    transcription_service = SonioxTranscriptionService(
-                        on_message_callback=on_transcription_message_local,
-                        on_error_callback=on_service_error,
-                        on_close_callback=on_service_close_local,
-                        loop=loop,
-                    )
+                        utterance_queue.task_done()
 
-                    await loop.run_in_executor(None, transcription_service.connect)
-                    log_utterance_step(
-                        "TRANSCRIPTION",
-                        message_id,
-                        "Transcription service connected.",
-                        speaker=speaker_name,
-                        detailed=True,
-                    )
+                    except asyncio.CancelledError:
+                        break
+                    except Exception as e:
+                        log_pipeline_step(
+                            "TRANSCRIPTION",
+                            f"Error in transcription worker: {e}",
+                            detailed=False,
+                        )
 
-                    chunk_size = 1280
-                    if len(audio_data) > 0:
-                        for i in range(0, len(audio_data), chunk_size):
-                            chunk = audio_data[i : i + chunk_size]
-                            log_utterance_step(
-                                "TRANSCRIPTION",
-                                message_id,
-                                "Sending audio chunk to transcription engine.",
-                                speaker=speaker_name,
-                                extra={
-                                    "offset": i,
-                                    "chunk_bytes": len(chunk),
-                                },
-                                detailed=True,
-                            )
-                            await loop.run_in_executor(
-                                None, transcription_service.send_chunk, chunk
-                            )
-                            await asyncio.sleep(0.04)
-                    log_utterance_step(
-                        "TRANSCRIPTION",
-                        message_id,
-                        "Signaling end of audio stream to transcription engine.",
-                        speaker=speaker_name,
-                        detailed=True,
-                    )
-                    await loop.run_in_executor(
-                        None, transcription_service.finalize_utterance
-                    )
-                    await transcription_done.wait()
-                    log_utterance_end(message_id, speaker_name)
-                    utterance_queue.task_done()
-                except asyncio.CancelledError:
-                    break
-                except Exception as e:
-                    log_pipeline_step(
-                        "TRANSCRIPTION",
-                        f"Error in transcription worker: {e}",
-                        detailed=False,
-                    )
+            worker_task = asyncio.create_task(transcription_worker())
+            current_speaker = "Unknown"
 
-        worker_task = asyncio.create_task(transcription_worker())
-        current_speaker = "Unknown"
-        try:
             while True:
                 raw_message = await websocket.receive_text()
                 message = json.loads(raw_message)
@@ -276,6 +291,16 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             )
         finally:
             worker_task.cancel()
+            utterance_finalized_event.set()
+
+            if transcription_service:
+                log_pipeline_step(
+                    "SESSION",
+                    "Client disconnected. Finalizing Soniox stream...",
+                    detailed=True,
+                )
+                await loop.run_in_executor(None, transcription_service.finalize_stream)
+
             await asyncio.sleep(0.1)
 
             # --- Save WAV files only in DEBUG_MODE ---

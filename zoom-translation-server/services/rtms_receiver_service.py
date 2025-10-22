@@ -14,10 +14,7 @@ from .debug_service import (
     log_utterance_start,
     save_audio_to_wav,
 )
-from .soniox_transcription_service import (
-    SonioxTranscriptionResult,
-    SonioxTranscriptionService,
-)
+from .soniox_service import SonioxResult, SonioxService
 
 
 def create_transcribe_router(viewer_manager, DEBUG_MODE):
@@ -51,7 +48,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
         async def on_service_error(error_message: str):
             log_pipeline_step(
-                "TRANSCRIPTION",
+                "SONIOX",
                 f"Transcription Error: {error_message}",
                 detailed=False,
             )
@@ -60,7 +57,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             )
 
         async def on_transcription_message_local(
-            result: SonioxTranscriptionResult,
+            result: SonioxResult,
         ):
             """
             Handles all T&T results from the single Soniox service.
@@ -75,7 +72,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
             if not current_message_id:
                 log_pipeline_step(
-                    "TRANSCRIPTION",
+                    "SONIOX",
                     "Received result with no active utterance, dropping.",
                     extra={"is_final": result.is_final},
                     detailed=True,
@@ -85,7 +82,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 return
 
             log_pipeline_step(
-                "TRANSCRIPTION",
+                "SONIOX",
                 "Received consolidated T&T chunk.",
                 speaker=current_speaker,
                 extra={
@@ -118,13 +115,13 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
             Handles the Soniox service closing unexpectedly.
             """
             log_pipeline_step(
-                "TRANSCRIPTION",
+                "SONIOX",
                 f"Transcription service closed. Code: {code}, Reason: {reason}",
                 detailed=False,
             )
 
         try:
-            transcription_service = SonioxTranscriptionService(
+            transcription_service = SonioxService(
                 on_message_callback=on_transcription_message_local,
                 on_error_callback=on_service_error,
                 on_close_callback=on_service_close_local,

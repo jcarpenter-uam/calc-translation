@@ -11,7 +11,7 @@ from .debug_service import log_pipeline_step
 
 
 @dataclass
-class SonioxTranscriptionResult:
+class SonioxResult:
     """
     Holds the consolidated transcription and translation from a Soniox message.
     """
@@ -21,7 +21,7 @@ class SonioxTranscriptionResult:
     is_final: bool
 
 
-class SonioxTranscriptionService:
+class SonioxService:
     """
     Connects to the Soniox streaming API and provides consolidated
     real-time transcription and translation.
@@ -29,7 +29,7 @@ class SonioxTranscriptionService:
 
     def __init__(
         self,
-        on_message_callback: Callable[[SonioxTranscriptionResult], Awaitable[None]],
+        on_message_callback: Callable[[SonioxResult], Awaitable[None]],
         on_error_callback: Callable[[str], Awaitable[None]],
         on_close_callback: Callable[[int, str], Awaitable[None]],
         loop: asyncio.AbstractEventLoop,
@@ -145,7 +145,7 @@ class SonioxTranscriptionService:
                 )
 
                 await self.on_message_callback(
-                    SonioxTranscriptionResult(
+                    SonioxResult(
                         transcription=full_transcription,
                         translation=full_translation,
                         is_final=False,
@@ -154,12 +154,12 @@ class SonioxTranscriptionService:
 
                 if is_end_token:
                     log_pipeline_step(
-                        "TRANSCRIPTION",
+                        "SONIOX",
                         "Received <end> token, sending final utterance result.",
                         detailed=True,
                     )
                     await self.on_message_callback(
-                        SonioxTranscriptionResult(
+                        SonioxResult(
                             transcription="".join(
                                 self.final_transcription_tokens
                             ).strip(),
@@ -172,12 +172,12 @@ class SonioxTranscriptionService:
 
                 if res.get("finished"):
                     log_pipeline_step(
-                        "TRANSCRIPTION",
+                        "SONIOX",
                         "Soniox signaled session finished.",
                         detailed=True,
                     )
                     await self.on_message_callback(
-                        SonioxTranscriptionResult(
+                        SonioxResult(
                             transcription="".join(
                                 self.final_transcription_tokens
                             ).strip(),
@@ -189,10 +189,10 @@ class SonioxTranscriptionService:
 
         except ConnectionClosedOK:
             log_pipeline_step(
-                "TRANSCRIPTION", "Soniox connection closed normally.", detailed=True
+                "SONIOX", "Soniox connection closed normally.", detailed=True
             )
             await self.on_message_callback(
-                SonioxTranscriptionResult(
+                SonioxResult(
                     transcription="".join(self.final_transcription_tokens).strip(),
                     translation="".join(self.final_translation_tokens).strip(),
                     is_final=True,
@@ -200,9 +200,7 @@ class SonioxTranscriptionService:
             )
             await self.on_close_callback(1000, "Normal closure")
         except Exception as e:
-            log_pipeline_step(
-                "TRANSCRIPTION", f"Receive loop error: {e}", detailed=False
-            )
+            log_pipeline_step("SONIOX", f"Receive loop error: {e}", detailed=False)
             await self.on_error_callback(str(e))
         finally:
             if self.ws:
@@ -218,13 +216,9 @@ class SonioxTranscriptionService:
             self.ws = connect(self.SONIOX_WEBSOCKET_URL)
             self.ws.send(json.dumps(config))
             self.receive_task = self.loop.create_task(self._receive_loop())
-            log_pipeline_step(
-                "TRANSCRIPTION", "Soniox service connected.", detailed=True
-            )
+            log_pipeline_step("SONIOX", "Soniox service connected.", detailed=True)
         except Exception as e:
-            log_pipeline_step(
-                "TRANSCRIPTION", f"Soniox connection error: {e}", detailed=False
-            )
+            log_pipeline_step("SONIOX", f"Soniox connection error: {e}", detailed=False)
             raise
 
     def send_chunk(self, chunk: bytes):
@@ -243,7 +237,7 @@ class SonioxTranscriptionService:
         if self.ws:
             self.ws.send("")
             log_pipeline_step(
-                "TRANSCRIPTION",
+                "SONIOX",
                 "Soniox stream finalized (session end).",
                 detailed=True,
             )

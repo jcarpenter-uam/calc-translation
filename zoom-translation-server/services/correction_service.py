@@ -7,7 +7,7 @@ from .debug_service import log_pipeline_step
 # TODO: Rework
 
 
-class OllamaCorrectionService:
+class CorrectionService:
     """
     Handles transcription correction using a local Ollama model.
     """

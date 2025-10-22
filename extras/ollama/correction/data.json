@@ -403,5 +403,545 @@
       "corrected_sentence": "他“直到”最后一刻才画完。",
       "reasoning": "The phrase '...才...' (only then) implies a duration up to a point. Corrects '知道' (zhīdào - know) to '直到' (zhídào - until)."
     }
+  },
+  {
+    "context": "今天是星期六，天气很好 ，不冷也不热，我带上笔记本，袋子和钱包，出门了。我的目的是中国超市，到了超市门口，我看到很多人在进行购物，我也突然很激动。",
+    "target_sentence": "今天是星期六，天气很好 ，不冷也不热，我觉得这是卖菜的好时候。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "今天是星期六，天气很好 ，不冷也不热，我觉得这是买菜的好时候。",
+      "reasoning": "Context '中国超市' (Chinese supermarket) and '进行购物' (shopping) implies the speaker is a customer. Corrects '卖菜' (mài cài - sell vegetables) to '买菜' (mǎi cài - buy vegetables)."
+    }
+  },
+  {
+    "context": "一个工作人员走过来问我，\"您需要帮助吗？\"...他说，\"在你右边...\"",
+    "target_sentence": "我为小说，我想买青菜和白菜，在哪里？",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我微笑说，我想买青菜和白菜，在哪里？",
+      "reasoning": "The phrase '我为小说' (wǒ wèi xiǎoshuō - I for the novel) is nonsensical ASR output. Corrects to the semantically correct and phonetically similar '我微笑说' (wǒ wēixiào shuō - I smiled and said)."
+    }
+  },
+  {
+    "context": "一进来，我看到...是假竹套，密兰和白桦，这些画很漂亮...",
+    "target_sentence": "一进来，我看到一个花具，是假竹套...",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "一进来，我看到一个花艺，是假竹套...",
+      "reasoning": "Context includes '假竹套' (fake bamboo) and '白桦' (birch), which are floral items. Corrects '花具' (huājù - vase set) to the semantically appropriate '花艺' (huāyì - floral art/display)."
+    }
+  },
+  {
+    "context": "我需要一个东西来插这些刚买的玫瑰花。",
+    "target_sentence": "我去买个花艺吧。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我去买个花具吧。",
+      "reasoning": "The context '插这些...玫瑰花' (arrange these roses) implies the need for a container. Corrects '花艺' (huāyì - floral art) to '花具' (huājù - vase/vase set)."
+    }
+  },
+  {
+    "context": "我需要一个东西来插这些刚买的玫瑰花。",
+    "target_sentence": "我去买个花具吧。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我去买个花具吧。",
+      "reasoning": "The context '插这些...玫瑰花' (arrange these roses) makes '花具' (huājù - vase/vase set) a semantically correct and logical purchase. No correction needed."
+    }
+  },
+  {
+    "context": "我的房子太旧了, 我准备装修一下。",
+    "target_sentence": "我打算把它卖掉。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我打算把它卖掉。",
+      "reasoning": "The target '卖掉' (mài diào - sell) is a plausible decision for an '旧房子' (old house). It is not contradicted by the context. No correction needed."
+    }
+  },
+  {
+    "context": "他花了三年时间才写完这本书。",
+    "target_sentence": "他“知道”上个月才最终定稿。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他“直到”上个月才最终定稿。",
+      "reasoning": "The context '花了三年时间' (spent three years) implies a long duration ending at a specific point. Corrects '知道' (zhīdào - know) to '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "我得赶紧去超市。家里的牛奶没有了。",
+    "target_sentence": "我得赶紧去超市。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我得赶紧去超市。",
+      "reasoning": "The target sentence is grammatically and semantically correct, even if it matches part of the context. No correction needed."
+    }
+  },
+  {
+    "context": "这家店周年庆, 全场八折。我作为老顾客, 一定要去支持一下。",
+    "target_sentence": "我准备去卖点新衣服。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我准备去买点新衣服。",
+      "reasoning": "Context '周年庆' (anniversary sale) and '老顾客' (loyal customer) implies the speaker is a customer buying items. Corrects '卖' (mài - sell) to '买' (mǎi - buy)."
+    }
+  },
+  {
+    "context": "火车晚点了, 我在车站等了五个小时。",
+    "target_sentence": "我“知道”晚上十点车才来。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我“直到”晚上十点车才来。",
+      "reasoning": "Context '等了五个小时' (waited for five hours) describes a duration *until* a point in time. Corrects '知道' (zhīdào - know) to '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "他一直工作, 没有休息。",
+    "target_sentence": "他“知道”项目完成才停下。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他“直到”项目完成才停下。",
+      "reasoning": "Context '一直工作' (kept working) implies a duration *until* a goal. Corrects '知道' (zhīdào - know) to the similar-sounding '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "我们去逛商场吧, 我想看看新款。",
+    "target_sentence": "好啊, 我也想卖件夹克。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "好啊, 我也想买件夹克。",
+      "reasoning": "Context '逛商场' (go shopping) implies the role of a customer. Corrects '卖' (mài - sell) to '买' (mǎi - buy)."
+    }
+  },
+  {
+    "context": "他终于完成了他的杰作。",
+    "target_sentence": "他“知道”最后一刻才画完。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他“直到”最后一刻才画完。",
+      "reasoning": "The phrase '...才...' (only then) implies a duration up to a point. Corrects '知道' (zhīdào - know) to '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "他是个武术家。",
+    "target_sentence": "他的“工夫”很好。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他的“功夫”很好。",
+      "reasoning": "Context '武术家' (martial artist) refers to martial arts. Corrects '工夫' (gōngfu - time/effort) to the homophone '功夫' (gōngfu - Kung Fu)."
+    }
+  },
+  {
+    "context": "我没时间了。",
+    "target_sentence": "我没“功夫”跟你聊了。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我没“工夫”跟你聊了。",
+      "reasoning": "Context '没时间了' (no time left) refers to time. Corrects '功夫' (gōngfu - Kung Fu) to the homophone '工夫' (gōngfu - time/effort)."
+    }
+  },
+  {
+    "context": "他是个武术家。",
+    "target_sentence": "他的“功夫”很好。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "他的“功夫”很好。",
+      "reasoning": "Context '武术家' (martial artist) refers to martial arts. '功夫' (gōngfu - Kung Fu) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "他是公司的CEO。",
+    "target_sentence": "他有很大的“权利”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他有很大的“权力”。",
+      "reasoning": "Context 'CEO' refers to authority. Corrects '权利' (quánlì - rights) to the homophone '权力' (quánlì - power)."
+    }
+  },
+  {
+    "context": "每个人都有投票的“权力”。",
+    "target_sentence": "每个人都有投票的“权力”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "每个人都有投票的“权利”。",
+      "reasoning": "Context '投票' (voting) refers to a civil right. Corrects '权力' (quánlì - power) to the homophone '权利' (quánlì - rights)."
+    }
+  },
+  {
+    "context": "他是公司的CEO。",
+    "target_sentence": "他有很大的“权力”。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "他有很大的“权力”。",
+      "reasoning": "Context 'CEO' refers to authority. '权力' (quánlì - power) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "他刚从大学毕业。",
+    "target_sentence": "他的“经历”很高。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他的“学历”很高。",
+      "reasoning": "Context '大学毕业' (university graduation) refers to education. Corrects '经历' (jīnglì - experience) to the similar-sounding '学历' (xuélì - educational background)."
+    }
+  },
+  {
+    "context": "他已经工作四十年了。",
+    "target_sentence": "他的“学历”很丰富。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他的“经历”很丰富。",
+      "reasoning": "Context '工作四十年' (worked for 40 years) refers to experience. Corrects '学历' (xuélì - education) to '经历' (jīnglì - experience)."
+    }
+  },
+  {
+    "context": "他已经工作四十年了。",
+    "target_sentence": "他的“经历”很丰富。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "他的“经历”很丰富。",
+      "reasoning": "Context '工作四十年' (worked for 40 years) refers to experience. '经历' (jīnglì - experience) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "我要去那家餐厅吃饭。",
+    "target_sentence": "我得先“决定”一个座位。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我得先“预定”一个座位。",
+      "reasoning": "Context '餐厅' (restaurant) implies booking. Corrects '决定' (juédìng - decide) to the similar-sounding '预定' (yùdìng - reserve)."
+    }
+  },
+  {
+    "context": "这个音乐太吵了。",
+    "target_sentence": "请调低“影响”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "请调低“音响”。",
+      "reasoning": "Context '音乐太吵' (music is too loud) refers to audio. Corrects '影响' (yǐngxiǎng - influence) to the homophone '音响' (yīnxiǎng - audio/stereo)."
+    }
+  },
+  {
+    "context": "他是一个很有魅力的人。",
+    "target_sentence": "他对我的“音响”很大。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他对我的“影响”很大。",
+      "reasoning": "Context '有魅力的人' (charismatic person) refers to influence. Corrects '音响' (yīnxiǎng - audio) to the homophone '影响' (yǐngxiǎng - influence)."
+    }
+  },
+  {
+    "context": "他是一个很有魅力的人。",
+    "target_sentence": "他对我的“影响”很大。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "他对我的“影响”很大。",
+      "reasoning": "Context '有魅力的人' (charismatic person) refers to influence. '影响' (yǐngxiǎng - influence) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "你往哪里走？",
+    "target_sentence": "我“上”前走。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我“向”前走。",
+      "reasoning": "The phrase '上' (shàng - up) is incorrect for direction. Corrects to the homophone '向' (xiàng - towards) for the phrase '向前走' (walk forward)."
+    }
+  },
+  {
+    "context": "请上楼。",
+    "target_sentence": "我“向”楼上走。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我“上”楼上走。",
+      "reasoning": "The phrase '向楼上' (xiàng lóushàng - towards upstairs) is grammatically awkward. Corrects '向' (xiàng - towards) to '上' (shàng - up) for the phrase '上楼' (go upstairs)."
+    }
+  },
+  {
+    "context": "你把午饭放哪了？",
+    "target_sentence": "我放在“写”上了。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我放在“桌”上了。",
+      "reasoning": "Context is about '午饭' (lunch). '写上' (xiě shàng - write on) is nonsensical. Corrects to the phonetically similar '桌上' (zhuō shàng - on the table)."
+    }
+  },
+  {
+    "context": "请报一下你的房间号。",
+    "target_sentence": "房间号是“一”零“一”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "房间号是“幺”零“幺”。",
+      "reasoning": "In spoken Chinese, '一' (yī) is often pronounced '幺' (yāo) when reading digits like a room number to avoid confusion. Correcting to the standard spoken form."
+    }
+  },
+  {
+    "context": "我需要支付账单。",
+    "target_sentence": "请给我你的帐号。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "请给我你的账号。",
+      "reasoning": "Context '支付账单' (pay bills) refers to a bank or payment account. Corrects '帐号' (zhànghào - tent number) to the homophone '账号' (zhànghào - account number)."
+    }
+  },
+  {
+    "context": "我们去露营吧。",
+    "target_sentence": "别忘了带上账号。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "别忘了带上帐号。",
+      "reasoning": "Context '露营' (camping) refers to needing a tent. Corrects '账号' (zhànghào - account number) to the homophone '帐号' (zhànghào - tent number/tent)."
+    }
+  },
+  {
+    "context": "我需要支付账单。",
+    "target_sentence": "请给我你的账号。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "请给我你的账号。",
+      "reasoning": "Context '支付账单' (pay bills) refers to a bank or payment account. '账号' (zhànghào - account number) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "他刚买了一辆新车。",
+    "target_sentence": "车的颜色很“兰”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "车的颜色很“蓝”。",
+      "reasoning": "Context '车的颜色' (car color) refers to color. Corrects '兰' (lán - orchid) to the exact homophone '蓝' (lán - blue)."
+    }
+  },
+  {
+    "context": "春天来了，花园里的花都开了。",
+    "target_sentence": "那朵蓝花真好看。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "那朵兰花真好看。",
+      "reasoning": "Context '花园里的花' (flowers in the garden) refers to flowers. Corrects '蓝' (lán - blue) to the exact homophone '兰' (lán - orchid)."
+    }
+  },
+  {
+    "context": "他刚买了一辆新车。",
+    "target_sentence": "车的颜色很“蓝”。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "车的颜色很“蓝”。",
+      "reasoning": "Context '车的颜色' (car color) refers to color. '蓝' (lán - blue) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "这部电影太感人了。",
+    "target_sentence": "我的“做”位都湿了。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我的“座”位都湿了。",
+      "reasoning": "Context '电影' (movie) refers to a seat in a theater. Corrects '做' (zuò - do/make) to the exact homophone '座' (zuò - seat)."
+    }
+  },
+  {
+    "context": "我今天有很多工作。",
+    "target_sentence": "我得赶紧“座”完。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我得赶紧“做”完。",
+      "reasoning": "Context '很多工作' (lots of work) refers to tasks to be done. Corrects '座' (zuò - seat) to the exact homophone '做' (zuò - do/make)."
+    }
+  },
+  {
+    "context": "这部电影太感人了。",
+    "target_sentence": "我的“座”位都湿了。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我的“座”位都湿了。",
+      "reasoning": "Context '电影' (movie) refers to a seat in a theater. '座' (zuò - seat) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "他说话总是拐弯抹角。",
+    "target_sentence": "他不够“坦帅”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他不够“坦率”。",
+      "reasoning": "Context '拐弯抹角' (beat around the bush) implies indirectness. Corrects '坦帅' (tǎnshuài - handsome/charming frankness - rare) to the common word '坦率' (tǎnshuài - frank/candid)."
+    }
+  },
+  {
+    "context": "这位将军打了胜仗。",
+    "target_sentence": "他是一位英勇的“坦率”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他是一位英勇的“统帅”。",
+      "reasoning": "Context '将军' (general) and '打了胜仗' (won a battle) refers to military command. Corrects '坦率' (tǎnshuài - frank) to the similar-sounding '统帅' (tǒngshuài - commander)."
+    }
+  },
+  {
+    "context": "他说话总是拐弯抹角。",
+    "target_sentence": "他不够“坦率”。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "他不够“坦率”。",
+      "reasoning": "Context '拐弯抹角' (beat around the bush) implies indirectness. '坦率' (tǎnshuài - frank/candid) is the correct antonym. No correction needed."
+    }
+  },
+  {
+    "context": "我想学习编程。",
+    "target_sentence": "我需要买一本“交”程。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我需要买一本“教”程。",
+      "reasoning": "Context '学习编程' (learn programming) refers to educational material. Corrects '交' (jiāo - hand over/intersect) to the homophone '教' (jiāo - teach) in the word '教程' (tutorial)."
+    }
+  },
+  {
+    "context": "我们约个时间见面吧。",
+    "target_sentence": "我们明天“教”个朋友。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我们明天“交”个朋友。",
+      "reasoning": "Context '见面' (meet) refers to social interaction. Corrects '教' (jiāo - teach) to the homophone '交' (jiāo - make friends/interact)."
+    }
+  },
+  {
+    "context": "我想学习编程。",
+    "target_sentence": "我需要买一本“教”程。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我需要买一本“教”程。",
+      "reasoning": "Context '学习编程' (learn programming) refers to educational material. '教' (jiāo - teach) in '教程' (tutorial) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "我需要一些现金。",
+    "target_sentence": "我去“取”款机取点钱。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我去“提”款机取点钱。",
+      "reasoning": "The standard term for ATM is '提款机' (tíkuǎnjī - withdrawal machine). Corrects '取' (qǔ - take/get) to '提' (tí - lift/withdraw)."
+    }
+  },
+  {
+    "context": "这个包裹是给你的。",
+    "target_sentence": "请你“提”一下。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "请你“取”一下。",
+      "reasoning": "Context '包裹' (package) implies receiving or collecting it. Corrects '提' (tí - lift/withdraw) to '取' (qǔ - take/get/collect)."
+    }
+  },
+  {
+    "context": "我需要一些现金。",
+    "target_sentence": "我去“提”款机取点钱。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我去“提”款机取点钱。",
+      "reasoning": "The standard term for ATM is '提款机' (tíkuǎnjī - withdrawal machine). '提' (tí) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "他是个演员。",
+    "target_sentence": "他的“演说”很精彩。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他的“演出”很精彩。",
+      "reasoning": "Context '演员' (actor) refers to performance. Corrects '演说' (yǎnshuō - speech) to '演出' (yǎnchū - performance)."
+    }
+  },
+  {
+    "context": "他参加了辩论比赛。",
+    "target_sentence": "他的“演出”很有说服力。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他的“演说”很有说服力。",
+      "reasoning": "Context '辩论比赛' (debate competition) refers to giving a speech. Corrects '演出' (yǎnchū - performance) to '演说' (yǎnshuō - speech)."
+    }
+  },
+  {
+    "context": "他是个演员。",
+    "target_sentence": "他的“演出”很精彩。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "他的“演出”很精彩。",
+      "reasoning": "Context '演员' (actor) refers to performance. '演出' (yǎnchū - performance) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "明天我们去爬山吧。",
+    "target_sentence": "那里的“风景”一定很美。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "那里的“风景”一定很美。",
+      "reasoning": "Context '爬山' (climb a mountain) relates to scenery. '风景' (fēngjǐng - scenery) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "他看起来很累。",
+    "target_sentence": "他需要好好“休息”。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "他需要好好“休息”。",
+      "reasoning": "Context '很累' (very tired) relates to needing rest. '休息' (xiūxi - rest) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "这件衣服太贵了。",
+    "target_sentence": "我们“在”看看别的吧。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我们“再”看看别的吧。",
+      "reasoning": "The sentence implies looking *again* or looking at *more* items. Corrects '在' (zài - at/in) to the homophone '再' (zài - again/more)."
+    }
+  },
+  {
+    "context": "你在哪里？",
+    "target_sentence": "我“再”家。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我“在”家。",
+      "reasoning": "The sentence refers to location. Corrects '再' (zài - again) to the homophone '在' (zài - at/in)."
+    }
+  },
+  {
+    "context": "这件衣服太贵了。",
+    "target_sentence": "我们“再”看看别的吧。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我们“再”看看别的吧。",
+      "reasoning": "The sentence implies looking *again* or looking at *more* items. '再' (zài - again/more) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "这个包裹有点重。",
+    "target_sentence": "你用点“历”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "你用点“力”。",
+      "reasoning": "Context '有点重' (a bit heavy) implies needing strength. Corrects '历' (lì - history/calendar) to the exact homophone '力' (lì - strength)."
+    }
+  },
+  {
+    "context": "他学习很好。",
+    "target_sentence": "他的“力”史成绩特别好。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他的“历”史成绩特别好。",
+      "reasoning": "Context '学习很好' (studies well) implies academics. Corrects '力' (lì - strength) to the exact homophone '历' (lì - history) in the word '历史' (history)."
+    }
+  },
+  {
+    "context": "他学习很好。",
+    "target_sentence": "他的“历”史成绩特别好。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "他的“历”史成绩特别好。",
+      "reasoning": "Context '学习很好' (studies well) implies academics. '历' (lì - history) in '历史' (history) is correct. No correction needed."
+    }
+  },
+  {
+    "context": "我今天感觉不舒服。",
+    "target_sentence": "可能是昨晚没“盖”好被子。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "可能是昨晚没“盖”好被子。",
+      "reasoning": "Context '不舒服' (unwell) implies getting cold. '盖' (gài - cover) is correct. No correction needed."
+    }
   }
 ]

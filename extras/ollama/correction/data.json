@@ -1,218 +1,362 @@
 [
   {
-    "context": "阿波,你在楼上搞什么鬼啊?",
-    "target_sentence": "阿妈快起来。",
+    "context": "股市崩盘了,我得赶紧处理掉我的股票。",
+    "target_sentence": "我得赶紧买了。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我得赶紧卖了。",
+      "reasoning": "Context '股市崩盘' (stock market crashed) and '处理掉' (get rid of) implies selling, not buying. Corrects '买' (mǎi) to the similar-sounding '卖' (mài)."
+    }
+  },
+  {
+    "context": "我得去超市了,清单上第一项是牛奶。",
+    "target_sentence": "我想卖点牛奶。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我想买点牛奶。",
+      "reasoning": "Context '去超市' (go to the supermarket) implies buying, not selling. Corrects '卖' (mài) to the similar-sounding '买' (mǎi)."
+    }
+  },
+  {
+    "context": "我们今天开会的主题是关于下一季度的预算。",
+    "target_sentence": "这是一个很重要的市。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "这是一个很重要的事。",
+      "reasoning": "Context '开会' (meeting) and '主题' (topic) makes '市' (shì - market/city) nonsensical. Corrects to the exact homophone '事' (shì - matter/affair)."
+    }
+  },
+  {
+    "context": "这个项目总共需要多长时间?",
+    "target_sentence": "总共大概三个妻。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "总共大概三个期。",
+      "reasoning": "Context '项目' (project) and '多长时间' (how much time) implies a unit of time or phase. Corrects the homophone '妻' (qī - wife) to '期' (qī - period/phase)."
+    }
+  },
+  {
+    "context": "你什么时候完成的?",
+    "target_sentence": "我“知道”半夜才做完。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我“直到”半夜才做完。",
+      "reasoning": "The sentence structure implies a duration *until* a point in time. Corrects '知道' (zhīdào - know) to the similar-sounding '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "套餐里有什么?",
+    "target_sentence": "“包乖”一份沙拉和一杯饮料。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "“包括”一份沙拉和一杯饮料。",
+      "reasoning": "The context of a '套餐' (set menu) implies inclusion. Corrects the misrecognized '包乖' (bāoguāi) to the semantically correct and similar-sounding '包括' (bāokuò - include)."
+    }
+  },
+  {
+    "context": "别担心,一切都会好起来的。",
+    "target_sentence": "希望“以后”一切顺利。",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "阿妈快起来。",
-      "reasoning": "The target sentence is grammatically correct and coherent with the provided context."
+      "corrected_sentence": "希望“以后”一切顺利。",
+      "reasoning": "The target '以后' (yǐhòu - in the future) is used correctly in this context. No correction needed."
     }
   },
   {
-    "context": "阿波,你在楼上搞什么鬼啊?",
-    "target_sentence": "阿婆快起来。嗯嗯嗯这是一个。嗯嗯嗯嗯嗯",
+    "context": "他刚从医院回来,医生说他没事。",
+    "target_sentence": "他的“检察”结果怎么样?",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "阿妈快起来。",
-      "reasoning": "Removes filler words ('嗯嗯嗯') and extraneous text ('这是一个'). Corrects the misrecognized word '阿婆' to '阿妈'."
+      "corrected_sentence": "他的“检查”结果怎么样?",
+      "reasoning": "Context '医院' (hospital) and '医生' (doctor) refers to a medical check-up. Corrects '检察' (jiǎnchá - to prosecute/inspect) to the homophone '检查' (jiǎnchá - medical check-up)."
     }
   },
   {
-    "context": "阿妈快起来。",
-    "target_sentence": "唉",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "",
-      "reasoning": "The target sentence '唉' is a non-linguistic filler word or sigh. The corrected sentence is empty, indicating it should be removed."
-    }
-  },
-  {
-    "context": "阿妈快起来。",
-    "target_sentence": "嗯嗯嗯降低。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "",
-      "reasoning": "Removes filler words ('嗯嗯嗯') and an extraneous word ('降低'). The corrected sentence is empty, indicating these should be removed."
-    }
-  },
-  {
-    "context": "阿妈快起来。 ... 啊,没有啊。",
-    "target_sentence": "阿波,你在楼上搞什么鬼啊?",
+    "context": "我得去超市了。",
+    "target_sentence": "你想买什么?",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "阿波,你在楼上搞什么鬼啊?",
-      "reasoning": "The target sentence is grammatically correct and coherent with the provided context."
+      "corrected_sentence": "你想买什么?",
+      "reasoning": "The target sentence '买' (mǎi - buy) is semantically correct in the context of '超市' (supermarket). No correction needed."
     }
   },
   {
-    "context": "阿妈快起来。 ... 啊,没有啊。",
-    "target_sentence": "你在楼上搞什么鬼呀?",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "阿波,你在楼上搞什么鬼啊?",
-      "reasoning": "Adds the missing name '阿波', which is present in the context. Corrects the final particle '呀' to '啊'."
-    }
-  },
-  {
-    "context": "阿波,你在楼上搞什么鬼啊? ... 阿波,快啦,快来不及了",
-    "target_sentence": "啊没有啊。this Is WOW猴王灰太狼领克枪小龙喊着5号。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "啊,没有啊。猴王、快螳螂、灵鹤、俏小龙、悍娇虎。",
-      "reasoning": "Removes extraneous English and Chinese text ('this Is WOW...5号'). Corrects misrecognized text ('灰太狼领克枪小龙') to a list of names ('快螳螂、灵鹤、俏小龙、悍娇虎'). The corrected sentence also segments the text into two distinct sentences and adds punctuation."
-    }
-  },
-  {
-    "context": "猴王、快螳螂、灵鹤、俏小龙、悍娇虎。 ... 对不起,阿爹",
-    "target_sentence": "嗯嗯嗯嗯老婆坏了快来不及了,来喽。Oh呜呜。呜呜。oh Oh.",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "阿波,快啦,快来不及了。来咯。",
-      "reasoning": "Removes significant filler words ('嗯嗯嗯嗯') and extraneous text ('老婆坏了', 'Oh呜呜...'). Corrects '来喽' to '来咯'. The corrected sentence also introduces the name '阿波' and segments the text into two sentences."
-    }
-  },
-  {
-    "context": "来咯。 ... 你到底在楼上搞什么,噼噼pia pia的",
-    "target_sentence": "对不起啊爹,对不起,又不能当面吃。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "对不起,阿爹。对不起又不能当面吃。",
-      "reasoning": "Corrects the particle '啊' to a comma before '阿爹'. The corrected sentence also splits the single input sentence into two separate sentences."
-    }
-  },
-  {
-    "context": "对不起又不能当面吃。 ... 什么梦?",
-    "target_sentence": "你到底在楼上搞什么PPT啊没什么,只是做一个怪梦啊,折磨。你不 不管什么东西啦,我们到。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "你到底在楼上搞什么,噼噼pia pia的。没什么,只是做了一个怪梦啦。",
-      "reasoning": "Corrects the misrecognized text 'PPT啊' to the onomatopoeia '噼噼pia pia的'. Removes large portions of extraneous text ('折磨。你不...我们到'). The corrected sentence also splits the single input sentence into two."
-    }
-  },
-  {
-    "context": "你梦到什么东西啦? ... 呃...汤面咯",
-    "target_sentence": "我们到那个aha.",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "我梦到那个...",
-      "reasoning": "Corrects misrecognized '我们到' (we arrive) to '我梦到' (I dreamed of), which is more consistent with the context. Removes extraneous text 'aha.'."
-    }
-  },
-  {
-    "context": "我梦到那个...",
-    "target_sentence": "How many laws?行业,你真的是梦到了。对呀。忽然会梦到什么 呢?小黑上面有一只非标噢大喜之日,我儿子他终于梦到汤面了。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "呃...汤面咯。汤面?你真的是梦到了汤面?对啊,不然会梦到什么咧?小心!那汤很烫。噢,大喜之日。我儿子他终于梦到汤面了。",
-      "reasoning": "The target sentence appears to be a major transcription error, merging multiple lines and inserting extraneous English ('How many laws?') and Chinese ('行业', '小黑上面有一只非标'). The corrected sentence replaces this with a coherent, multi-sentence dialogue."
-    }
-  },
-  {
-    "context": "你到底在楼上搞什么,噼噼pia pia的。 ... 没什么,只是做了一个怪梦啦。",
-    "target_sentence": "什么梦?",
+    "context": "我把旧车处理掉了。",
+    "target_sentence": "你卖了多少钱?",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "什么梦?",
-      "reasoning": "The target sentence is a grammatically correct and coherent question that fits the context."
+      "corrected_sentence": "你卖了多少钱?",
+      "reasoning": "The target sentence '卖' (mài - sell) is semantically correct in the context of '处理掉了' (got rid of). No correction needed."
     }
   },
   {
-    "context": "什么梦? ... 我梦到...呃...",
-    "target_sentence": "你梦到什么东西啦?",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "你梦到什么东西啦?",
-      "reasoning": "The target sentence is a grammatically correct and coherent question that fits the context."
-    }
-  },
-  {
-    "context": "什么梦? ... 我梦到...呃...",
-    "target_sentence": "你梦到什么? 东西?",
+    "context": "他今天过生日,我们去给他庆祝一下。",
+    "target_sentence": "祝你“声”日快乐!",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "你梦到什么东西啦?",
-      "reasoning": "The target sentence incorrectly segments the question into two parts. The corrected sentence combines them into a single, natural-sounding question and adds the final particle '啦'."
+      "corrected_sentence": "祝你“生”日快乐!",
+      "reasoning": "Context '过生日' (celebrate a birthday) refers to a date of birth. Corrects the exact homophone '声' (shēng - sound) to '生' (shēng - birth)."
     }
   },
   {
-    "context": "你梦到什么东西啦? ... 我梦到那个...",
-    "target_sentence": "我梦到...呃...",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "我梦到...呃...",
-      "reasoning": "The target sentence correctly represents a hesitation in speech, which is appropriate for the context."
-    }
-  },
-  {
-    "context": "你梦到什么东西啦? ... 我梦到那个...",
-    "target_sentence": "我梦到,呃...",
+    "context": "这个病人失血过多,我们没有时间了。",
+    "target_sentence": "他“继续”输血。",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "我梦到...呃...",
-      "reasoning": "The punctuation is incorrect for a hesitation. The corrected sentence replaces the comma with an ellipsis '...'"
+      "corrected_sentence": "他“急需”输血。",
+      "reasoning": "Context '失血过多' (excessive blood loss) implies urgency, not continuation. Corrects '继续' (jìxù - continue) to the similar-sounding '急需' (jíxū - urgently need)."
     }
   },
   {
-    "context": "我梦到那个... ... 汤面?你真的是梦到了汤面?",
-    "target_sentence": "呃...汤面咯",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "呃...汤面咯",
-      "reasoning": "The target sentence is a grammatically correct and coherent statement, including hesitation and a final particle."
-    }
-  },
-  {
-    "context": "我梦到那个... ... 汤面?你真的是梦到了汤面?",
-    "target_sentence": "汤面。",
+    "context": "我必须马上离开,上班要迟到了。",
+    "target_sentence": "我一“课”也不能再等了。",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "呃...汤面咯",
-      "reasoning": "The target sentence is an abrupt and incomplete answer. The corrected sentence adds the hesitation '呃...' and the final particle '咯' to make it a more natural response."
+      "corrected_sentence": "我一“刻”也不能再等了。",
+      "reasoning": "Context '马上离开' (leave immediately) refers to a unit of time. Corrects the homophone '课' (kè - class) to '刻' (kè - moment)."
     }
   },
   {
-    "context": "呃...汤面咯。 ... 对啊,不然会梦到什么咧?",
-    "target_sentence": "汤面?你真的是梦到了汤面?",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "汤面?你真的是梦到了汤面?",
-      "reasoning": "The target sentence is a grammatically correct and coherent question that fits the context."
-    }
-  },
-  {
-    "context": "汤面?你真的是梦到了汤面? ... 小心!那汤很烫。",
-    "target_sentence": "对啊,不然会梦到什么咧?",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "对啊,不然会梦到什么咧?",
-      "reasoning": "The target sentence is a grammatically correct and coherent question that fits the context."
-    }
-  },
-  {
-    "context": "汤面?你真的是梦到了汤面? ... 小心!那汤很烫。",
-    "target_sentence": "对啊,不然会梦到什么?",
+    "context": "你明天要去北京,别迟到了。",
+    "target_sentence": "我差点“往”了买火车票。",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "对啊,不然会梦到什么咧?",
-      "reasoning": "The target sentence is missing the final particle. The corrected sentence adds '咧' to make the question more natural and complete."
+      "corrected_sentence": "我差点“忘”了买火车票。",
+      "reasoning": "The sentence implies a memory lapse. Corrects '往' (wǎng - towards) to the similar-sounding and semantically correct '忘' (wàng - forget)."
     }
   },
   {
-    "context": "对啊,不然会梦到什么咧? ... 噢,大喜之日",
-    "target_sentence": "小心!那汤很烫。",
+    "context": "他是这个部门的经理,权力很大。",
+    "target_sentence": "他有“全”利批准这个。",
     "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "小心!那汤很烫。",
-      "reasoning": "The target sentence is a grammatically correct and coherent warning."
+      "is_correction_needed": true,
+      "corrected_sentence": "他有“权”利批准这个。",
+      "reasoning": "Context '经理' (manager) and '权力' (power) refers to authority. Corrects the homophone '全' (quán - all/whole) to '权' (quán - right/authority) in the word '权利' (right)."
     }
   },
   {
-    "context": "小心!那汤很烫。 ... 我儿子他终于梦到汤面了",
-    "target_sentence": "噢,大喜之日",
+    "context": "他总是抱怨工作太重,压力很大。",
+    "target_sentence": "他的工作“副”担很重。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他的工作“负担很重。",
+      "reasoning": "Context '工作太重' (work is too heavy) refers to a burden. Corrects the homophone '副' (fù - deputy/vice) to '负' (fù - load/burden) in the word '负担' (burden)."
+    }
+  },
+  {
+    "context": "大家都不赞同他的看法。",
+    "target_sentence": "他持有“意”议。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他持有“异”议。",
+      "reasoning": "Context '不赞同' (disagree) implies dissent. Corrects '意' (yì - meaning/intention) to the homophone '异' (yì - different) in the word '异议' (objection/dissent)."
+    }
+  },
+  {
+    "context": "我昨天在街上碰到一个老朋友。",
+    "target_sentence": "真是个愉快的“预见”。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "真是个愉快的“遇见”。",
+      "reasoning": "Context '碰到' (ran into) refers to an encounter, not a premonition. Corrects '预见' (yùjiàn - foresee/predict) to the homophone '遇见' (yùjiàn - meet/encounter)."
+    }
+  },
+  {
+    "context": "这家店要倒闭了,所有东西都打五折。",
+    "target_sentence": "太好了,我得赶紧去买点东西。",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "噢,大喜之日",
-      "reasoning": "The target sentence is a grammatically correct and coherent celebratory exclamation."
+      "corrected_sentence": "太好了,我得赶紧去买点东西。",
+      "reasoning": "The target '买' (mǎi - buy) is semantically correct in the context of a '五折' (50% off) sale. No correction needed."
+    }
+  },
+  {
+    "context": "我晚饭需要买点新鲜蔬菜。",
+    "target_sentence": "我们去菜市看看吧。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我们去菜市看看吧。",
+      "reasoning": "The target '市' (shì) as part of '菜市' (vegetable market) is semantically correct in the context of '买新鲜蔬菜' (buying fresh vegetables). No correction needed."
+    }
+  },
+  {
+    "context": "你听说他发生什么事了吗？",
+    "target_sentence": "不, 我不知道。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "不, 我不知道。",
+      "reasoning": "The target '知道' (zhīdào - know) is used correctly to state a lack of knowledge in response to a question. No correction needed."
+    }
+  },
+  {
+    "context": "你家人最近怎么样？",
+    "target_sentence": "我妻子刚换了新工作。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我妻子刚换了新工作。",
+      "reasoning": "The target '妻' (qī) as part of '妻子' (wife) is semantically correct in the context of '家人' (family). No correction needed."
+    }
+  },
+  {
+    "context": "火车站是哪个方向？",
+    "target_sentence": "你得一直往前走。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "你得一直往前走。",
+      "reasoning": "The target '往' (wǎng - towards) is used correctly to indicate direction in response to a question about '方向' (direction). No correction needed."
+    }
+  },
+  {
+    "context": "我们为什么要做这个项目？",
+    "target_sentence": "这个有很重大的意义。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "这个有很重大的意义。",
+      "reasoning": "The target '意义' (yìyì - meaning/significance) is semantically correct in response to a '为什么' (why) question about a project. No correction needed."
+    }
+  },
+  {
+    "context": "你听到那个噪音了吗？",
+    "target_sentence": "听到了，声音很大。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "听到了，声音很大。",
+      "reasoning": "The target '声' (shēng) as part of '声音' (sound) is semantically correct in the context of '噪音' (noise). No correction needed."
+    }
+  },
+  {
+    "context": "我明天要去医院。",
+    "target_sentence": "你是去做检查吗？",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "你是去做检查吗？",
+      "reasoning": "The target '检查' (jiǎnchá - check-up) is semantically correct in the context of '医院' (hospital). No correction needed."
+    }
+  },
+  {
+    "context": "太阳系里有什么？",
+    "target_sentence": "包括八大行星。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "包括八大行星。",
+      "reasoning": "The target '包括' (bāokuò - include) is used correctly to list items within a set. No correction needed."
+    }
+  },
+  {
+    "context": "我刚到农贸市场,这里的水果看起来很新鲜。",
+    "target_sentence": "我想卖两斤苹果。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我想买两斤苹果。",
+      "reasoning": "Context '农贸市场' (farmer's market) as a customer implies buying, not selling. Corrects '卖' (mài - sell) to the similar-sounding '买' (mǎi - buy)."
+    }
+  },
+  {
+    "context": "他为了这个项目工作了整整两天,没有睡觉。",
+    "target_sentence": "他“知道”周三早上才完成。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他“直到”周三早上才完成。",
+      "reasoning": "Context '工作了整整两天' (worked for two whole days) implies a duration *until* a point in time. Corrects '知道' (zhīdào - know) to the similar-sounding '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "别忘了我交代你的事。",
+    "target_sentence": "你放心, 我“系”住了。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "你放心, 我“记”住了。",
+      "reasoning": "Context '别忘了' (don't forget) implies memory. Corrects '系' (jì - to tie) to the exact homophone '记' (jì - to remember)."
+    }
+  },
+  {
+    "context": "我是一个农民, 我在市场上租了一个摊位。",
+    "target_sentence": "我每天都来这里卖菜。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我每天都来这里卖菜。",
+      "reasoning": "The target '卖' (mài - sell) is semantically correct in the context of a '农民' (farmer) at a '市场' (market). No correction needed."
+    }
+  },
+  {
+    "context": "你为什么认为他有资格？",
+    "target_sentence": "因为他知道所有的内幕。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "因为他知道所有的内幕。",
+      "reasoning": "The target '知道' (zhīdào - know) is used correctly to state knowledge. No correction needed."
+    }
+  },
+  {
+    "context": "你对刚才的演讲有什么看法？",
+    "target_sentence": "没什么大事, 都是老生常谈。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "没什么大事, 都是老生常谈。",
+      "reasoning": "The target '事' (shì) in '大事' (big matter) is used correctly in context. No correction needed."
+    }
+  },
+  {
+    "context": "你住在哪里？",
+    "target_sentence": "我就住在市中心。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我就住在市中心。",
+      "reasoning": "The target '市' (shì) in '市中心' (city center) is semantically correct in the context of location. No correction needed."
+    }
+  },
+  {
+    "context": "会议还没结束, 你为什么要走？",
+    "target_sentence": "我必须走了, 你们继续吧。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我必须走了, 你们继续吧。",
+      "reasoning": "The target '继续' (jìxù - continue) is semantically correct in the context of a '会议' (meeting) proceeding. No correction needed."
+    }
+  },
+  {
+    "context": "这家商店所有商品都打五折, 顾客们都疯了。",
+    "target_sentence": "我也想卖几件便宜货。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我也想买几件便宜货。",
+      "reasoning": "Context '商店' (store), '打五折' (50% off), and '顾客' (customers) implies the speaker is a customer. Corrects '卖' (mài - sell) to '买' (mǎi - buy)."
+    }
+  },
+  {
+    "context": "我昨晚一直在看书, 没有停过。",
+    "target_sentence": "我几乎知道凌晨四点才睡。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我几乎直到凌晨四点才睡。",
+      "reasoning": "The context '一直在看书' (kept reading) and '没有停过' (didn't stop) describes a duration *until* a time. Corrects '知道' (zhīdào - know) to the similar-sounding '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "我的房子太旧了, 我准备装修一下。",
+    "target_sentence": "我打算把它卖掉。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我打算把它卖掉。",
+      "reasoning": "The target '卖掉' (mài diào - sell) is a plausible decision for an '旧房子' (old house). It is not contradicted by the context. No correction needed."
+    }
+  },
+  {
+    "context": "他花了三年时间才写完这本书。",
+    "target_sentence": "他“知道”上个月才最终定稿。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他“直到”上个月才最终定稿。",
+      "reasoning": "The context '花了三年时间' (spent three years) implies a long duration ending at a specific point. Corrects '知道' (zhīdào - know) to '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "我得赶紧去超市。家里的牛奶没有了。",
+    "target_sentence": "我得赶紧去超市。",
+    "output": {
+      "is_correction_needed": false,
+      "corrected_sentence": "我得赶紧去超市。",
+      "reasoning": "The target sentence is an exact partial match of the context, but it is grammatically and semantically correct on its own. No correction needed."
     }
   }
 ]

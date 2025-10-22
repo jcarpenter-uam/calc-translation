@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from .audio_processing_service import AudioProcessingService
+from .correction_service import CorrectionService
 from .debug_service import (
     log_pipeline_step,
     log_utterance_end,
@@ -28,6 +29,24 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
         loop = asyncio.get_running_loop()
         audio_processor = AudioProcessingService()
         transcription_service = None
+        correction_service = None
+
+        try:
+            ollama_url = os.environ["OLLAMA_URL"]
+            log_pipeline_step(
+                "SYSTEM",
+                f"Ollama Correction Service URL: {ollama_url}",
+                detailed=False,
+            )
+            correction_service = CorrectionService(
+                ollama_url=ollama_url, viewer_manager=viewer_manager
+            )
+        except KeyError:
+            log_pipeline_step(
+                "SYSTEM",
+                "WARNING: The 'OLLAMA_URL' environment variable is not set. Contextual corrections will be disabled.",
+                detailed=False,
+            )
 
         current_message_id = None
         is_new_utterance = True
@@ -107,6 +126,21 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
             if result.is_final:
                 log_utterance_end(current_message_id, current_speaker)
+
+                if (
+                    correction_service
+                    and result.transcription
+                    and result.transcription.strip()
+                ):
+                    utterance_to_store = {
+                        "message_id": current_message_id,
+                        "speaker": current_speaker,
+                        "transcription": result.transcription,
+                    }
+                    asyncio.create_task(
+                        correction_service.process_final_utterance(utterance_to_store)
+                    )
+
                 is_new_utterance = True
                 current_message_id = None
 
@@ -157,7 +191,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 if DEBUG_MODE:
                     session_processed.append(processed_audio)
 
-                # Can either send raw audio or processed
+                # BUG: Send processed_audio once new noise filtering is emplemented
                 await loop.run_in_executor(
                     None, transcription_service.send_chunk, audio_chunk
                 )
@@ -184,6 +218,14 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 await loop.run_in_executor(None, transcription_service.finalize_stream)
 
             await asyncio.sleep(0.1)
+
+            if correction_service:
+                log_pipeline_step(
+                    "SESSION",
+                    "Running final correction check on remaining utterances.",
+                    detailed=False,
+                )
+                await correction_service.finalize_session()
 
             if DEBUG_MODE and session_debug_dir:
                 log_pipeline_step(

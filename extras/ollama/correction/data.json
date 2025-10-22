@@ -358,5 +358,50 @@
       "corrected_sentence": "我得赶紧去超市。",
       "reasoning": "The target sentence is an exact partial match of the context, but it is grammatically and semantically correct on its own. No correction needed."
     }
+  },
+  {
+    "context": "这家店周年庆, 全场八折。我作为老顾客, 一定要去支持一下。",
+    "target_sentence": "我准备去卖点新衣服。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我准备去买点新衣服。",
+      "reasoning": "Context '周年庆' (anniversary sale) and '老顾客' (loyal customer) implies the speaker is a customer buying items. Corrects '卖' (mài - sell) to '买' (mǎi - buy)."
+    }
+  },
+  {
+    "context": "火车晚点了, 我在车站等了五个小时。",
+    "target_sentence": "我“知道”晚上十点车才来。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "我“直到”晚上十点车才来。",
+      "reasoning": "Context '等了五个小时' (waited for five hours) describes a duration *until* a point in time. Corrects '知道' (zhīdào - know) to '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "他一直工作, 没有休息。",
+    "target_sentence": "他“知道”项目完成才停下。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他“直到”项目完成才停下。",
+      "reasoning": "Context '一直工作' (kept working) implies a duration *until* a goal. Corrects '知道' (zhīdào - know) to the similar-sounding '直到' (zhídào - until)."
+    }
+  },
+  {
+    "context": "我们去逛商场吧, 我想看看新款。",
+    "target_sentence": "好啊, 我也想卖件夹克。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "好啊, 我也想买件夹克。",
+      "reasoning": "Context '逛商场' (go shopping) implies the role of a customer. Corrects '卖' (mài - sell) to '买' (mǎi - buy)."
+    }
+  },
+  {
+    "context": "他终于完成了他的杰作。",
+    "target_sentence": "他“知道”最后一刻才画完。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "他“直到”最后一刻才画完。",
+      "reasoning": "The phrase '...才...' (only then) implies a duration up to a point. Corrects '知道' (zhīdào - know) to '直到' (zhídào - until)."
+    }
   }
 ]

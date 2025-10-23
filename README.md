@@ -9,14 +9,11 @@ This project develops a real-time translation pipeline that integrates directly 
 ```mermaid
 graph TD
     A["Zoom RTMS WebSocket<br>(raw 16-bit PCM chunks)"] --> B["RTMS Receiver (WS server)<br>- accept websocket frames<br>- speaker-id"];
-    B --> C["Buffer<br>- normalize chunk sizes<br>- output fixed 20-30ms frames"];
-    C --> D["VAD (voice activity detect)<br>- drop non-speech frames"];
-    D --> E["Audio Preprocessing<br>- Noise suppression<br>- Volume Normalize"];
-    E --> G["STT Router<br>- abstraction layer for easy changing of models"];
-    G --> H["STT Output"];
+    B --> C["Audio Preprocessing<br>- Noise suppression<br>- Volume Normalize"];
+    C --> D["Soniox Output"];
 
-    H --> I["Immediate (low-lat) pipeline<br>- short-context (~0)<br>- Produce initial translation"];
-    H --> J["Correction pipeline (LLM)<br>- rolling context window<br>- disambiguate tone-based confusions<br>- output: corrected translation"];
+    D --> I["Immediate (low-lat) pipeline<br>- short-context (~0)<br>- Produce initial translation"];
+    D --> J["Correction pipeline (LLM)<br>- rolling context window<br>- disambiguate tone-based confusions<br>- output: corrected translation"];
 
     I --> K["Publish (low-latency)"];
     J --> L["Re-translate corrected text<br>- Seperate Local Model"];
@@ -31,8 +28,7 @@ graph TD
 ## Prerequisites
 
 - **Ollama:** Used to handle the text correction logic. To enable this feature, you must train a model using the colab notebook and dataset [here](https://github.com/jcarpenter-uam/zoom-translation/tree/master/extras/ollama/correction)
-- **iFlyTech API Key:** Used as the current ASR (STT) model. The credentials can be gathered [here](https://global.xfyun.cn/doc/rtasr/rtasr/API.html#description-of-the-interface)
-- **Alibaba:** Used as the current translation model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
+- **Soniox:** Used as the current transcription/translation model. An API key can be obtained [here](https://soniox.com/docs/)
 
 ## Installation
 
@@ -50,10 +46,9 @@ docker compose up -d
 
 ## Todo:
 
-- auto select translation/transcription model based on which .env vars are present
+- Update install instructions
+- Denoising and Normalizing audio needs improvements. Though for zoom calls a simple noise floor should do the trick
 - IaC for datacrunch GPU server based on zoom meeting calender?
 - Send final transcript to all meeting participants
-- Empty responses in frontend?
 - Keep tweaking the fine tuned model to get the best results
 - Play with cache size, we want full history but at what point is too long?
-- Clean up seperation of concerns between files: logging, connection-manager, etc..

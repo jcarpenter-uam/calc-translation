@@ -7,10 +7,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - APPID=${APPID}
-      - APISECRET=${APISECRET}
-      - APIKEY=${APIKEY}
-      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - SONIOX_API_KEY=${SONIOX_API_KEY}
+      - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - OLLAMA_URL=${OLLAMA_URL}
       - DEBUG_MODE=${DEBUG_MODE}
     networks:

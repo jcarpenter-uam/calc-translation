@@ -1,218 +1,92 @@
 [
   {
-    "context": "阿波,你在楼上搞什么鬼啊?",
-    "target_sentence": "阿妈快起来。",
+    "context": "他解释说那是一种罕见的鸟类。 羽毛颜色非常鲜艳。 主要生活在热带雨林。 现在数量已经很少了。",
+    "target_sentence": "那只鸟的“羽翼”很漂亮。",
+    "output": {
+      "is_correction_needed": true,
+      "corrected_sentence": "那只鸟的“羽毛”很漂亮。",
+      "reasoning": "The following context describes the bird's '羽毛颜色' (feather color) being vibrant. While '羽翼' (yǔyì - wing) relates to birds, '羽毛' (yǔmáo - feather) fits the specific detail about color mentioned next. Corrects '羽翼' to '羽毛'."
+    }
+  },
+  {
+    "context": "我们需要更多信息才能做决定。 市场研究报告还没出来。 竞争对手的动态也不清楚。 风险评估也不完整。",
+    "target_sentence": "目前的信息还很“朦胧”。",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "阿妈快起来。",
-      "reasoning": "The target sentence is grammatically correct and coherent with the provided context."
+      "corrected_sentence": "目前的信息还很“朦胧”。",
+      "reasoning": "The following context details missing information ('报告还没出来', '动态也不清楚', '评估也不完整'), supporting the idea that the current information is unclear or '朦胧' (ménglóng - hazy/obscure). No correction needed."
     }
   },
   {
-    "context": "阿波,你在楼上搞什么鬼啊?",
-    "target_sentence": "阿婆快起来。嗯嗯嗯这是一个。嗯嗯嗯嗯嗯",
+    "context": "他每天早上都去公园锻炼。 主要是跑步和打太极。 坚持了好几年了。 身体非常健康。",
+    "target_sentence": "他的生活很“朦胧”。",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "阿妈快起来。",
-      "reasoning": "Removes filler words ('嗯嗯嗯') and extraneous text ('这是一个'). Corrects the misrecognized word '阿婆' to '阿妈'."
+      "corrected_sentence": "他的生活很“规律”。",
+      "reasoning": "The following context describes a consistent daily routine ('每天早上都去公园锻炼', '坚持了好几年了'). This implies regularity, not obscurity. Corrects '朦胧' (ménglóng - hazy) to the similar-sounding '规律' (guīlǜ - regular/disciplined)."
     }
   },
   {
-    "context": "阿妈快起来。",
-    "target_sentence": "唉",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "",
-      "reasoning": "The target sentence '唉' is a non-linguistic filler word or sigh. The corrected sentence is empty, indicating it should be removed."
-    }
-  },
-  {
-    "context": "阿妈快起来。",
-    "target_sentence": "嗯嗯嗯降低。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "",
-      "reasoning": "Removes filler words ('嗯嗯嗯') and an extraneous word ('降低'). The corrected sentence is empty, indicating these should be removed."
-    }
-  },
-  {
-    "context": "阿妈快起来。 ... 啊,没有啊。",
-    "target_sentence": "阿波,你在楼上搞什么鬼啊?",
+    "context": "特别是历史和地理部分。 他对这些领域非常感兴趣。 经常阅读相关书籍。 知识面很广。",
+    "target_sentence": "他对“人文”科学很了解。",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "阿波,你在楼上搞什么鬼啊?",
-      "reasoning": "The target sentence is grammatically correct and coherent with the provided context."
+      "corrected_sentence": "他对“人文”科学很了解。",
+      "reasoning": "The following context specifically mentions '历史和地理' (history and geography), which fall under '人文' (rénwén - humanities). The target sentence is correct. No correction needed."
     }
   },
   {
-    "context": "阿妈快起来。 ... 啊,没有啊。",
-    "target_sentence": "你在楼上搞什么鬼呀?",
+    "context": "比如礼仪、沟通技巧等。 这些在职场中非常重要。 公司应该提供相关培训。 有助于提升员工素质。",
+    "target_sentence": "我们需要加强“人文”关怀。",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "阿波,你在楼上搞什么鬼啊?",
-      "reasoning": "Adds the missing name '阿波', which is present in the context. Corrects the final particle '呀' to '啊'."
+      "corrected_sentence": "我们需要加强“人性”关怀。",
+      "reasoning": "While '人文' (rénwén - humanities/culture) can relate to care, the following context discusses workplace skills ('礼仪', '沟通技巧'). '人性' (rénxìng - human nature/humanity)关怀 (care for humanity/people) fits better with improving employee well-being in a general sense. Corrects '人文' to '人性'."
     }
   },
   {
-    "context": "阿波,你在楼上搞什么鬼啊? ... 阿波,快啦,快来不及了",
-    "target_sentence": "啊没有啊。this Is WOW猴王灰太狼领克枪小龙喊着5号。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "啊,没有啊。猴王、快螳螂、灵鹤、俏小龙、悍娇虎。",
-      "reasoning": "Removes extraneous English and Chinese text ('this Is WOW...5号'). Corrects misrecognized text ('灰太狼领克枪小龙') to a list of names ('快螳螂、灵鹤、俏小龙、悍娇虎'). The corrected sentence also segments the text into two distinct sentences and adds punctuation."
-    }
-  },
-  {
-    "context": "猴王、快螳螂、灵鹤、俏小龙、悍娇虎。 ... 对不起,阿爹",
-    "target_sentence": "嗯嗯嗯嗯老婆坏了快来不及了,来喽。Oh呜呜。呜呜。oh Oh.",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "阿波,快啦,快来不及了。来咯。",
-      "reasoning": "Removes significant filler words ('嗯嗯嗯嗯') and extraneous text ('老婆坏了', 'Oh呜呜...'). Corrects '来喽' to '来咯'. The corrected sentence also introduces the name '阿波' and segments the text into two sentences."
-    }
-  },
-  {
-    "context": "来咯。 ... 你到底在楼上搞什么,噼噼pia pia的",
-    "target_sentence": "对不起啊爹,对不起,又不能当面吃。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "对不起,阿爹。对不起又不能当面吃。",
-      "reasoning": "Corrects the particle '啊' to a comma before '阿爹'. The corrected sentence also splits the single input sentence into two separate sentences."
-    }
-  },
-  {
-    "context": "对不起又不能当面吃。 ... 什么梦?",
-    "target_sentence": "你到底在楼上搞什么PPT啊没什么,只是做一个怪梦啊,折磨。你不 不管什么东西啦,我们到。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "你到底在楼上搞什么,噼噼pia pia的。没什么,只是做了一个怪梦啦。",
-      "reasoning": "Corrects the misrecognized text 'PPT啊' to the onomatopoeia '噼噼pia pia的'. Removes large portions of extraneous text ('折磨。你不...我们到'). The corrected sentence also splits the single input sentence into two."
-    }
-  },
-  {
-    "context": "你梦到什么东西啦? ... 呃...汤面咯",
-    "target_sentence": "我们到那个aha.",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "我梦到那个...",
-      "reasoning": "Corrects misrecognized '我们到' (we arrive) to '我梦到' (I dreamed of), which is more consistent with the context. Removes extraneous text 'aha.'."
-    }
-  },
-  {
-    "context": "我梦到那个...",
-    "target_sentence": "How many laws?行业,你真的是梦到了。对呀。忽然会梦到什么 呢?小黑上面有一只非标噢大喜之日,我儿子他终于梦到汤面了。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "呃...汤面咯。汤面?你真的是梦到了汤面?对啊,不然会梦到什么咧?小心!那汤很烫。噢,大喜之日。我儿子他终于梦到汤面了。",
-      "reasoning": "The target sentence appears to be a major transcription error, merging multiple lines and inserting extraneous English ('How many laws?') and Chinese ('行业', '小黑上面有一只非标'). The corrected sentence replaces this with a coherent, multi-sentence dialogue."
-    }
-  },
-  {
-    "context": "你到底在楼上搞什么,噼噼pia pia的。 ... 没什么,只是做了一个怪梦啦。",
-    "target_sentence": "什么梦?",
+    "context": "他发明了一种新的节能设备。 可以大大降低工厂的能耗。 已经申请了专利。 预计明年可以投产。",
+    "target_sentence": "他的“创造”能力很强。",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "什么梦?",
-      "reasoning": "The target sentence is a grammatically correct and coherent question that fits the context."
+      "corrected_sentence": "他的“创造”能力很强。",
+      "reasoning": "The following context describes an invention ('发明了一种新的节能设备') and patent application, directly supporting strong '创造' (chuàngzào - creation/creativity) ability. No correction needed."
     }
   },
   {
-    "context": "什么梦? ... 我梦到...呃...",
-    "target_sentence": "你梦到什么东西啦?",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "你梦到什么东西啦?",
-      "reasoning": "The target sentence is a grammatically correct and coherent question that fits the context."
-    }
-  },
-  {
-    "context": "什么梦? ... 我梦到...呃...",
-    "target_sentence": "你梦到什么? 东西?",
+    "context": "床单、被罩、枕头都弄脏了。 需要全部换洗一下。 我先把它们放进洗衣机。 晚点再晾晒。",
+    "target_sentence": "我得去换一下“创造”。",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "你梦到什么东西啦?",
-      "reasoning": "The target sentence incorrectly segments the question into two parts. The corrected sentence combines them into a single, natural-sounding question and adds the final particle '啦'."
+      "corrected_sentence": "我得去换一下“床罩”。",
+      "reasoning": "The following context lists bedding items ('床单', '被罩', '枕头'). '创造' (chuàngzào - creation) is nonsensical. Corrects to the similar-sounding '床罩' (chuángzhào - bedspread/bed cover)."
     }
   },
   {
-    "context": "你梦到什么东西啦? ... 我梦到那个...",
-    "target_sentence": "我梦到...呃...",
+    "context": "尤其是毒品和枪支。 这些都是严格禁止的。 海关检查非常严格。 绝对不能携带入境。",
+    "target_sentence": "走私这些是严重的“犯法”行为。",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "我梦到...呃...",
-      "reasoning": "The target sentence correctly represents a hesitation in speech, which is appropriate for the context."
+      "corrected_sentence": "走私这些是严重的“犯法”行为。",
+      "reasoning": "The following context lists illegal items ('毒品', '枪支') and mentions strict customs checks, confirming that smuggling them constitutes '犯法' (fànfǎ - breaking the law). No correction needed."
     }
   },
   {
-    "context": "你梦到什么东西啦? ... 我梦到那个...",
-    "target_sentence": "我梦到,呃...",
+    "context": "比如加减乘除。 他学得很快。 现在已经会做两位数乘法了。 老师表扬了他。",
+    "target_sentence": "他在学习基本的“犯法”。",
     "output": {
       "is_correction_needed": true,
-      "corrected_sentence": "我梦到...呃...",
-      "reasoning": "The punctuation is incorrect for a hesitation. The corrected sentence replaces the comma with an ellipsis '...'"
+      "corrected_sentence": "他在学习基本的“算法”。",
+      "reasoning": "The following context lists mathematical operations ('加减乘除'). '犯法' (fànfǎ - breaking the law) is completely wrong. Corrects to the similar-sounding '算法' (suànfǎ - algorithm/method of calculation)."
     }
   },
   {
-    "context": "我梦到那个... ... 汤面?你真的是梦到了汤面?",
-    "target_sentence": "呃...汤面咯",
+    "context": "他把所有的钱都投入了股市。 希望能赚一大笔。 结果亏得一塌糊涂。 现在非常后悔。",
+    "target_sentence": "他太“贪婪”了。",
     "output": {
       "is_correction_needed": false,
-      "corrected_sentence": "呃...汤面咯",
-      "reasoning": "The target sentence is a grammatically correct and coherent statement, including hesitation and a final particle."
-    }
-  },
-  {
-    "context": "我梦到那个... ... 汤面?你真的是梦到了汤面?",
-    "target_sentence": "汤面。",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "呃...汤面咯",
-      "reasoning": "The target sentence is an abrupt and incomplete answer. The corrected sentence adds the hesitation '呃...' and the final particle '咯' to make it a more natural response."
-    }
-  },
-  {
-    "context": "呃...汤面咯。 ... 对啊,不然会梦到什么咧?",
-    "target_sentence": "汤面?你真的是梦到了汤面?",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "汤面?你真的是梦到了汤面?",
-      "reasoning": "The target sentence is a grammatically correct and coherent question that fits the context."
-    }
-  },
-  {
-    "context": "汤面?你真的是梦到了汤面? ... 小心!那汤很烫。",
-    "target_sentence": "对啊,不然会梦到什么咧?",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "对啊,不然会梦到什么咧?",
-      "reasoning": "The target sentence is a grammatically correct and coherent question that fits the context."
-    }
-  },
-  {
-    "context": "汤面?你真的是梦到了汤面? ... 小心!那汤很烫。",
-    "target_sentence": "对啊,不然会梦到什么?",
-    "output": {
-      "is_correction_needed": true,
-      "corrected_sentence": "对啊,不然会梦到什么咧?",
-      "reasoning": "The target sentence is missing the final particle. The corrected sentence adds '咧' to make the question more natural and complete."
-    }
-  },
-  {
-    "context": "对啊,不然会梦到什么咧? ... 噢,大喜之日",
-    "target_sentence": "小心!那汤很烫。",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "小心!那汤很烫。",
-      "reasoning": "The target sentence is a grammatically correct and coherent warning."
-    }
-  },
-  {
-    "context": "小心!那汤很烫。 ... 我儿子他终于梦到汤面了",
-    "target_sentence": "噢,大喜之日",
-    "output": {
-      "is_correction_needed": false,
-      "corrected_sentence": "噢,大喜之日",
-      "reasoning": "The target sentence is a grammatically correct and coherent celebratory exclamation."
+      "corrected_sentence": "他太“贪婪”了。",
+      "reasoning": "The following context describes investing everything ('所有的钱都投入了') hoping for huge profits ('赚一大笔') and ending in failure ('亏得一塌糊涂'), which strongly suggests '贪婪' (tānlán - greedy) behavior. No correction needed."
     }
   }
 ]

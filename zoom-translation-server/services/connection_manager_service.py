@@ -10,17 +10,15 @@ from .debug_service import log_pipeline_step
 class ConnectionManager:
     """Manages active WebSocket connections."""
 
-    # Accepts a TranscriptCache instance for dependency injection.
     def __init__(self, cache: TranscriptCache):
         """Initializes the manager with connections and a transcript cache."""
         self.active_connections: List[WebSocket] = []
-        self.cache = cache  # <-- Store the cache instance
+        self.cache = cache
 
     async def connect(self, websocket: WebSocket):
         """Accepts a new connection and replays the transcript history."""
         await websocket.accept()
 
-        # Use the cache service to get history.
         history = self.cache.get_history()
         log_pipeline_step(
             "WEBSOCKET",
@@ -31,7 +29,6 @@ class ConnectionManager:
             for payload in history:
                 await websocket.send_json(payload)
 
-        # After replay, add the connection to the active list for live updates.
         self.active_connections.append(websocket)
         log_pipeline_step(
             "WEBSOCKET",
@@ -57,7 +54,6 @@ class ConnectionManager:
         if data.get("message_id"):
             self.cache.process_message(data)
 
-        # Broadcast the message to all currently connected viewers.
         if self.active_connections:
             tasks = [conn.send_json(data) for conn in self.active_connections]
             await asyncio.gather(*tasks)

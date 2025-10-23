@@ -24,7 +24,6 @@ log_pipeline_step(
     detailed=False,
 )
 
-# Instantiate the cache first, then pass it to the manager.
 transcript_cache = TranscriptCache()
 viewer_manager = ConnectionManager(cache=transcript_cache)
 
@@ -39,14 +38,12 @@ app.include_router(rtms_router)
 async def websocket_viewer_endpoint(websocket: WebSocket):
     await viewer_manager.connect(websocket)
     try:
-        # Keep the connection alive to receive broadcasts.
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
         viewer_manager.disconnect(websocket)
 
 
-# Web static files
 app.mount("/", StaticFiles(directory="web/dist", html=True), name="web")
 
 

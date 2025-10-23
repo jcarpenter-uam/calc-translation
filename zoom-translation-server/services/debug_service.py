@@ -4,7 +4,6 @@ import wave
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, TextIO, Union
 
-
 DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() == "true"
 
 
@@ -116,12 +115,12 @@ def save_audio_to_wav(
         )
         return
 
-    # Ensure the directory exists
     os.makedirs(dir_path, exist_ok=True)
     filepath = os.path.join(dir_path, file_name)
 
-    # Combine frames if audio_data is a list
-    if isinstance(audio_data, Iterable) and not isinstance(audio_data, (bytes, bytearray)):
+    if isinstance(audio_data, Iterable) and not isinstance(
+        audio_data, (bytes, bytearray)
+    ):
         audio_bytes = b"".join(audio_data)
     else:
         audio_bytes = audio_data

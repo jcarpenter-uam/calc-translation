@@ -129,7 +129,7 @@ class CorrectionService:
         self.viewer_manager = viewer_manager
         self.retranslation_service = RetranslationService()
         self.utterance_history = deque(maxlen=5)
-        self.CORRECTION_CONTEXT_THRESHOLD = 3
+        self.CORRECTION_CONTEXT_THRESHOLD = 5
 
         log_pipeline_step(
             "CORRECTION",

@@ -10,6 +10,7 @@
   "dependencies": {
     "@zoom/rtms": "^0.0.2",
     "dotenv": "^17.2.3",
+    "express": "^5.1.0",
     "fs": "^0.0.1-security",
     "ws": "^8.18.3"
   },

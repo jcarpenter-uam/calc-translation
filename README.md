@@ -29,6 +29,7 @@ graph TD
 
 - **Ollama:** Used to handle the text correction logic. To enable this feature, you must train a model using the colab notebook and dataset [here](https://github.com/jcarpenter-uam/zoom-translation/tree/master/extras/ollama/correction)
 - **Soniox:** Used as the current transcription/translation model. An API key can be obtained [here](https://soniox.com/docs/)
+- **Qwen-MT-Turbo:** Used as the current retranslation model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
 
 ## Installation
 
@@ -44,11 +45,16 @@ cp .env.example .env
 docker compose up -d
 ```
 
-## Todo:
+## Bugs:
+
+- The zoom-rtms sdk should work for joining and hosting meetings alike
+- Play with cache size, we want full history but at what point is too long? Once the limit is reached, the oldest utterance should be stored on disk. Where we append to the file at the end so we store the full meeting transcription.
+- Dont show name on frontend as soon as connection is accpeted, wait until something is transcribed
+
+## Inprovements:
 
 - Update install instructions
 - Denoising and Normalizing audio needs improvements. Though for zoom calls a simple noise floor should do the trick
 - IaC for datacrunch GPU server based on zoom meeting calender?
 - Send final transcript to all meeting participants
 - Keep tweaking the fine tuned model to get the best results
-- Play with cache size, we want full history but at what point is too long?

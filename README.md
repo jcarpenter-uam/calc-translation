@@ -33,16 +33,65 @@ graph TD
 
 ## Installation
 
-**1. Create your .env**
+**Docker Compose**
 
 ```bash
-cp .env.example .env
+services:
+  zoom-translation-server:
+    build: ./zoom-translation-server
+    pull_policy: build
+    container_name: zoom-translation-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SONIOX_API_KEY=${SONIOX_API_KEY}
+      - ALIBABA_API_KEY=${ALIBABA_API_KEY}
+      - OLLAMA_URL=${OLLAMA_URL}
+      - DEBUG_MODE=${DEBUG_MODE}
+    networks:
+      - zoom-translation
+
+  zoom-rtms-server:
+    build: ./zoom-rtms-server
+    pull_policy: build
+    container_name: zoom-rtms-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
+      - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
+      - TRANSCRIPTION_SERVER_URL=${TRANSCRIPTION_SERVER_URL}
+    depends_on:
+      - zoom-translation-server
+    networks:
+      - zoom-translation
+
+networks:
+  zoom-translation:
+    driver: bridge
 ```
 
-**2. Run the Server**
+**Expected Variables**
 
 ```bash
-docker compose up -d
+ZM_RTMS_CLIENT=
+ZM_RTMS_SECRET=
+
+TRANSCRIPTION_SERVER_URL="ws://zoom-translation-server:8000/ws/transcribe"
+
+# Soniox API
+SONIOX_API_KEY=
+
+# QWEN-MT-Turbo Retranslation
+ALIBABA_API_KEY=
+
+#Ollama
+OLLAMA_URL="http://localhost:11434"
+
+# Determines wether or not audio files and log files are saved per session
+DEBUG_MODE=False # True/False as options
 ```
 
 ## Bugs:

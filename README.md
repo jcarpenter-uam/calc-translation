@@ -62,7 +62,7 @@ services:
     environment:
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
-      - TRANSCRIPTION_SERVER_URL=${TRANSCRIPTION_SERVER_URL}
+      - ZOOM_TRANSLATION_SERVER_URL=${ZOOM_TRANSLATION_SERVER_URL}
     depends_on:
       - zoom-translation-server
     networks:
@@ -79,7 +79,7 @@ networks:
 ZM_RTMS_CLIENT=
 ZM_RTMS_SECRET=
 
-TRANSCRIPTION_SERVER_URL="ws://zoom-translation-server:8000/ws/transcribe"
+ZOOM_TRANSLATION_SERVER_URL="ws://zoom-translation-server:8000/ws/transcribe"
 
 # Soniox API
 SONIOX_API_KEY=

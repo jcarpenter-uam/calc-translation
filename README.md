@@ -96,10 +96,9 @@ DEBUG_MODE=False # True/False as options
 
 ## Bugs:
 
-- Optimize CPU usage
-- The zoom-rtms sdk should work for joining and hosting meetings alike
+- Publish app for beta testing and add to HR account
+- Fix the lingering speaker name, and the initial Zoom Client speaker name on first utterance
 - Play with cache size, we want full history but at what point is too long? Once the limit is reached, the oldest utterance should be stored on disk. Where we append to the file at the end so we store the full meeting transcription.
-- Dont show name on frontend as soon as connection is accpeted, wait until something is transcribed
 
 ## Inprovements:
 

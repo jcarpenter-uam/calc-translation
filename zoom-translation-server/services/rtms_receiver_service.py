@@ -186,12 +186,15 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 if DEBUG_MODE:
                     session_raw_audio.append(audio_chunk)
 
-                processed_audio = audio_processor.process(audio_chunk)
+                # BUG: Send processed_audio once new noise filtering is emplemented
+                # processed_audio = await loop.run_in_executor(
+                #     None, audio_processor.process, audio_chunk
+                # )
 
                 if DEBUG_MODE:
                     session_processed.append(processed_audio)
 
-                # BUG: Send processed_audio once new noise filtering is emplemented
+                # BUG: Send processed_audio once that is fixed
                 await loop.run_in_executor(
                     None, transcription_service.send_chunk, audio_chunk
                 )

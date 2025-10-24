@@ -1,22 +1,26 @@
+// Load env variables
 import "dotenv/config";
+// Import the RTMS SDK
 import rtms from "@zoom/rtms";
-import { WebSocket } from "ws";
+// Import FS for creating the logs dir
 import fs from "fs";
+// Import Websockets to send zoom audio to our server
+import { WebSocket } from "ws";
 
 const logDir = "logs";
 
 // Create the 'logs' directory if it does not exist
+// This removes the error for missing ./logs dir
 if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir, { recursive: true });
   console.log(`Created directory: ${logDir}`);
 }
 
-const TRANSCRIPTION_SERVER_URL = process.env.TRANSCRIPTION_SERVER_URL;
-const CHUNK_SIZE_BYTES = 1280;
-const SEND_INTERVAL_MS = 40;
+const ZOOM_TRANSLATION_SERVER_URL = process.env.ZOOM_TRANSLATION_SERVER_URL;
 
 let clients = new Map();
 
+// Set up webhook event handler to receive RTMS events from Zoom
 rtms.onWebhookEvent(({ event, payload }) => {
   const streamId = payload?.rtms_stream_id;
 
@@ -25,108 +29,76 @@ rtms.onWebhookEvent(({ event, payload }) => {
       console.log(`Received meeting.rtms_stopped event without stream ID`);
       return;
     }
-    const session = clients.get(streamId);
-    if (!session) {
+
+    const clientEntry = clients.get(streamId);
+    if (!clientEntry) {
       console.log(
         `Received meeting.rtms_stopped event for unknown stream ID: ${streamId}`,
       );
       return;
     }
-    if (session.sendInterval) {
-      clearInterval(session.sendInterval);
-    }
-    session.zoomClient.leave();
-    if (session.wsClient) {
-      session.wsClient.close();
-      console.log(`Closed WebSocket connection for stream: ${streamId}`);
+
+    // Clean up both the RTMS client and the WebSocket client
+    clientEntry.rtmsClient.leave();
+    if (clientEntry.wsClient) {
+      clientEntry.wsClient.close();
     }
     clients.delete(streamId);
+
     return;
   } else if (event !== "meeting.rtms_started") {
-    console.log(`Ignoring unknown event: ${event}`);
+    console.log(`Ignoring unknown event`);
     return;
   }
 
-  console.log(`RTMS stream started for stream ID: ${streamId}`);
+  // Create a new RTMS client for the stream
+  const rtmsClient = new rtms.Client();
 
-  const wsClient = new WebSocket(TRANSCRIPTION_SERVER_URL);
-  let audioBuffer = Buffer.alloc(0);
-  let sendInterval = null;
+  // Create a new WebSocket client for the translation server
+  const wsClient = new WebSocket(ZOOM_TRANSLATION_SERVER_URL);
 
   wsClient.on("open", () => {
-    console.log(`WebSocket connection opened for stream: ${streamId}`);
-    sendInterval = setInterval(() => {
-      if (audioBuffer.length >= CHUNK_SIZE_BYTES) {
-        const chunk = audioBuffer.slice(0, CHUNK_SIZE_BYTES);
-        audioBuffer = audioBuffer.slice(CHUNK_SIZE_BYTES);
-
-        const session = clients.get(streamId);
-        const currentUserName = session?.userName || "Zoom User";
-
-        const payload = {
-          userName: currentUserName,
-          audio: chunk.toString("base64"),
-        };
-
-        if (wsClient.readyState === WebSocket.OPEN) {
-          wsClient.send(JSON.stringify(payload));
-        }
-      }
-    }, SEND_INTERVAL_MS);
+    console.log(
+      `WebSocket connection to ${ZOOM_TRANSLATION_SERVER_URL} established for stream ${streamId}`,
+    );
   });
 
   wsClient.on("error", (error) => {
-    console.error(`WebSocket error for stream ${streamId}:`, error);
+    console.error(`WebSocket error for stream ${streamId}:`, error.message);
+    // We don't clean up the rtmsClient here, to handle them independently.
   });
 
-  wsClient.on("close", () => {
-    console.log(`WebSocket connection closed for stream: ${streamId}`);
-    if (sendInterval) {
-      clearInterval(sendInterval);
-    }
-  });
-
-  const zoomClient = new rtms.Client();
-  clients.set(streamId, {
-    zoomClient,
-    wsClient,
-    sendInterval,
-    userName: "Zoom User",
-  });
-
-  zoomClient.onTranscriptData((data, size, timestamp, metadata) => {
-    console.log(`[${timestamp}] -- ${metadata.userName}: ${data}`);
-  });
-
-  zoomClient.onAudioData((data, size, timestamp, metadata) => {
-    const session = clients.get(streamId);
-    if (session) {
-      session.userName = metadata.userName;
-    }
-    audioBuffer = Buffer.concat([audioBuffer, data]);
-  });
-
-  const video_params = {
-    contentType: rtms.VideoContentType.RAW_VIDEO,
-    codec: rtms.VideoCodec.H264,
-    resolution: rtms.VideoResolution.SD,
-    dataOpt: rtms.VideoDataOption.VIDEO_SINGLE_ACTIVE_STREAM,
-    fps: 30,
-  };
-
-  zoomClient.setVideoParams(video_params);
-  zoomClient.onVideoData((data, size, timestamp, metadata) => {
+  wsClient.on("close", (code, reason) => {
     console.log(
-      `Received ${size} bytes of video data at ${timestamp} from ${metadata.userName}`,
+      `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
     );
   });
 
-  zoomClient.setDeskshareParams(video_params);
-  zoomClient.onDeskshareData((data, size, timestamp, metadata) => {
+  // Store both clients in the map
+  clients.set(streamId, { rtmsClient, wsClient });
+
+  rtmsClient.onAudioData((data, size, timestamp, metadata) => {
+    const speakerName = metadata.userName || "Zoom RTMS";
+    // userName stays empty until someone speaks. And sticks to that userName until someone else speaks
     console.log(
-      `Received ${size} bytes of deskshare data at ${timestamp} from ${metadata.userName}`,
+      `Received ${size} bytes of audio data at ${timestamp} from ${metadata.userName}`,
     );
+
+    // Check if the WebSocket is ready to send data
+    if (wsClient.readyState === WebSocket.OPEN) {
+      const payload = {
+        userName: speakerName,
+        audio: data.toString("base64"), // Convert raw audio buffer to base64 string
+      };
+      wsClient.send(JSON.stringify(payload));
+    } else {
+      // Handle independently: Log a warning but don't stop the RTMS client.
+      console.warn(
+        `WebSocket not open for stream ${streamId}. Skipping audio packet.`,
+      );
+    }
   });
 
-  zoomClient.join(payload);
+  // Join the meeting using the webhook payload directly
+  rtmsClient.join(payload);
 });

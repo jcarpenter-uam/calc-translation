@@ -5,11 +5,12 @@
   "description": "Get started with RTMS using Node.JS ",
   "main": "index.js",
   "scripts": {
-    "dev": "node index.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "@zoom/rtms": "^0.0.2",
-    "dotenv": "^17.2.2",
+    "dotenv": "^17.2.3",
+    "fs": "^0.0.1-security",
     "ws": "^8.18.3"
   },
   "author": "Zoom Communications, Inc.",

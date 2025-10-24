@@ -62,6 +62,7 @@ services:
     environment:
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
+      - ZOOM_WEBHOOK_SECRET_TOKEN=${ZOOM_WEBHOOK_SECRET_TOKEN}
       - ZOOM_TRANSLATION_SERVER_URL=${ZOOM_TRANSLATION_SERVER_URL}
     depends_on:
       - zoom-translation-server
@@ -78,6 +79,7 @@ networks:
 ```bash
 ZM_RTMS_CLIENT=
 ZM_RTMS_SECRET=
+ZOOM_WEBHOOK_SECRET_TOKEN=
 
 ZOOM_TRANSLATION_SERVER_URL="ws://zoom-translation-server:8000/ws/transcribe"
 

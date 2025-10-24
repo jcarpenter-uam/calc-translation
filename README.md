@@ -10,19 +10,19 @@ This project develops a real-time translation pipeline that integrates directly 
 graph TD
     A["Zoom RTMS WebSocket<br>(raw 16-bit PCM chunks)"] --> B["RTMS Receiver (WS server)<br>- accept websocket frames<br>- speaker-id"];
     B --> C["Audio Preprocessing<br>- Noise suppression<br>- Volume Normalize"];
-    C --> D["Soniox Output"];
+    C --> D["Soniox WS Connection"];
 
-    D --> I["Immediate (low-lat) pipeline<br>- short-context (~0)<br>- Produce initial translation"];
-    D --> J["Correction pipeline (LLM)<br>- rolling context window<br>- disambiguate tone-based confusions<br>- output: corrected translation"];
+    D --> E["Immediate (low-lat) pipeline<br>- Produce initial translation"];
+    D --> F["Correction pipeline (future context)<br>- rolling context window<br>- disambiguate tone-based confusions<br>- output: correction_needed: true or false "];
 
-    I --> K["Publish (low-latency)"];
-    J --> L["Re-translate corrected text<br>- Seperate Local Model"];
-    L --> M["Publish correction event to frontend<br>(edit/update message)"];
+    E --> G["Publish (low-latency)"];
+    F --> H["Re-translate corrected text<br>- Qwen-MT-Turbo"];
+    H --> I["Publish correction event to frontend<br>(edit/update message)"];
 
-    K --> N["Frontend (Zoom embed / url)<br>- display live transcription/translation<br>- apply inline replacements"];
-    M -- "WebSocket updates" --> N;
+    G --> J["Frontend (Zoom embed / url)<br>- display live transcription/translation<br>- apply inline replacements"];
+    I -- "WebSocket updates" --> J;
 
-    N --> O["( User sees immediate translation → then corrected revision )"];
+    J --> K["( User sees immediate translation → then corrected revision )"];
 ```
 
 ## Prerequisites

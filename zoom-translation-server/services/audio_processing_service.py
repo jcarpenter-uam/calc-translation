@@ -3,6 +3,12 @@ import numpy as np
 
 from .debug_service import log_pipeline_step
 
+# BUG:
+# /usr/local/lib/python3.13/site-packages/noisereduce/spectralgate/nonstationary.py:70: RuntimeWarning: invalid value encountered in divide
+# sig_mult_above_thresh = (abs_sig_stft - sig_stft_smooth) / sig_stft_smooth
+# /app/services/audio_processing_service.py:41: RuntimeWarning: invalid value encountered in cast
+# return reduced_noise_audio.astype(np.int16)
+
 
 class AudioProcessingService:
     """
@@ -115,17 +121,17 @@ class AudioProcessingService:
             detailed=True,
         )
 
-        # normalized_audio = self.normalize_volume(denoised_audio)
-        # log_pipeline_step(
-        #     "AUDIO_PROCESSING",
-        #     "Volume normalization complete.",
-        #     extra={
-        #         "dtype": str(normalized_audio.dtype),
-        #         "min": int(normalized_audio.min()),
-        #         "max": int(normalized_audio.max()),
-        #     },
-        #     detailed=True,
-        # )
+        normalized_audio = self.normalize_volume(denoised_audio)
+        log_pipeline_step(
+            "AUDIO_PROCESSING",
+            "Volume normalization complete.",
+            extra={
+                "dtype": str(normalized_audio.dtype),
+                "min": int(normalized_audio.min()),
+                "max": int(normalized_audio.max()),
+            },
+            detailed=True,
+        )
 
         processed_bytes = self._audio_to_bytes(denoised_audio)
         log_pipeline_step(

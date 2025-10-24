@@ -63,11 +63,13 @@ rtms.onWebhookEvent(({ event, payload }) => {
     );
   });
 
+  // TODO: Auto reconnect logic
   wsClient.on("error", (error) => {
     console.error(`WebSocket error for stream ${streamId}:`, error.message);
     // We don't clean up the rtmsClient here, to handle them independently.
   });
 
+  // TODO: Auto reconnect logic
   wsClient.on("close", (code, reason) => {
     console.log(
       `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,

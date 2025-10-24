@@ -238,7 +238,7 @@ const app = express();
 //  This ensures req.body is *only* a Buffer inside our handler.
 //  We set a limit just in case.
 app.use(
-  "/zoom",
+  "/",
   express.raw({
     type: "application/json",
     limit: "2mb", // Set a reasonable limit
@@ -246,12 +246,12 @@ app.use(
 );
 
 // Tell the server to use your main handler for this endpoint
-app.post("/zoom", rtmsWebhookHandler);
+app.post("/", rtmsWebhookHandler);
 
 // Start the server
 app.listen(PORT, () => {
   console.log(`Zoom RTMS server listening on port ${PORT}`);
   console.log(
-    `Your Event Notification Endpoint URL should be https://<your_public_domain.com>/zoom`,
+    `Your Event Notification Endpoint URL should be https://<your_public_domain.com>`,
   );
 });

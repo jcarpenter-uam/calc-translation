@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Optional
 
 from websockets import ConnectionClosedOK
 from websockets.sync.client import connect
@@ -19,6 +19,8 @@ class SonioxResult:
     transcription: str
     translation: str
     is_final: bool
+    source_language: Optional[str] = None
+    target_language: Optional[str] = None
 
 
 class SonioxService:
@@ -48,6 +50,9 @@ class SonioxService:
 
         self.final_transcription_tokens = []
         self.final_translation_tokens = []
+
+        self.final_source_language: Optional[str] = None
+        self.final_translation_language: Optional[str] = None
 
     def _get_config(self) -> dict:
         """
@@ -110,6 +115,9 @@ class SonioxService:
                 non_final_translation_tokens = []
                 is_end_token = False
 
+                non_final_source_lang: Optional[str] = None
+                non_final_target_lang: Optional[str] = None
+
                 for token in res.get("tokens", []):
                     text = token.get("text")
                     if not text:
@@ -120,17 +128,26 @@ class SonioxService:
                         continue
 
                     is_translation = token.get("translation_status") == "translation"
+                    lang = token.get("language")
 
                     if token.get("is_final"):
                         if is_translation:
                             self.final_translation_tokens.append(text)
+                            if not self.final_translation_language and lang:
+                                self.final_translation_language = lang
                         else:
                             self.final_transcription_tokens.append(text)
+                            if not self.final_source_language and lang:
+                                self.final_source_language = lang
                     else:
                         if is_translation:
                             non_final_translation_tokens.append(text)
+                            if not non_final_target_lang and lang:
+                                non_final_target_lang = lang
                         else:
                             non_final_transcription_tokens.append(text)
+                            if not non_final_source_lang and lang:
+                                non_final_source_lang = lang
 
                 final_transcription = "".join(self.final_transcription_tokens)
                 non_final_transcription = "".join(non_final_transcription_tokens)
@@ -144,11 +161,20 @@ class SonioxService:
                     f"{final_translation} {non_final_translation}".strip()
                 )
 
+                source_lang_to_send = (
+                    self.final_source_language or non_final_source_lang
+                )
+                target_lang_to_send = (
+                    self.final_translation_language or non_final_target_lang
+                )
+
                 await self.on_message_callback(
                     SonioxResult(
                         transcription=full_transcription,
                         translation=full_translation,
                         is_final=False,
+                        source_language=source_lang_to_send,
+                        target_language=target_lang_to_send,
                     )
                 )
 
@@ -158,6 +184,10 @@ class SonioxService:
                         "Received <end> token, sending final utterance result.",
                         detailed=True,
                     )
+
+                    final_source_lang = self.final_source_language
+                    final_target_lang = self.final_translation_language
+
                     await self.on_message_callback(
                         SonioxResult(
                             transcription="".join(
@@ -165,10 +195,14 @@ class SonioxService:
                             ).strip(),
                             translation="".join(self.final_translation_tokens).strip(),
                             is_final=True,
+                            source_language=final_source_lang,
+                            target_language=final_target_lang,
                         )
                     )
                     self.final_transcription_tokens = []
                     self.final_translation_tokens = []
+                    self.final_source_language = None
+                    self.final_translation_language = None
 
                 if res.get("finished"):
                     log_pipeline_step(
@@ -183,6 +217,8 @@ class SonioxService:
                             ).strip(),
                             translation="".join(self.final_translation_tokens).strip(),
                             is_final=True,
+                            source_language=self.final_source_language,
+                            target_language=self.final_translation_language,
                         )
                     )
                     break
@@ -196,6 +232,8 @@ class SonioxService:
                     transcription="".join(self.final_transcription_tokens).strip(),
                     translation="".join(self.final_translation_tokens).strip(),
                     is_final=True,
+                    source_language=self.final_source_language,
+                    target_language=self.final_translation_language,
                 )
             )
             await self.on_close_callback(1000, "Normal closure")

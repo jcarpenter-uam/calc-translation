@@ -125,6 +125,8 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     "message_id": current_message_id,
                     "transcription": result.transcription,
                     "translation": result.translation,
+                    "source_language": result.source_language,
+                    "target_language": result.target_language,
                     "speaker": current_speaker,
                     "type": payload_type,
                     "isfinalize": result.is_final,

@@ -8,7 +8,8 @@ from pympler.asizeof import asizeof
 
 from .debug_service import log_pipeline_step
 
-MAX_CACHE_SIZE = 100
+# TODO: Define limit as MB or GB not utterances
+MAX_CACHE_SIZE = 10000  # ~9MB by my calculations
 
 
 class TranscriptCache:

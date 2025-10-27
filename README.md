@@ -98,7 +98,8 @@ DEBUG_MODE=False # True/False as options
 
 ## Bugs:
 
-- Play with cache size, we want full history but at what point is too long? Once the limit is reached, the oldest utterance should be stored on disk. Where we append to the file at the end so we store the full meeting transcription.
+- Change cache size limit to be MB/GB based, not length
+- Bidirectional translations (ZH -> EN or EN -> ZH)
 
 ## Inprovements:
 

@@ -80,10 +80,10 @@ class SonioxService:
             # Translation options.
             # See: soniox.com/docs/stt/rt/real-time-translation#translation-modes
             "translation": {
-                # Translates all languages into the target language.
-                "type": "one_way",
-                "source_languages": ["*"],
-                "target_language": "en",
+                # Translates ZH -> EN and EN -> ZH
+                "type": "two_way",
+                "language_a": "zh",
+                "language_b": "en",
             },
             #
             # Set language hints when possible to significantly improve accuracy.

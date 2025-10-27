@@ -48,6 +48,7 @@ services:
       - SONIOX_API_KEY=${SONIOX_API_KEY}
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - OLLAMA_URL=${OLLAMA_URL}
+      - MAX_CACHE_MB=${MAX_CACHE_MB}
       - DEBUG_MODE=${DEBUG_MODE}
     networks:
       - zoom-translation
@@ -92,13 +93,20 @@ ALIBABA_API_KEY=
 #Ollama
 OLLAMA_URL="http://localhost:11434"
 
-# Determines wether or not audio files and log files are saved per session
+# The max cache size for translations/transcriptions.
+# Once exceeded the oldest entry is evicted
+# Default is 10MB unless specified otherwise
+MAX_CACHE_MB=
+
+# Logging state
+# True also saves audio files per session
 DEBUG_MODE=False # True/False as options
 ```
 
 ## Todo:
 
-- Change cache size limit to be MB/GB based, not length
+- Lanugage option on frontend to always show that one on top?
+- Auto scroll should lock on to translation scroll with transcription
 - Skip correction model for EN -> ZH
 
 ## Inprovements:

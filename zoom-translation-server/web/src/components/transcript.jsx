@@ -91,7 +91,6 @@ export default function Transcript({
         {/* If 'original' exists, display the old text faded and inline */}
         {original && (
           <div className="mb-1 opacity-70">
-            ref={topTextRef}
             <p className="m-0 leading-relaxed text-sm font-medium text-zinc-500 dark:text-zinc-500 line-through">
               {topOriginal}
             </p>
@@ -103,6 +102,7 @@ export default function Transcript({
 
         {/* Display the current or corrected text */}
         <p
+          ref={topTextRef}
           className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}
         >
           {topText}

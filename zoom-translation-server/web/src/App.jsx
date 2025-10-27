@@ -6,6 +6,7 @@ import Transcript from "./components/transcript.jsx";
 import Notification from "./components/notification.jsx";
 import { useTranscriptStream } from "./hooks/use-transcript-stream.js";
 import { useSmartScroll } from "./hooks/use-smart-scroll.js";
+import { useLanguage } from "./context/language.jsx";
 
 export default function App() {
   const { status: transcriptionStatus, transcripts } = useTranscriptStream(
@@ -13,6 +14,8 @@ export default function App() {
   );
 
   const notification = useSmartScroll(transcripts);
+
+  const { language } = useLanguage();
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors">
@@ -22,12 +25,12 @@ export default function App() {
             <div className="flex flex-col gap-1">
               <ConnectionIndicator
                 status={transcriptionStatus}
-                label="Transcription"
+                label={language === "english" ? "Server" : "服务器"}
               />
             </div>
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <h1 className="text-lg font-bold sm:text-xl whitespace-nowrap">
-                Live Transcription
+                {language === "english" ? "Live Transcription" : "实时转录"}
               </h1>
             </div>
             <div className="flex-shrink-0 flex items-center gap-2">

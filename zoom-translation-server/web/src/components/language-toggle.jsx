@@ -14,7 +14,7 @@ export default function LanguageToggle() {
     <button
       onClick={toggleLanguage}
       className="p-2 w-10 h-10 flex items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900" // Added fixed size for better text display
-      aria-label="Toggle language"
+      aria-label={language === "english" ? "Toggle language" : "切换语言"}
     >
       {language === "english" ? (
         /* Show 'EN' because English is currently selected */

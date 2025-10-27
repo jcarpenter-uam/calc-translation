@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { useLanguage } from "../context/language.jsx";
 
 /**
  * A custom React hook that provides "smart" auto-scrolling for a dynamic list of content.
@@ -26,6 +27,8 @@ export function useSmartScroll(list, lastElementRef) {
   const ignoreScrollEventsRef = useRef(false);
   const scrollCooldownTimer = useRef(null);
 
+  const { language } = useLanguage();
+
   const showNotification = (message) => {
     if (notificationTimeoutRef.current) {
       clearTimeout(notificationTimeoutRef.current);
@@ -47,16 +50,20 @@ export function useSmartScroll(list, lastElementRef) {
 
       if (isAtBottom && !isAutoScrollEnabled) {
         setIsAutoScrollEnabled(true);
-        showNotification("Auto Scroll On");
+        const message =
+          language === "english" ? "Auto Scroll On" : "自动滚动开启";
+        showNotification(message);
       } else if (!isAtBottom && isAutoScrollEnabled) {
         setIsAutoScrollEnabled(false);
-        showNotification("Auto Scroll Off");
+        const message =
+          language === "english" ? "Auto Scroll Off" : "自动滚动关闭";
+        showNotification(message);
       }
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isAutoScrollEnabled]);
+  }, [isAutoScrollEnabled, language]);
 
   useLayoutEffect(() => {
     const scrollElement = window.document.documentElement;

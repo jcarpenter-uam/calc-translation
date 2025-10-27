@@ -105,9 +105,8 @@ DEBUG_MODE=False # True/False as options
 
 ## Todo:
 
-- Lanugage option on frontend to always show that one on top?
 - Auto scroll should lock on to translation scroll with transcription
-- Skip correction model for EN -> ZH
+- Skip correction if source_language != zh
 
 ## Inprovements:
 

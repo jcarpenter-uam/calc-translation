@@ -1,4 +1,7 @@
+import json
+import os
 from collections import deque
+from datetime import datetime
 from typing import Any, Deque, Dict, List
 
 from .debug_service import log_pipeline_step
@@ -62,6 +65,47 @@ class TranscriptCache:
         Retrieves the entire history from the cache in chronological order.
         """
         return [self._cache_dict[msg_id] for msg_id in self._order_queue]
+
+    def save_history_and_clear(self, output_dir: str = "session_history"):
+        """
+        Saves the current cache history to a timestamped JSON file
+        in the specified directory and then clears the cache.
+        """
+        try:
+            transcript_history = self.get_history()
+            if not transcript_history:
+                log_pipeline_step(
+                    "CACHE", "No history to save, cache is empty.", detailed=False
+                )
+                return
+
+            os.makedirs(output_dir, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_name = f"history_{timestamp}.json"
+            cache_filepath = os.path.join(output_dir, file_name)
+
+            with open(cache_filepath, "w", encoding="utf-8") as f:
+                json.dump(transcript_history, f, indent=4, ensure_ascii=False)
+
+            log_pipeline_step(
+                "CACHE",
+                "Transcript cache saved to file successfully.",
+                extra={
+                    "path": cache_filepath,
+                    "entries": len(transcript_history),
+                },
+                detailed=True,
+            )
+
+            self.clear()
+
+        except Exception as e:
+            log_pipeline_step(
+                "CACHE",
+                f"Failed to save history or clear transcript cache: {e}",
+                detailed=False,
+            )
 
     def __len__(self) -> int:
         """Returns the current number of items in the cache."""

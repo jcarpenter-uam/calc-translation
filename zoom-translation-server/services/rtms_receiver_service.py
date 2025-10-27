@@ -300,36 +300,6 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     "processed.wav",
                 )
 
-            try:
-                output_dir = "session_history"
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                file_name = f"history_{timestamp}.json"
-
-                os.makedirs(output_dir, exist_ok=True)
-                cache_filepath = os.path.join(output_dir, file_name)
-
-                transcript_history = viewer_manager.cache.get_history()
-                if transcript_history:
-                    with open(cache_filepath, "w", encoding="utf-8") as f:
-                        json.dump(transcript_history, f, indent=4, ensure_ascii=False)
-
-                    log_pipeline_step(
-                        "SESSION",
-                        "Transcript cache saved to file successfully.",
-                        extra={
-                            "path": cache_filepath,
-                            "entries": len(transcript_history),
-                        },
-                        detailed=True,
-                    )
-
-                viewer_manager.cache.clear()
-
-            except Exception as e:
-                log_pipeline_step(
-                    "SESSION",
-                    f"Failed to save history or clear transcript cache: {e}",
-                    detailed=False,
-                )
+            viewer_manager.cache.save_history_and_clear("session_history")
 
     return router

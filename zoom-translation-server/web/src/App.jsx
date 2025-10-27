@@ -1,5 +1,6 @@
 import React from "react";
 import ThemeToggle from "./components/theme-toggle.jsx";
+import LanguageToggle from "./components/language-toggle.jsx";
 import ConnectionIndicator from "./components/connection-indicator.jsx";
 import Transcript from "./components/transcript.jsx";
 import Notification from "./components/notification.jsx";
@@ -29,7 +30,8 @@ export default function App() {
                 Live Transcription
               </h1>
             </div>
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 flex items-center gap-2">
+              <LanguageToggle />
               <ThemeToggle />
             </div>
           </div>

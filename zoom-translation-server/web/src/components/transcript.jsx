@@ -1,6 +1,6 @@
 import React from "react";
 import { HiOutlineSparkles, HiPencil } from "react-icons/hi";
-import { useLanguage } from "../context/language.jsx"; // Import the hook
+import { useLanguage } from "../context/language.jsx";
 
 /**
  * A component to display a visual status for the correction process.
@@ -39,6 +39,7 @@ export default function Transcript({
   isFinalized = false,
   original,
   correctionStatus,
+  topTextRef,
 }) {
   const { language: selectedLanguage } = useLanguage();
   const textOpacity = isFinalized ? "opacity-100" : "opacity-60";
@@ -90,6 +91,7 @@ export default function Transcript({
         {/* If 'original' exists, display the old text faded and inline */}
         {original && (
           <div className="mb-1 opacity-70">
+            ref={topTextRef}
             <p className="m-0 leading-relaxed text-sm font-medium text-zinc-500 dark:text-zinc-500 line-through">
               {topOriginal}
             </p>

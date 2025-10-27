@@ -13,7 +13,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from "react";
  * visible: boolean;
  * }}
  */
-export function useSmartScroll(list) {
+export function useSmartScroll(list, lastElementRef) {
   const [notification, setNotification] = useState({
     message: "",
     visible: false,
@@ -66,8 +66,16 @@ export function useSmartScroll(list) {
       scrollTop + clientHeight >= prevScrollHeightRef.current - 20;
 
     if (wasAtBottom) {
-      ignoreScrollEventsRef.current = true;
-      window.scrollTo({ top: scrollHeight, behavior: "smooth" });
+      if (lastElementRef.current) {
+        ignoreScrollEventsRef.current = true;
+        lastElementRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      } else {
+        ignoreScrollEventsRef.current = true;
+        window.scrollTo({ top: scrollHeight, behavior: "smooth" });
+      }
 
       if (scrollCooldownTimer.current) {
         clearTimeout(scrollCooldownTimer.current);
@@ -78,7 +86,7 @@ export function useSmartScroll(list) {
     }
 
     prevScrollHeightRef.current = scrollHeight;
-  }, [list]);
+  }, [list, lastElementRef]);
 
   return notification;
 }

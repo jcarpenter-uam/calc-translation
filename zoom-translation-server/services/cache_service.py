@@ -4,6 +4,8 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Deque, Dict, List
 
+from pympler.asizeof import asizeof
+
 from .debug_service import log_pipeline_step
 
 MAX_CACHE_SIZE = 100
@@ -51,14 +53,41 @@ class TranscriptCache:
             self._order_queue.append(message_id)
             self._cache_dict[message_id] = payload
 
+            utterance_size = asizeof(payload)
+            log_pipeline_step(
+                "CACHE",
+                f"Added new final utterance. Size: {utterance_size} bytes.",
+                extra={"message_id": message_id, "size_bytes": utterance_size},
+                detailed=True,
+            )
+
         elif message_id in self._cache_dict:
             message_type = payload.get("type")
 
             if message_type == "correction":
                 self._cache_dict[message_id] = payload
 
+                utterance_size = asizeof(payload)
+                log_pipeline_step(
+                    "CACHE",
+                    f"Applied correction. New size: {utterance_size} bytes.",
+                    extra={"message_id": message_id, "size_bytes": utterance_size},
+                    detailed=True,
+                )
+
             elif message_type == "status_update":
                 self._cache_dict[message_id].update(payload)
+
+                updated_utterance_size = asizeof(self._cache_dict[message_id])
+                log_pipeline_step(
+                    "CACHE",
+                    f"Applied status update. New size: {updated_utterance_size} bytes.",
+                    extra={
+                        "message_id": message_id,
+                        "size_bytes": updated_utterance_size,
+                    },
+                    detailed=True,
+                )
 
     def get_history(self) -> List[Dict[str, Any]]:
         """
@@ -88,12 +117,15 @@ class TranscriptCache:
             with open(cache_filepath, "w", encoding="utf-8") as f:
                 json.dump(transcript_history, f, indent=4, ensure_ascii=False)
 
+            total_cache_size = asizeof(transcript_history)
+
             log_pipeline_step(
                 "CACHE",
-                "Transcript cache saved to file successfully.",
+                f"Transcript cache saved to file successfully. Total size: {total_cache_size} bytes.",
                 extra={
                     "path": cache_filepath,
                     "entries": len(transcript_history),
+                    "size_bytes": total_cache_size,
                 },
                 detailed=True,
             )

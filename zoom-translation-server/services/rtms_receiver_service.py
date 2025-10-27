@@ -210,9 +210,8 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 # processed_audio = await loop.run_in_executor(
                 #     None, audio_processor.process, audio_chunk
                 # )
-
-                if DEBUG_MODE:
-                    session_processed.append(processed_audio)
+                # if DEBUG_MODE:
+                #     session_processed.append(processed_audio)
 
                 # BUG: Send processed_audio once that is fixed
                 await loop.run_in_executor(

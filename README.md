@@ -108,6 +108,7 @@ DEBUG_MODE=False # True/False as options
 - Auto scroll should allow downward scrolling
 - Skip correction if source_language != zh
 - reimplement denoising with new solution
+- CI/CD for prod
 
 ## Inprovements:
 

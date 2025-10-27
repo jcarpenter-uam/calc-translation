@@ -105,12 +105,12 @@ DEBUG_MODE=False # True/False as options
 
 ## Todo:
 
-- Auto scroll should lock on to translation scroll with transcription
+- Auto scroll should allow downward scrolling
 - Skip correction if source_language != zh
+- reimplement denoising with new solution
 
 ## Inprovements:
 
-- Denoising and Normalizing audio needs improvements. Though for zoom calls a simple noise floor should do the trick
 - IaC for datacrunch GPU server based on zoom meeting calender?
 - Send final transcript to all meeting participants
 - Auto fine tuning?

@@ -96,15 +96,15 @@ OLLAMA_URL="http://localhost:11434"
 DEBUG_MODE=False # True/False as options
 ```
 
-## Bugs:
+## Todo:
 
 - Change cache size limit to be MB/GB based, not length
 - Bidirectional translations (ZH -> EN or EN -> ZH)
+- Correction model for EN -> ZH?
 
 ## Inprovements:
 
-- Update install instructions
 - Denoising and Normalizing audio needs improvements. Though for zoom calls a simple noise floor should do the trick
 - IaC for datacrunch GPU server based on zoom meeting calender?
 - Send final transcript to all meeting participants
-- Keep tweaking the fine tuned model to get the best results
+- Auto fine tuning?

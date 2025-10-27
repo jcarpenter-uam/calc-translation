@@ -99,8 +99,7 @@ DEBUG_MODE=False # True/False as options
 ## Todo:
 
 - Change cache size limit to be MB/GB based, not length
-- Bidirectional translations (ZH -> EN or EN -> ZH)
-- Correction model for EN -> ZH?
+- Skip correction model for EN -> ZH
 
 ## Inprovements:
 

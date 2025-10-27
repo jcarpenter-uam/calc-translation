@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  HiCheckCircle,
-  HiOutlineSparkles,
-  HiPencil,
-  HiClock,
-} from "react-icons/hi";
+import { HiOutlineSparkles, HiPencil } from "react-icons/hi";
 
 /**
  * A component to display a visual status for the correction process.
@@ -13,25 +8,11 @@ const CorrectionStatusIndicator = ({ status }) => {
   if (!status) return null;
 
   switch (status) {
-    case "checking":
-      return (
-        <HiClock
-          className="h-5 w-5 text-blue-500 animate-spin"
-          title="Checking for contextual corrections..."
-        />
-      );
     case "correcting":
       return (
         <HiPencil
           className="h-5 w-5 text-amber-500"
           title="Correction in progress..."
-        />
-      );
-    case "checked_ok":
-      return (
-        <HiCheckCircle
-          className="h-5 w-5 text-green-500"
-          title="Contextually verified."
         />
       );
     case "corrected":

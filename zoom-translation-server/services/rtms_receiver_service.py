@@ -30,6 +30,8 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
         audio_processor = AudioProcessingService()
         transcription_service = None
         correction_service = None
+        active_correction_tasks = set()
+        final_message_processed = asyncio.Event()
 
         try:
             ollama_url = os.environ["OLLAMA_URL"]
@@ -113,16 +115,31 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 detailed=True,
             )
 
-            payload_type = "final" if result.is_final else "partial"
-            payload = {
-                "message_id": current_message_id,
-                "transcription": result.transcription,
-                "translation": result.translation,
-                "speaker": current_speaker,
-                "type": payload_type,
-                "isfinalize": result.is_final,
-            }
-            await viewer_manager.broadcast(payload)
+            has_text = (result.transcription and result.transcription.strip()) or (
+                result.translation and result.translation.strip()
+            )
+
+            if result.is_final or has_text:
+                payload_type = "final" if result.is_final else "partial"
+                payload = {
+                    "message_id": current_message_id,
+                    "transcription": result.transcription,
+                    "translation": result.translation,
+                    "speaker": current_speaker,
+                    "type": payload_type,
+                    "isfinalize": result.is_final,
+                }
+                await viewer_manager.broadcast(payload)
+            else:
+                log_pipeline_step(
+                    "SONIOX",
+                    "Dropping empty partial result.",
+                    speaker=current_speaker,
+                    extra={
+                        "message_id": current_message_id,
+                    },
+                    detailed=True,
+                )
 
             if result.is_final:
                 log_utterance_end(current_message_id, current_speaker)
@@ -137,9 +154,11 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                         "speaker": current_speaker,
                         "transcription": result.transcription,
                     }
-                    asyncio.create_task(
+                    task = asyncio.create_task(
                         correction_service.process_final_utterance(utterance_to_store)
                     )
+                    active_correction_tasks.add(task)
+                    task.add_done_callback(active_correction_tasks.discard)
 
                 is_new_utterance = True
                 current_message_id = None
@@ -153,6 +172,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 f"Transcription service closed. Code: {code}, Reason: {reason}",
                 detailed=False,
             )
+            final_message_processed.set()
 
         try:
             transcription_service = SonioxService(
@@ -220,7 +240,27 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 )
                 await loop.run_in_executor(None, transcription_service.finalize_stream)
 
-            await asyncio.sleep(0.1)
+            if transcription_service:
+                log_pipeline_step(
+                    "SESSION",
+                    "Waiting for Soniox connection to fully close...",
+                    detailed=True,
+                )
+                try:
+                    await asyncio.wait_for(final_message_processed.wait(), timeout=5.0)
+                    log_pipeline_step(
+                        "SESSION",
+                        "Soniox connection closed.",
+                        detailed=True,
+                    )
+                except asyncio.TimeoutError:
+                    log_pipeline_step(
+                        "SESSION",
+                        "Warning: Timeout waiting for Soniox to close. Proceeding anyway.",
+                        detailed=False,
+                    )
+            else:
+                await asyncio.sleep(0.1)
 
             if correction_service:
                 log_pipeline_step(
@@ -229,6 +269,19 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     detailed=False,
                 )
                 await correction_service.finalize_session()
+
+            if active_correction_tasks:
+                log_pipeline_step(
+                    "SESSION",
+                    f"Waiting for {len(active_correction_tasks)} outstanding correction task(s) to complete...",
+                    detailed=True,
+                )
+                await asyncio.gather(*active_correction_tasks)
+                log_pipeline_step(
+                    "SESSION",
+                    "All correction tasks complete.",
+                    detailed=True,
+                )
 
             if DEBUG_MODE and session_debug_dir:
                 log_pipeline_step(

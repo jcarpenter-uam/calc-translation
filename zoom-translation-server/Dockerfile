@@ -32,6 +32,8 @@ COPY --from=builder /app/web/dist ./web/dist
 
 COPY main.py ./
 COPY services ./services/
+RUN mkdir -p /app/session_history
+RUN mkdir -p /app/debug
 
 RUN chown -R zoom-translator:zoom-translator /app
 

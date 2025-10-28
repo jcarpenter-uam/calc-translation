@@ -50,6 +50,9 @@ services:
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
       - DEBUG_MODE=${DEBUG_MODE}
+    volumes:
+      - zoom-translation-data:/app/session_history
+      - zoom-translation-data:/app/debug
     networks:
       - zoom-translation
 
@@ -69,6 +72,9 @@ services:
       - zoom-translation-server
     networks:
       - zoom-translation
+
+volumes:
+  zoom-translation-data:
 
 networks:
   zoom-translation:
@@ -110,8 +116,6 @@ DEBUG_MODE=False # True/False as options
 - reimplement denoising with new solution
 - CI/CD for prod
 - Auth for /ws/transcribe endpoint
-- PVC for ./debug & ./session_history
-- Command for bandit bandit -r ./ -f html -o reports/bandit_report.html
 
 ## Inprovements:
 

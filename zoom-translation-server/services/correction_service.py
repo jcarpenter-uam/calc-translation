@@ -225,14 +225,6 @@ class CorrectionService:
 
     async def _perform_correction(self, target_utterance: dict):
         """Performs correction logic on a specific target utterance."""
-        await self.viewer_manager.broadcast(
-            {
-                "message_id": target_utterance["message_id"],
-                "type": "status_update",
-                "correction_status": "checking",
-            }
-        )
-
         log_utterance_step(
             "CORRECTION",
             target_utterance["message_id"],
@@ -315,13 +307,6 @@ class CorrectionService:
                 detailed=False,
             )
         else:
-            await self.viewer_manager.broadcast(
-                {
-                    "message_id": target_utterance["message_id"],
-                    "type": "status_update",
-                    "correction_status": "checked_ok",
-                }
-            )
             log_reason = (
                 reason
                 if not is_needed

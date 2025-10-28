@@ -48,6 +48,7 @@ services:
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
+      - WS_TRANSCRIBE_SECRET_TOKEN=${WS_TRANSCRIBE_SECRET_TOKEN}
       - DEBUG_MODE=${DEBUG_MODE}
     volumes:
       - zoom-translation-data:/app/session_history
@@ -66,6 +67,7 @@ services:
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - ZOOM_WEBHOOK_SECRET_TOKEN=${ZOOM_WEBHOOK_SECRET_TOKEN}
       - ZOOM_TRANSLATION_SERVER_URL=${ZOOM_TRANSLATION_SERVER_URL}
+      - WS_TRANSCRIBE_SECRET_TOKEN=${WS_TRANSCRIBE_SECRET_TOKEN}
     depends_on:
       - zoom-translation-server
     networks:
@@ -102,6 +104,10 @@ OLLAMA_URL="http://localhost:11434"
 # Default is 10MB unless specified otherwise
 MAX_CACHE_MB=
 
+# Secure token for the /ws/transcibe endpoint
+# REQUIRED
+WS_TRANSCRIBE_SECRET_TOKEN=defaultwstoken
+
 # Logging state
 # True also saves audio files per session
 DEBUG_MODE=False # True/False as options
@@ -113,7 +119,6 @@ DEBUG_MODE=False # True/False as options
 - Skip correction if source_language != zh
 - reimplement denoising with new solution
 - CI/CD for prod
-- Auth for /ws/transcribe endpoint
 
 ## Inprovements:
 

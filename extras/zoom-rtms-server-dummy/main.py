@@ -4,10 +4,10 @@ import json
 import os
 import sys
 
+import aiohttp
 import numpy as np
 import resampy
 import sounddevice as sd
-import websockets
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,6 +16,14 @@ load_dotenv()
 WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe")
 SPEAKER_NAME = "Jonah"
 TARGET_SAMPLE_RATE = 16000
+
+WS_SECRET_TOKEN = os.getenv("WS_SECRET_TOKEN")
+if not WS_SECRET_TOKEN:
+    print(
+        "FATAL: 'WS_SECRET_TOKEN' environment variable is not set. Please add it to your .env file.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 # A shared buffer to hold resampled audio data
 audio_buffer = bytearray()
@@ -57,10 +65,20 @@ async def receive_transcriptions(ws):
     """Receives and prints transcription results from the server."""
     print("--- Live Transcription Active (Press Ctrl+C to stop) 🎤 ---")
     try:
-        async for message in ws:
-            pass
-    except websockets.exceptions.ConnectionClosed as e:
-        print(f"\nConnection closed by server: {e.reason}")
+        # aiohttp's iteration model is slightly different
+        async for msg in ws:
+            if msg.type == aiohttp.WSMsgType.TEXT:
+                # The original script had 'pass'.
+                # You would process msg.data here (e.g., json.loads(msg.data))
+                pass
+            elif msg.type == aiohttp.WSMsgType.ERROR:
+                print(f"WebSocket Error: {ws.exception()}")
+                break
+            elif msg.type == aiohttp.WSMsgType.CLOSED:
+                print("WebSocket closed by server")
+                break
+    except Exception as e:
+        print(f"\nReceiver task closed: {e}")
 
 
 async def send_audio(ws, stop_event: asyncio.Event):
@@ -82,15 +100,17 @@ async def send_audio(ws, stop_event: asyncio.Event):
 
                 encoded_audio = base64.b64encode(data_chunk).decode("utf-8")
                 payload = {"userName": SPEAKER_NAME, "audio": encoded_audio}
-                await ws.send(json.dumps(payload))
+
+                # Use ws.send_str for sending JSON text
+                await ws.send_str(json.dumps(payload))
 
             # A small sleep to prevent a tight loop when there's no audio
             await asyncio.sleep(0.01)
 
-    except websockets.exceptions.ConnectionClosed:
-        print("\nSender task is stopping because connection closed.")
-    except asyncio.CancelledError:
-        pass
+    except (ConnectionResetError, asyncio.CancelledError):
+        print("\nSender task is stopping.")
+    except Exception as e:
+        print(f"\nSender task encountered an error: {e}")
 
 
 async def main(device_name: str, native_rate: int):
@@ -118,29 +138,41 @@ async def main(device_name: str, native_rate: int):
             audio_buffer.extend(data)
 
     try:
-        async with websockets.connect(WEBSOCKET_URL) as ws:
-            print(f"\nConnected to {WEBSOCKET_URL}")
+        # aiohttp uses a simple dictionary for headers
+        auth_header = {"Authorization": f"Bearer {WS_SECRET_TOKEN}"}
 
-            receiver_task = asyncio.create_task(receive_transcriptions(ws))
-            sender_task = asyncio.create_task(send_audio(ws, stop_event))
+        # aiohttp uses a ClientSession to manage connections and headers
+        async with aiohttp.ClientSession(headers=auth_header) as session:
+            async with session.ws_connect(WEBSOCKET_URL) as ws:
+                print(f"\nConnected to {WEBSOCKET_URL}")
 
-            print(f"Starting audio stream from '{device_name}' at {native_rate} Hz...")
-            with sd.InputStream(
-                samplerate=native_rate,
-                device=device_name,
-                channels=1,
-                dtype="float32",
-                callback=audio_callback,
-            ):
-                # Wait for the receiver to finish (e.g., connection closes)
-                await receiver_task
+                receiver_task = asyncio.create_task(receive_transcriptions(ws))
+                sender_task = asyncio.create_task(send_audio(ws, stop_event))
 
-            # Cleanly stop the sender task
-            stop_event.set()
-            await sender_task
+                print(
+                    f"Starting audio stream from '{device_name}' at {native_rate} Hz..."
+                )
+                with sd.InputStream(
+                    samplerate=native_rate,
+                    device=device_name,
+                    channels=1,
+                    dtype="float32",
+                    callback=audio_callback,
+                ):
+                    # Wait for the receiver to finish (e.g., connection closes)
+                    await receiver_task
 
-    except websockets.exceptions.ConnectionClosedError:
+                # Cleanly stop the sender task
+                stop_event.set()
+                await sender_task
+
+    except aiohttp.ClientConnectorError:
         print("\nCould not connect to the server. Is it running?")
+    except aiohttp.WSServerHandshakeError as e:
+        # This error is useful for debugging auth issues
+        print(
+            f"\nHandshake failed. Check your auth token? Server said: {e.status} {e.message}"
+        )
     except Exception as e:
         print(f"\nAn unexpected error occurred: {e}")
 

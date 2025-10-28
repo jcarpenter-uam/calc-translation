@@ -20,9 +20,18 @@ if (!fs.existsSync(logDir)) {
 }
 
 const ZOOM_TRANSLATION_SERVER_URL = process.env.ZOOM_TRANSLATION_SERVER_URL;
+const WS_TRANSCRIBE_SECRET_TOKEN = process.env.WS_TRANSCRIBE_SECRET_TOKEN;
 const ZOOM_WEBHOOK_SECRET_TOKEN = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
 
 const PORT = process.env.PORT || 8080;
+
+if (!WS_TRANSCRIBE_SECRET_TOKEN) {
+  console.error(
+    "FATAL: WS_TRANSCRIBE_SECRET_TOKEN is not defined in .env file!",
+  );
+  console.error("Cannot connect to translation server without it.");
+  process.exit(1);
+}
 
 // --- In-Memory Storage ---
 // Store active clients, keyed by streamId
@@ -157,8 +166,14 @@ function handleRtmsStarted(payload, streamId) {
   // Create a new RTMS client for the stream
   const rtmsClient = new rtms.Client();
 
-  // Create a new WebSocket client for the translation server
-  const wsClient = new WebSocket(ZOOM_TRANSLATION_SERVER_URL);
+  const authHeader = {
+    Authorization: `Bearer ${WS_TRANSCRIBE_SECRET_TOKEN}`,
+  };
+
+  // Create a new WebSocket client for the translation server with token
+  const wsClient = new WebSocket(ZOOM_TRANSLATION_SERVER_URL, {
+    headers: authHeader,
+  });
 
   wsClient.on("open", () => {
     console.log(

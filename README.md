@@ -38,8 +38,7 @@ graph TD
 ```bash
 services:
   zoom-translation-server:
-    build: ./zoom-translation-server
-    pull_policy: build
+    image: ghcr.io/jcarpenter-uam/zoom-translation/zoom-translation-server:latest
     container_name: zoom-translation-server
     restart: unless-stopped
     ports:
@@ -57,8 +56,7 @@ services:
       - zoom-translation
 
   zoom-rtms-server:
-    build: ./zoom-rtms-server
-    pull_policy: build
+    image: ghcr.io/jcarpenter-uam/zoom-translation/zoom-translation-rtms:latest
     container_name: zoom-rtms-server
     restart: unless-stopped
     ports:

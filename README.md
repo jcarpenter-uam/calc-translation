@@ -117,7 +117,6 @@ DEBUG_MODE=False # True/False as options
 
 - Auto scroll should allow downward scrolling
 - reimplement denoising with new solution
-- Dont send last "" after ending to frontend
 
 ## Inprovements:
 

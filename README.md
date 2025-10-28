@@ -109,6 +109,8 @@ DEBUG_MODE=False # True/False as options
 - Skip correction if source_language != zh
 - reimplement denoising with new solution
 - CI/CD for prod
+- Auth for /ws/transcribe endpoint
+- PVC for ./debug & ./session_history
 
 ## Inprovements:
 

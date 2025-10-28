@@ -116,9 +116,8 @@ DEBUG_MODE=False # True/False as options
 ## Todo:
 
 - Auto scroll should allow downward scrolling
-- Skip correction if source_language != zh
 - reimplement denoising with new solution
-- CI/CD for prod
+- Dont send last "" after ending to frontend
 
 ## Inprovements:
 

@@ -216,6 +216,8 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     correction_service
                     and result.transcription
                     and result.transcription.strip()
+                    # Only send Chinese to correction model
+                    and result.source_language == "zh"
                 ):
                     utterance_to_store = {
                         "message_id": current_message_id,

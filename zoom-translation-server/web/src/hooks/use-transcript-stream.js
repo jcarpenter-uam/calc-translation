@@ -15,7 +15,7 @@ import { useState, useEffect, useRef } from "react";
  * isFinalized: boolean,
  * type: 'update' | 'final' | 'correction' | 'status_update',
  * original?: { translation: string, transcription: string },
- * correctionStatus?: 'checking' | 'correcting' | 'checked_ok' | 'corrected' | null
+ * correctionStatus?: 'correcting' | 'corrected' | null
  * }>;
  * }}
  */
@@ -41,7 +41,7 @@ export function useTranscriptStream(url) {
       setStatus("connecting");
 
       ws.current.onopen = () => {
-        console.log(`✅ WebSocket connected to ${url}`);
+        console.log(`WebSocket connected to ${url}`);
         setStatus("connected");
       };
 

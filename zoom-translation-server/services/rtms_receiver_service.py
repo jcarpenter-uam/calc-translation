@@ -185,7 +185,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                 result.translation and result.translation.strip()
             )
 
-            if result.is_final or has_text:
+            if has_text:
                 payload_type = "final" if result.is_final else "partial"
                 payload = {
                     "message_id": current_message_id,

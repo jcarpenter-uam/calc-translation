@@ -5,7 +5,8 @@
   "description": "Get started with RTMS using Node.JS ",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "audit": "npm audit --json > ../reports/zoom-rtms-server-npm_audit_report.json"
   },
   "dependencies": {
     "@zoom/rtms": "^0.0.2",

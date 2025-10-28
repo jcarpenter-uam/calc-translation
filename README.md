@@ -111,6 +111,7 @@ DEBUG_MODE=False # True/False as options
 - CI/CD for prod
 - Auth for /ws/transcribe endpoint
 - PVC for ./debug & ./session_history
+- Command for bandit bandit -r ./ -f html -o reports/bandit_report.html
 
 ## Inprovements:
 

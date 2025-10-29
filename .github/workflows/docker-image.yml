@@ -3,12 +3,12 @@ name: Docker Image CI
 on:
   release:
     types: [published] # This workflow runs only when a new release is published
-    # Ignore desktop app releases
-    tags-ignore:
-      - "*-desktop"
 
 jobs:
   build-and-push:
+    # This job will now only run if the release tag *does not* end with '-desktop'
+    if: endsWith(github.event.release.tag_name, '-desktop') == false
+
     runs-on: ubuntu-latest
     permissions:
       contents: read

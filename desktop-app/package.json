@@ -1,7 +1,7 @@
 {
-  "name": "zoom-translation-desktop",
-  "version": "1.0.0-desktop",
-  "description": "",
+  "name": "calc-zoom-translation-desktop",
+  "version": "1.0.1-desktop",
+  "description": "A desktop app for the Zoom Translation web app",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -21,10 +21,11 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "zoom-translation-desktop",
-    "productName": "Zoom Translation",
+    "appId": "calc-zoom-translation-desktop",
+    "productName": "CALC Zoom Translation",
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -33,7 +34,8 @@
     "files": [
       "main.js",
       "preload.js",
-      "package.json"
+      "package.json",
+      "assets/**/*"
     ],
     "publish": {
       "provider": "github",

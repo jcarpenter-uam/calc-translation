@@ -13,6 +13,7 @@ document.getElementById("close-btn").addEventListener("click", () => {
 const webview = document.getElementById("content-view");
 
 webview.addEventListener("dom-ready", () => {
+  webview.openDevTools();
   const defaultFontSize = 20;
   const jsCode = `document.documentElement.style.fontSize = '${defaultFontSize}px';`;
   webview.executeJavaScript(jsCode).catch((err) => console.error(err));

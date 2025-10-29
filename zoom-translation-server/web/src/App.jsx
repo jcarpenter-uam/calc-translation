@@ -19,11 +19,11 @@ export default function App() {
     <div className="min-h-screen bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors">
       <header className="sticky top-0 z-50 w-full bg-white/80 dark:bg-zinc-900/80">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative flex items-center justify-end h-16">
+          <div className="relative flex items-center justify-start h-16">
             <div className="flex-shrink-0 flex items-center gap-2">
               <ConnectionIndicator status={transcriptionStatus} />
-              <LanguageToggle />
               <ThemeToggle />
+              <LanguageToggle />
             </div>
           </div>
         </div>

@@ -115,6 +115,8 @@ DEBUG_MODE=False # True/False as options
 
 ## Todo:
 
+- Auth middleware
+- restrict /ws/transcribe to first connection
 - Auto scroll should allow downward scrolling
 - reimplement denoising with new solution
 

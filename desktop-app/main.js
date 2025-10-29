@@ -22,6 +22,7 @@ function createWindow() {
     frame: false,
     vibrancy: {
       theme: "appearance-based",
+      effect: "acrylic",
     },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

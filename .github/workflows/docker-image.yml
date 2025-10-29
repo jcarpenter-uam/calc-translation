@@ -3,6 +3,9 @@ name: Docker Image CI
 on:
   release:
     types: [published] # This workflow runs only when a new release is published
+    # Ignore desktop app releases
+    tags-ignore:
+      - "*-desktop"
 
 jobs:
   build-and-push:
@@ -49,4 +52,3 @@ jobs:
           push: true
           tags: ${{ steps.meta_rtms.outputs.tags }}
           labels: ${{ steps.meta_rtms.outputs.labels }}
-

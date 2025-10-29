@@ -1,11 +1,13 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
+const { autoUpdater } = require("electron-updater");
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
     // 2 utterances
     width: 1200,
     height: 800,
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
     },
@@ -18,6 +20,8 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+
+  autoUpdater.checkForUpdatesAndNotify();
 
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) {

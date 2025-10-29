@@ -1,17 +1,21 @@
 {
   "name": "zoom-translation-desktop",
-  "version": "1.0.0",
+  "version": "1.0.0-desktop",
   "description": "",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",
-    "dist": "electron-builder --win"
+    "build": "electron-builder --win",
+    "publish": "electron-builder --win --publish always"
   },
   "keywords": [],
   "author": "Jonah Carpenter",
   "license": "ISC",
   "type": "commonjs",
+  "dependencies": {
+    "electron-updater": "^6.2.1"
+  },
   "devDependencies": {
     "electron": "^39.0.0",
     "electron-builder": "^26.0.12"
@@ -30,6 +34,11 @@
       "main.js",
       "preload.js",
       "package.json"
-    ]
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "jcarpenter-uam",
+      "repo": "zoom-translation"
+    }
   }
 }

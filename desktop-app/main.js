@@ -4,6 +4,7 @@ const { autoUpdater } = require("electron-updater");
 
 // TODO:
 // Personal toolbar with minimal look
+// Remove human intervention with auto update
 
 autoUpdater.autoDownload = true;
 

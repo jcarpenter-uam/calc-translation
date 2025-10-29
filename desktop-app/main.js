@@ -115,6 +115,8 @@ app.whenReady().then(() => {
             }
           },
         },
+        { role: "reload" }, // Handles 'Control+R'
+        { role: "forceReload" }, // Handles 'Control+Shift+R'
         { role: "toggleDevTools" }, // Handles 'Control+Shift+I'
       ],
     },

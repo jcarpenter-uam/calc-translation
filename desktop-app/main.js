@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const path = require("path");
 const { autoUpdater } = require("electron-updater");
 
@@ -16,22 +16,32 @@ function createWindow() {
     width: 800,
     height: 300,
     autoHideMenuBar: true,
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
+      webviewTag: true,
     },
     icon: path.join(__dirname, "assets/icon.png"),
   });
 
-  mainWindow.webContents.on("did-finish-load", () => {
-    const jsCode = `document.documentElement.style.fontSize = '${defaultFontSize}px';`;
-
-    mainWindow.webContents.executeJavaScript(jsCode).catch((err) => {
-      console.error("Failed to set default font size:", err);
-    });
-  });
-
-  mainWindow.loadURL("https://translator.my-uam.com/");
+  mainWindow.loadFile(path.join(__dirname, "index.html"));
 }
+
+ipcMain.on("window-minimize", () => {
+  mainWindow.minimize();
+});
+
+ipcMain.on("window-maximize", () => {
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
+
+ipcMain.on("window-close", () => {
+  mainWindow.close();
+});
 
 app.whenReady().then(() => {
   createWindow();
@@ -55,64 +65,29 @@ app.whenReady().then(() => {
     {
       label: "View",
       submenu: [
-        // --- Increase Font Size ---
         {
           label: "Increase Font Size",
           accelerator: "Control+=",
           click: () => {
-            if (mainWindow) {
-              const jsCode = `
-                (function() {
-                  const el = document.documentElement;
-                  let currentSize = parseFloat(window.getComputedStyle(el).fontSize);
-                  
-                  if (isNaN(currentSize)) { currentSize = 16; }
-                  
-                  el.style.fontSize = (currentSize + 1) + 'px';
-                })();
-              `;
-
-              mainWindow.webContents.executeJavaScript(jsCode).catch((err) => {
-                console.error("Failed to execute increase font JS:", err);
-              });
-            }
+            mainWindow.webContents.send("font-change-request", "increase");
           },
         },
-        // --- Decrease Font Size ---
         {
           label: "Decrease Font Size",
           accelerator: "Control+-",
           click: () => {
-            if (mainWindow) {
-              const jsCode = `
-                (function() {
-                  const el = document.documentElement;
-                  let currentSize = parseFloat(window.getComputedStyle(el).fontSize);
-                  
-                  if (isNaN(currentSize)) { currentSize = 16; }
-                  
-                  el.style.fontSize = (currentSize - 1) + 'px';
-                })();
-              `;
-
-              mainWindow.webContents.executeJavaScript(jsCode).catch((err) => {
-                console.error("Failed to execute decrease font JS:", err);
-              });
-            }
+            mainWindow.webContents.send("font-change-request", "decrease");
           },
         },
-        // --- Reset Font Size ---
         {
           label: "Reset Font Size",
           accelerator: "Control+0",
           click: () => {
-            if (mainWindow) {
-              const jsCode = `document.documentElement.style.fontSize = '${defaultFontSize}px';`;
-
-              mainWindow.webContents.executeJavaScript(jsCode).catch((err) => {
-                console.error("Failed to execute reset font JS:", err);
-              });
-            }
+            mainWindow.webContents.send(
+              "font-change-request",
+              "reset",
+              defaultFontSize,
+            );
           },
         },
         { role: "reload" }, // Handles 'Control+R'

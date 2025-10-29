@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>My Translator App</title>
+    <title>CALC Zoom Translation</title>
     <style>
       body,
       html {
@@ -30,19 +30,30 @@
         justify-content: space-between;
         align-items: center;
         height: 32px;
-        background: #f0f0f0;
+        background: #18181b;
         padding-left: 10px;
 
         -webkit-app-region: drag;
       }
 
+      #title-bar-left {
+        display: flex;
+        align-items: center;
+      }
+
+      #title-bar-icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+      }
+
       #title-bar-title {
         font-size: 13px;
+        color: white;
       }
 
       #window-controls {
         display: flex;
-
         -webkit-app-region: no-drag;
       }
 
@@ -54,10 +65,12 @@
         font-size: 16px;
         padding: 0;
         margin: 0;
+        color: white;
+        font-weight: bold;
       }
 
       #window-controls button:hover {
-        background: #e0e0e0;
+        background: #71717a;
       }
       #window-controls button#close-btn:hover {
         background: #e81123;
@@ -73,14 +86,16 @@
   </head>
   <body>
     <div id="title-bar">
-      <div id="title-bar-title">Translator</div>
+      <div id="title-bar-left">
+        <img id="title-bar-icon" src="./assets/icon.png" />
+        <div id="title-bar-title">CALC Zoom Translation</div>
+      </div>
       <div id="window-controls">
         <button id="minimize-btn" title="Minimize">_</button>
         <button id="maximize-btn" title="Maximize">◻</button>
         <button id="close-btn" title="Close">✕</button>
       </div>
     </div>
-
     <webview id="content-view" src="https://translator.my-uam.com/"> </webview>
 
     <script src="./renderer.js"></script>

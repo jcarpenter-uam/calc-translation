@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu, ipcMain } = require("electron");
+const { app, Menu, ipcMain } = require("electron");
+const { BrowserWindow } = require("electron-acrylic-window");
 const path = require("path");
 const { autoUpdater } = require("electron-updater");
 
@@ -19,6 +20,9 @@ function createWindow() {
     height: 300,
     autoHideMenuBar: true,
     frame: false,
+    vibrancy: {
+      theme: "appearance-based",
+    },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       webviewTag: true,

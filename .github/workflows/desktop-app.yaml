@@ -78,15 +78,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
-      - name: "List available Qt6 packages (for debugging)"
-        run: |
-          brew search qt6 || true
-
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
           version: ${{ env.QT_VERSION }}
-          arch: "macos"
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
           modules: "qtbase qtwebengine"
           cache: false
 
@@ -126,7 +122,7 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: ${{ env.QT_VERSION }}
-          arch: "msvc2019_64"
+          arch: "msvc2022_64"
           modules: "qtbase qtwebengine"
           cache: false
 

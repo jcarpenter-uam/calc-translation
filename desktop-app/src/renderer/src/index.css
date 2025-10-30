@@ -14,3 +14,13 @@
     transition: none !important;
   }
 }
+
+/* Make a region draggable */
+.app-region-drag {
+  -webkit-app-region: drag;
+}
+
+/* Make elements inside a draggable region clickable again */
+.app-region-no-drag {
+  -webkit-app-region: no-drag;
+}

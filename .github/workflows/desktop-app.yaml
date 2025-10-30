@@ -108,7 +108,7 @@ jobs:
         with:
           version: ${{ env.QT_VERSION }}
           arch: "win64_msvc2022_64"
-          modules: "qtwebengine qtwebchannel qtpositioning qtwebenginewidgets"
+          modules: "qtwebengine qtwebchannel qtpositioning"
           cache: false
 
       - name: Install jom (parallel nmake)

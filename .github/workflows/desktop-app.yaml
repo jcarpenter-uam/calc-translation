@@ -1,0 +1,164 @@
+name: Build and Release Desktop
+
+#  This workflow runs when you push a tag starting with 'v'
+#  and ending with '-desktop' (e.g., v1.0.0-desktop, v1.0.1-desktop)
+on:
+  push:
+    tags:
+      - "v*.*.*-desktop"
+
+env:
+  QT_VERSION: "6.10.0"
+  WORKING_DIR: "desktop-app"
+  PROJECT_FILE: "CALC_Zoom_Translation.qt.pro"
+  PROJECT_NAME: "CALC_Zoom_Translation.qt"
+
+jobs:
+  # -------------------------------------------------------------------
+  #                       BUILD LINUX
+  # -------------------------------------------------------------------
+  build-linux:
+    name: Build Linux (AppImage)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: "gcc_64"
+          modules: "qtbase qtwebengine"
+
+      - name: Install Linux dependencies for QtWebEngine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 libdbus-1-3 libxss1 libxkbcommon-x11-0 \
+            libasound2 libfontconfig1 libgl1 libegl1 libxi6 libxcursor1
+
+      - name: Build the application
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          qmake ${{ env.PROJECT_FILE }}
+          make -j $(nproc)
+
+      - name: Download linuxdeployqt
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
+          chmod +x linuxdeployqt-continuous-x86_64.AppImage
+
+      - name: Package as AppImage
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          ./linuxdeployqt-continuous-x86_64.AppImage ${{ env.PROJECT_NAME }} -appimage
+
+      - name: Upload Artifact (Linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}*.AppImage
+
+  # -------------------------------------------------------------------
+  #                       BUILD MACOS
+  # -------------------------------------------------------------------
+  build-macos:
+    name: Build macOS (DMG)
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: "macos"
+          modules: "qtbase qtwebengine"
+
+      - name: Build the application
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          qmake ${{ env.PROJECT_FILE }}
+          make -j $(sysctl -n hw.ncpu)
+
+      - name: Package as .dmg
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          macdeployqt ${{ env.PROJECT_NAME }}.app -dmg
+
+      - name: Upload Artifact (macOS)
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}.dmg
+
+  # -------------------------------------------------------------------
+  #                       BUILD WINDOWS
+  # -------------------------------------------------------------------
+  build-windows:
+    name: Build Windows (zip)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: "msvc2019_64"
+          modules: "qtbase qtwebengine"
+
+      - name: Install jom (parallel nmake)
+        run: choco install jom
+
+      - name: Build the application
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          qmake ${{ env.PROJECT_FILE }}
+          jom -j
+
+      - name: Package as .zip
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          mkdir deploy
+
+          windeployqt --release --webengine --dir deploy release/${{ env.PROJECT_NAME }}.exe
+
+          # Create a zip file of the deployment folder
+          powershell: Compress-Archive -Path deploy -DestinationPath ${{ env.PROJECT_NAME }}_Windows_x64.zip
+
+      - name: Upload Artifact (Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}_Windows_x64.zip
+
+  # -------------------------------------------------------------------
+  #                   CREATE GITHUB RELEASE
+  # -------------------------------------------------------------------
+  create-release:
+    name: Create GitHub Release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create Release and Upload Assets
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "artifacts/*/*.*"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Release ${{ github.ref_name }}
+          body: ${{ github.event.head_commit.message }}
+          allowUpdates: true

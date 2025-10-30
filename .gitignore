@@ -13,7 +13,7 @@ logs/
 dist/
 
 # Desktop App
-build/bin
+out
 
 # SECRETS
 .env

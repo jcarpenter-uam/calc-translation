@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@config "../../../tailwind.config.mjs";
+
+/* Smoothen theme flips without animating layout-heavy props */
+:root * {
+  transition-property: background-color, color, border-color, fill, stroke;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  :root * {
+    transition: none !important;
+  }
+}

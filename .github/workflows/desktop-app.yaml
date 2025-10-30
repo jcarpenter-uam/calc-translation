@@ -7,6 +7,9 @@ on:
     tags:
       - "v*.*.*-desktop"
 
+permissions:
+  contents: write
+
 env:
   QT_VERSION: "6.8.3" # Last LTS
   WORKING_DIR: "desktop-app"

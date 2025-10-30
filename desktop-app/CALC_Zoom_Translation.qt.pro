@@ -1,7 +1,7 @@
-QT += widgets webenginewidgets
+QT += widgets webenginewidgets webchannel positioning
 
-TARGET = CALC_Zoom_Translation.qt
-
+TEMPLATE = app
+TARGET = CALC_Zoom_Translation
+CONFIG  += c++17 release
+DESTDIR  = release
 SOURCES += main.cpp
-
-CONFIG += c++17

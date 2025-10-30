@@ -14,7 +14,7 @@ env:
   QT_VERSION: "6.8.3" # Last LTS
   WORKING_DIR: "desktop-app"
   PROJECT_FILE: "CALC_Zoom_Translation.qt.pro"
-  PROJECT_NAME: "CALC_Zoom_Translation.qt"
+  PROJECT_NAME: "CALC_Zoom_Translation"
 
 jobs:
   # -------------------------------------------------------------------
@@ -99,50 +99,56 @@ jobs:
   #                       BUILD WINDOWS
   # -------------------------------------------------------------------
   build-windows:
-    name: Build Windows (zip)
     runs-on: windows-latest
-
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+      - uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          arch: "win64_msvc2022_64"
-          modules: "qtwebengine qtwebchannel qtpositioning"
+          arch: win64_msvc2022_64
+          modules: qtwebengine qtwebchannel qtpositioning
           cache: false
 
-      - name: Install jom (parallel nmake)
-        run: choco install jom
+      - run: choco install jom -y
 
-      - name: Setup MSVC Build Tools
-        uses: microsoft/setup-msbuild@v2
-        with:
-          vs-version: "17.0"
+      - uses: microsoft/setup-msbuild@v2
+        with: { vs-version: "17.0" }
 
-      - name: Setup Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+      - uses: ilammy/msvc-dev-cmd@v1
+        with: { arch: x64 }
 
-      - name: Build the application
+      - name: Build (Release)
         working-directory: ${{ env.WORKING_DIR }}
+        shell: pwsh
         run: |
-          qmake ${{ env.PROJECT_FILE }}
+          qmake $env:PROJECT_FILE -spec win32-msvc "CONFIG+=release"
           jom
+
+      - name: Find built EXE
+        id: findexe
+        working-directory: ${{ env.WORKING_DIR }}
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path "release" -Filter *.exe -ErrorAction SilentlyContinue |
+                 Where-Object { $_.Name -notmatch 'QtWebEngineProcess|vc_redist' } |
+                 Select-Object -First 1
+          if (-not $exe) { throw "No app EXE found in .\release" }
+          "EXE=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Using EXE: $($exe.FullName)"
 
       - name: Package as .zip
         working-directory: ${{ env.WORKING_DIR }}
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path deploy | Out-Null
-          windeployqt --release --dir deploy "release/${{ env.PROJECT_NAME }}.exe"
+          $exe = "${{ steps.findexe.outputs.EXE }}"
+          # Qt 6: do NOT pass --webengine
+          windeployqt --release --dir deploy "$exe"
+          Copy-Item -Force "$exe" deploy\      # ensure the app exe is present
           Compress-Archive -Path 'deploy\*' -DestinationPath "${{ env.PROJECT_NAME }}_Windows_x64.zip" -Force
 
-      - name: Upload Artifact (Windows)
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: windows-zip
           path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}_Windows_x64.zip

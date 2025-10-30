@@ -25,6 +25,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: "List available Qt6 packages (for debugging)"
+        run: |
+          apt list | grep qt6
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
@@ -32,7 +36,6 @@ jobs:
           arch: "gcc_64"
           modules: "qtbase qtwebengine"
           cache: false
-          logging: true
 
       - name: Install Linux dependencies for QtWebEngine
         run: |
@@ -75,6 +78,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: "List available Qt6 packages (for debugging)"
+        run: |
+          brew search qt6 || true
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
@@ -82,7 +89,6 @@ jobs:
           arch: "macos"
           modules: "qtbase qtwebengine"
           cache: false
-          logging: true
 
       - name: Build the application
         working-directory: ${{ env.WORKING_DIR }}
@@ -112,6 +118,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: "List available Qt6 packages (for debugging)"
+        run: |
+          choco search qt6
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
@@ -119,7 +129,6 @@ jobs:
           arch: "msvc2019_64"
           modules: "qtbase qtwebengine"
           cache: false
-          logging: true
 
       - name: Install jom (parallel nmake)
         run: choco install jom
@@ -137,7 +146,6 @@ jobs:
 
           windeployqt --release --webengine --dir deploy release/${{ env.PROJECT_NAME }}.exe
 
-          # Create a zip file of the deployment folder
           powershell: Compress-Archive -Path deploy -DestinationPath ${{ env.PROJECT_NAME }}_Windows_x64.zip
 
       - name: Upload Artifact (Windows)

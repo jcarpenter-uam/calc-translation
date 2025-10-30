@@ -119,6 +119,11 @@ jobs:
         with:
           vs-version: "17.0"
 
+      - name: Setup Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Build the application
         working-directory: ${{ env.WORKING_DIR }}
         run: |

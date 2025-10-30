@@ -8,7 +8,7 @@ on:
       - "v*.*.*-desktop"
 
 env:
-  QT_VERSION: "6.7.0"
+  QT_VERSION: "6.10.0"
   WORKING_DIR: "desktop-app"
   PROJECT_FILE: "CALC_Zoom_Translation.qt.pro"
   PROJECT_NAME: "CALC_Zoom_Translation.qt"
@@ -31,6 +31,8 @@ jobs:
           version: ${{ env.QT_VERSION }}
           arch: "gcc_64"
           modules: "qtbase qtwebengine"
+          cache: false
+          logging: true
 
       - name: Install Linux dependencies for QtWebEngine
         run: |
@@ -79,6 +81,8 @@ jobs:
           version: ${{ env.QT_VERSION }}
           arch: "macos"
           modules: "qtbase qtwebengine"
+          cache: false
+          logging: true
 
       - name: Build the application
         working-directory: ${{ env.WORKING_DIR }}
@@ -114,6 +118,8 @@ jobs:
           version: ${{ env.QT_VERSION }}
           arch: "msvc2019_64"
           modules: "qtbase qtwebengine"
+          cache: false
+          logging: true
 
       - name: Install jom (parallel nmake)
         run: choco install jom

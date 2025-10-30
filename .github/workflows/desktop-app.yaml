@@ -25,24 +25,20 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
-      - name: "List available Qt6 packages (for debugging)"
-        run: |
-          apt list | grep qt6
-
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
           version: ${{ env.QT_VERSION }}
           arch: "gcc_64"
-          modules: "qtbase qtwebengine"
+          # modules: "qtbase qtwebengine"
           cache: false
 
-      - name: Install Linux dependencies for QtWebEngine
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 libdbus-1-3 libxss1 libxkbcommon-x11-0 \
-            libasound2 libfontconfig1 libgl1 libegl1 libxi6 libxcursor1
+      # - name: Install Linux dependencies for QtWebEngine
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y \
+      #       libnss3 libdbus-1-3 libxss1 libxkbcommon-x11-0 \
+      #       libasound2 libfontconfig1 libgl1 libegl1 libxi6 libxcursor1
 
       - name: Build the application
         working-directory: ${{ env.WORKING_DIR }}
@@ -70,92 +66,89 @@ jobs:
   # -------------------------------------------------------------------
   #                       BUILD MACOS
   # -------------------------------------------------------------------
-  build-macos:
-    name: Build macOS (DMG)
-    runs-on: macos-latest
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: ${{ env.QT_VERSION }}
-          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
-          modules: "qtbase qtwebengine"
-          cache: false
-
-      - name: Build the application
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          qmake ${{ env.PROJECT_FILE }}
-          make -j $(sysctl -n hw.ncpu)
-
-      - name: Package as .dmg
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          macdeployqt ${{ env.PROJECT_NAME }}.app -dmg
-
-      - name: Upload Artifact (macOS)
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-dmg
-          path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}.dmg
+  # build-macos:
+  #   name: Build macOS (DMG)
+  #   runs-on: macos-latest
+  #
+  #   steps:
+  #     - name: Check out code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Install Qt
+  #       uses: jurplel/install-qt-action@v3
+  #       with:
+  #         version: ${{ env.QT_VERSION }}
+  #         arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+  #         modules: "qtbase qtwebengine"
+  #         cache: false
+  #
+  #     - name: Build the application
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #       run: |
+  #         qmake ${{ env.PROJECT_FILE }}
+  #         make -j $(sysctl -n hw.ncpu)
+  #
+  #     - name: Package as .dmg
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #       run: |
+  #         macdeployqt ${{ env.PROJECT_NAME }}.app -dmg
+  #
+  #     - name: Upload Artifact (macOS)
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: macos-dmg
+  #         path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}.dmg
 
   # -------------------------------------------------------------------
   #                       BUILD WINDOWS
   # -------------------------------------------------------------------
-  build-windows:
-    name: Build Windows (zip)
-    runs-on: windows-latest
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: "List available Qt6 packages (for debugging)"
-        run: |
-          choco search qt6
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: ${{ env.QT_VERSION }}
-          arch: "msvc2022_64"
-          modules: "qtbase qtwebengine"
-          cache: false
-
-      - name: Install jom (parallel nmake)
-        run: choco install jom
-
-      - name: Build the application
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          qmake ${{ env.PROJECT_FILE }}
-          jom -j
-
-      - name: Package as .zip
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          mkdir deploy
-
-          windeployqt --release --webengine --dir deploy release/${{ env.PROJECT_NAME }}.exe
-
-          powershell: Compress-Archive -Path deploy -DestinationPath ${{ env.PROJECT_NAME }}_Windows_x64.zip
-
-      - name: Upload Artifact (Windows)
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-zip
-          path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}_Windows_x64.zip
+  # build-windows:
+  #   name: Build Windows (zip)
+  #   runs-on: windows-latest
+  #
+  #   steps:
+  #     - name: Check out code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Install Qt
+  #       uses: jurplel/install-qt-action@v3
+  #       with:
+  #         version: ${{ env.QT_VERSION }}
+  #         arch: "msvc2022_64"
+  #         modules: "qtbase qtwebengine"
+  #         cache: false
+  #
+  #     - name: Install jom (parallel nmake)
+  #       run: choco install jom
+  #
+  #     - name: Build the application
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #       run: |
+  #         qmake ${{ env.PROJECT_FILE }}
+  #         jom -j
+  #
+  #     - name: Package as .zip
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #       run: |
+  #         mkdir deploy
+  #
+  #         windeployqt --release --webengine --dir deploy release/${{ env.PROJECT_NAME }}.exe
+  #
+  #         powershell: Compress-Archive -Path deploy -DestinationPath ${{ env.PROJECT_NAME }}_Windows_x64.zip
+  #
+  #     - name: Upload Artifact (Windows)
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: windows-zip
+  #         path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}_Windows_x64.zip
 
   # -------------------------------------------------------------------
   #                   CREATE GITHUB RELEASE
   # -------------------------------------------------------------------
   create-release:
     name: Create GitHub Release
-    needs: [build-linux, build-macos, build-windows]
+    # needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux]
     runs-on: ubuntu-latest
 
     steps:

@@ -12,10 +12,8 @@ node_modules/
 logs/
 dist/
 
-# QT Desktop App
-desktop-app/*
-!desktop-app/main.cpp
-!desktop-app/CALC_Zoom_Translation.qt.pro
+# Desktop App
+build/bin
 
 # SECRETS
 .env

@@ -8,7 +8,7 @@ on:
       - "v*.*.*-desktop"
 
 env:
-  QT_VERSION: "6.10.0"
+  QT_VERSION: "6.7.0"
   WORKING_DIR: "desktop-app"
   PROJECT_FILE: "CALC_Zoom_Translation.qt.pro"
   PROJECT_NAME: "CALC_Zoom_Translation.qt"
@@ -30,7 +30,7 @@ jobs:
         with:
           version: ${{ env.QT_VERSION }}
           arch: "gcc_64"
-          cache: false
+          cached: false
 
       - name: Install Linux dependencies for QtWebEngine
         run: |

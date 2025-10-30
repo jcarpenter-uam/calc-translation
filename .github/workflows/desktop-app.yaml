@@ -17,44 +17,44 @@ jobs:
   # -------------------------------------------------------------------
   #                       BUILD LINUX
   # -------------------------------------------------------------------
-  build-linux:
-    name: Build Linux (AppImage)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          arch: "gcc_64"
-          modules: "qtwebengine"
-          cache: false
-
-      - name: Build the application
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          qmake ${{ env.PROJECT_FILE }}
-          make -j $(nproc)
-
-      - name: Download linuxdeployqt
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
-          chmod +x linuxdeployqt-continuous-x86_64.AppImage
-
-      - name: Package as AppImage
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          ./linuxdeployqt-continuous-x86_64.AppImage ${{ env.PROJECT_NAME }} -appimage
-
-      - name: Upload Artifact (Linux)
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-appimage
-          path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}*.AppImage
+  # build-linux:
+  #   name: Build Linux (AppImage)
+  #   runs-on: ubuntu-latest
+  #
+  #   steps:
+  #     - name: Check out code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Install Qt
+  #       uses: jurplel/install-qt-action@v4
+  #       with:
+  #         version: ${{ env.QT_VERSION }}
+  #         arch: "gcc_64"
+  #         modules: "qtwebengine"
+  #         cache: false
+  #
+  #     - name: Build the application
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #       run: |
+  #         qmake ${{ env.PROJECT_FILE }}
+  #         make -j $(nproc)
+  #
+  #     - name: Download linuxdeployqt
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #       run: |
+  #         wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
+  #         chmod +x linuxdeployqt-continuous-x86_64.AppImage
+  #
+  #     - name: Package as AppImage
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #       run: |
+  #         ./linuxdeployqt-continuous-x86_64.AppImage ${{ env.PROJECT_NAME }} -appimage
+  #
+  #     - name: Upload Artifact (Linux)
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: linux-appimage
+  #         path: ${{ env.WORKING_DIR }}/${{ env.PROJECT_NAME }}*.AppImage
 
   # -------------------------------------------------------------------
   #                       BUILD MACOS
@@ -114,11 +114,16 @@ jobs:
       - name: Install jom (parallel nmake)
         run: choco install jom
 
+      - name: Setup MSVC Build Tools
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: "17.0"
+
       - name: Build the application
         working-directory: ${{ env.WORKING_DIR }}
         run: |
           qmake ${{ env.PROJECT_FILE }}
-          jom -j
+          jom
 
       - name: Package as .zip
         working-directory: ${{ env.WORKING_DIR }}
@@ -141,7 +146,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     # needs: [build-linux, build-macos, build-windows]
-    needs: [build-linux]
+    needs: [build-windows]
     runs-on: ubuntu-latest
 
     steps:

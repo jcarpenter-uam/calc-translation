@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
+import log from "electron-log/renderer";
 
 const LanguageContext = createContext();
 
@@ -14,17 +15,22 @@ function getInitialLanguage() {
   try {
     const storedLanguage = window.localStorage.getItem(STORAGE_KEY);
     if (storedLanguage) {
+      log.info(
+        `Language: Found saved language in localStorage: ${storedLanguage}`,
+      );
       return storedLanguage;
     }
   } catch (error) {
-    console.error("Error reading from localStorage", error);
+    log.error("Language: Error reading from localStorage", error);
   }
 
   const browserLang = window.navigator.language;
   if (browserLang.startsWith("zh")) {
+    log.info(`Language: Detected browser language: chinese`);
     return "chinese";
   }
 
+  log.info(`Language: Falling back to default: english`);
   return "english";
 }
 
@@ -34,8 +40,11 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, language);
+      log.info(
+        `Language: Saved language preference to localStorage: ${language}`,
+      );
     } catch (error) {
-      console.error("Error writing to localStorage", error);
+      log.error("Language: Error writing to localStorage", error);
     }
   }, [language]);
 

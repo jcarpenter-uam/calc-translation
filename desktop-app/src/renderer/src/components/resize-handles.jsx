@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import log from "electron-log/renderer";
 
 const handleBase = "app-region-no-drag fixed z-[100]";
 
@@ -34,10 +35,12 @@ export default function ResizeHandles() {
 
   const handleMouseDown = (e, direction) => {
     e.preventDefault();
+    log.debug(`Resize: Mouse down on ${direction} handle`);
 
     window.electron.getWindowBounds().then((bounds) => {
       initialBounds.current = bounds;
       initialMouse.current = { x: e.screenX, y: e.screenY };
+      log.debug("Resize: Stored initial bounds and mouse position", bounds);
 
       const handleMouseMove = (moveEvent) => {
         const mouseX = moveEvent.screenX;
@@ -103,6 +106,7 @@ export default function ResizeHandles() {
       };
 
       const handleMouseUp = () => {
+        log.debug("Resize: Mouse up, resize finished.");
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
       };

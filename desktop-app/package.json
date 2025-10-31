@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "electron-log": "^5.4.3",
     "electron-updater": "^6.2.1"
   },
   "devDependencies": {
@@ -45,7 +46,7 @@
     },
     "nsis": {
       "oneClick": true,
-      "perMachine": false
+      "perMachine": true
     },
     "files": [
       "out/**"

@@ -3,11 +3,22 @@ import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 const { autoUpdater } = require("electron-updater");
+import log from "electron-log/main";
+
+// This will set up the default file logging (1MB size, 1 rotation)
+// Along with automatically catch and log unhandled errors
+// By default, it writes logs to the following locations:
+// on Linux: ~/.config/{app name}/logs/main.log
+// on macOS: ~/Library/Logs/{app name}/main.log
+// on Windows: %USERPROFILE%\AppData\Roaming\{app name}\logs\main.log
+log.initialize();
+log.errorHandler.startCatching();
 
 autoUpdater.autoDownload = true;
 let mainWindow;
 
 function createWindow() {
+  log.info("Creating main window...");
   mainWindow = new BrowserWindow({
     width: 800,
     height: 300,
@@ -78,6 +89,7 @@ function createWindow() {
                 currentBounds.width !== defaultWidth ||
                 currentBounds.height !== defaultHeight
               ) {
+                log.info("Resetting window size to default");
                 mainWindow.setBounds({
                   width: defaultWidth,
                   height: defaultHeight,
@@ -95,16 +107,18 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  log.info("App is ready.");
+
   autoUpdater.on("update-available", (info) => {
-    console.log("An update is available:", info.version);
+    log.info("An update is available:", info.version);
   });
 
   autoUpdater.on("error", (err) => {
-    console.error("Error during update:", err);
+    log.error("Error during update:", err);
   });
 
   autoUpdater.on("update-downloaded", (info) => {
-    console.log("Update downloaded. Prompting user...");
+    log.info("Update downloaded. Prompting user...", info);
 
     const window = mainWindow || BrowserWindow.getAllWindows()[0];
 
@@ -122,11 +136,11 @@ app.whenReady().then(() => {
         })
         .then((result) => {
           if (result.response === 0) {
-            console.log("User chose 'Install Now'. Quitting and installing.");
+            log.info("User chose 'Install Now'. Quitting and installing.");
             // BUG: App does not repoen 100% of the time
             autoUpdater.quitAndInstall(true);
           } else {
-            console.log(
+            log.info(
               "User chose 'Install on Next Start'. Update will be installed on next launch.",
             );
           }
@@ -146,11 +160,13 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
+  log.info("Checking for updates...");
   autoUpdater.checkForUpdates();
 });
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
+    log.info("All windows closed, quitting application.");
     app.quit();
   }
 });

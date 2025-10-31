@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useLanguage } from "../context/language.jsx";
+import log from "electron-log/renderer";
 
 const SCROLL_PADDING_BOTTOM = 96;
 
@@ -21,6 +22,7 @@ export function useSmartScroll(list, lastElementRef) {
   const { language } = useLanguage();
 
   const showNotification = (message) => {
+    log.info(`Showing notification: "${message}"`);
     if (notificationTimeoutRef.current) {
       clearTimeout(notificationTimeoutRef.current);
     }
@@ -48,11 +50,13 @@ export function useSmartScroll(list, lastElementRef) {
       }
 
       if (isAtTarget && !isAutoScrollEnabled) {
+        log.info("User scrolled to bottom. Enabling auto-scroll.");
         setIsAutoScrollEnabled(true);
         const message =
           language === "english" ? "Auto Scroll On" : "自动滚动开启";
         showNotification(message);
       } else if (!isAtTarget && isAutoScrollEnabled) {
+        log.info("User scrolled up. Disabling auto-scroll.");
         setIsAutoScrollEnabled(false);
         const message =
           language === "english" ? "Auto Scroll Off" : "自动滚动关闭";
@@ -66,6 +70,7 @@ export function useSmartScroll(list, lastElementRef) {
 
   useLayoutEffect(() => {
     if (isAutoScrollEnabled) {
+      log.debug("Auto-scrolling to bottom.");
       if (lastElementRef.current) {
         const { bottom } = lastElementRef.current.getBoundingClientRect();
         const targetScrollY =

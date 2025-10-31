@@ -2,10 +2,6 @@ import React from "react";
 
 /**
  * A stateless component to display the state of a WS connection.
- * @param {{
- * status: 'connected' | 'connecting' | 'disconnected';
- * label: string;
- * }} props
  */
 export default function ConnectionIndicator({
   status = "disconnected",

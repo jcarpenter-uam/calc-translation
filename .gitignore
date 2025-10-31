@@ -1,20 +1,18 @@
-# PYTHON
+# Correction Model
+*.gguf
+
+# Server
 __pycache__/
 venv/
 debug/
 session_history/
 
-# Correction Model
-*.gguf
-
-# NPM
+# Web/Desktop
 node_modules/
 logs/
 dist/
-
-# Desktop App
 out
 
-# SECRETS
+# Secrets
 .env
 docker-compose.yaml

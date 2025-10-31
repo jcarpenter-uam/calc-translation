@@ -48,7 +48,7 @@ jobs:
       - name: Build and push rtms docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./zoom-rtms-server
+          context: ./integrations/zoom-rtms
           push: true
           tags: ${{ steps.meta_rtms.outputs.tags }}
           labels: ${{ steps.meta_rtms.outputs.labels }}

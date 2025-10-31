@@ -72,20 +72,16 @@ function createWindow() {
             const defaultHeight = 300;
 
             if (mainWindow) {
-              console.log("Reset Window Size keybind triggered.");
               const currentBounds = mainWindow.getBounds();
 
               if (
                 currentBounds.width !== defaultWidth ||
                 currentBounds.height !== defaultHeight
               ) {
-                console.log("Window size is NOT default. Resetting...");
                 mainWindow.setBounds({
                   width: defaultWidth,
                   height: defaultHeight,
                 });
-              } else {
-                console.log("Window size is already default. Doing nothing.");
               }
             }
           },
@@ -114,11 +110,10 @@ app.whenReady().then(() => {
 
     if (window) {
       dialog
-        // BUG: Should be interactionless install
         .showMessageBox(window, {
           type: "info",
           title: "Update Available",
-          message: "A new version has been downloaded.",
+          message: "A new version of CALC Translation has been downloaded.",
           detail: "Do you want to install it now or on the next app start?",
           buttons: ["Install Now", "Install on Next Start"],
           defaultId: 0, // 'Install Now' is the default
@@ -127,7 +122,7 @@ app.whenReady().then(() => {
         .then((result) => {
           if (result.response === 0) {
             console.log("User chose 'Install Now'. Quitting and installing.");
-            autoUpdater.quitAndInstall();
+            autoUpdater.quitAndInstall(true);
           } else {
             console.log(
               "User chose 'Install on Next Start'. Update will be installed on next launch.",

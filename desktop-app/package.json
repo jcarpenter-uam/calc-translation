@@ -44,8 +44,8 @@
       "icon": "resources/icon.png"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "oneClick": true,
+      "perMachine": false
     },
     "files": [
       "out/**"

@@ -54,18 +54,16 @@ export default function ResizeHandles() {
 
         if (direction.includes("right")) {
           newWidth = Math.max(minWidth, width + deltaX);
-        }
-        if (direction.includes("bottom")) {
-          newHeight = Math.max(minHeight, height + deltaY);
-        }
-
-        if (direction.includes("left")) {
+        } else if (direction.includes("left")) {
           const potentialWidth = width - deltaX;
           newWidth = Math.max(minWidth, potentialWidth);
           const actualDeltaWidth = width - newWidth;
           newX = x + actualDeltaWidth;
         }
-        if (direction.includes("top")) {
+
+        if (direction.includes("bottom")) {
+          newHeight = Math.max(minHeight, height + deltaY);
+        } else if (direction.includes("top")) {
           const potentialHeight = height - deltaY;
           newHeight = Math.max(minHeight, potentialHeight);
           const actualDeltaHeight = height - newHeight;

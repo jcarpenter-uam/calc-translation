@@ -47,28 +47,36 @@ export default function ResizeHandles() {
         const minWidth = 400;
         const minHeight = 200;
 
-        let newBounds = { x, y, width, height };
+        let newX = x;
+        let newY = y;
+        let newWidth = width;
+        let newHeight = height;
 
         if (direction.includes("right")) {
-          newBounds.width = Math.max(minWidth, width + deltaX);
+          newWidth = Math.max(minWidth, width + deltaX);
         }
         if (direction.includes("bottom")) {
-          newBounds.height = Math.max(minHeight, height + deltaY);
+          newHeight = Math.max(minHeight, height + deltaY);
         }
+
         if (direction.includes("left")) {
-          newBounds.x = x + deltaX;
-          newBounds.width = Math.max(minWidth, width - deltaX);
+          const potentialWidth = width - deltaX;
+          newWidth = Math.max(minWidth, potentialWidth);
+          const actualDeltaWidth = width - newWidth;
+          newX = x + actualDeltaWidth;
         }
         if (direction.includes("top")) {
-          newBounds.y = y + deltaY;
-          newBounds.height = Math.max(minHeight, height - deltaY);
+          const potentialHeight = height - deltaY;
+          newHeight = Math.max(minHeight, potentialHeight);
+          const actualDeltaHeight = height - newHeight;
+          newY = y + actualDeltaHeight;
         }
 
         const finalBounds = {
-          x: Math.round(newBounds.x),
-          y: Math.round(newBounds.y),
-          width: Math.round(newBounds.width),
-          height: Math.round(newBounds.height),
+          x: Math.round(newX),
+          y: Math.round(newY),
+          width: Math.round(newWidth),
+          height: Math.round(newHeight),
         };
 
         window.electron.setWindowBounds(finalBounds);

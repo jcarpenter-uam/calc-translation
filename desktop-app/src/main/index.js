@@ -88,6 +88,7 @@ app.whenReady().then(() => {
 
     if (window) {
       dialog
+        // BUG: Should be interactionless install
         .showMessageBox(window, {
           type: "info",
           title: "Update Available",

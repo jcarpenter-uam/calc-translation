@@ -1,7 +1,7 @@
 {
-  "name": "calc-zoom-translation-desktop",
+  "name": "calc-translation-desktop",
   "version": "1.0.0-desktop",
-  "description": "A desktop app for the CALC Zoom Translation web app",
+  "description": "A desktop app for CALC Translation",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -38,8 +38,8 @@
     "vite": "^7.1.12"
   },
   "build": {
-    "appId": "calc-zoom-translation-desktop",
-    "productName": "CALC Zoom Translation",
+    "appId": "calc-translation-desktop",
+    "productName": "CALC Translation",
     "win": {
       "target": "nsis",
       "icon": "resources/icon.png"
@@ -54,7 +54,7 @@
     "publish": {
       "provider": "github",
       "owner": "jcarpenter-uam",
-      "repo": "zoom-translation"
+      "repo": "calc-translation"
     }
   }
 }

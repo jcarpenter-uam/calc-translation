@@ -31,6 +31,8 @@ export default function ResizeHandles() {
   const handleMouseDown = (e, direction) => {
     e.preventDefault();
 
+    console.log("Mouse Down On:", direction);
+
     window.electron.getWindowBounds().then((bounds) => {
       initialBounds.current = bounds;
       initialMouse.current = { x: e.screenX, y: e.screenY };
@@ -54,7 +56,9 @@ export default function ResizeHandles() {
 
         if (direction.includes("right")) {
           newWidth = Math.max(minWidth, width + deltaX);
-        } else if (direction.includes("left")) {
+        }
+
+        if (direction.includes("left")) {
           const potentialWidth = width - deltaX;
           newWidth = Math.max(minWidth, potentialWidth);
           const actualDeltaWidth = width - newWidth;
@@ -63,12 +67,20 @@ export default function ResizeHandles() {
 
         if (direction.includes("bottom")) {
           newHeight = Math.max(minHeight, height + deltaY);
-        } else if (direction.includes("top")) {
+        }
+
+        if (direction.includes("top")) {
           const potentialHeight = height - deltaY;
           newHeight = Math.max(minHeight, potentialHeight);
           const actualDeltaHeight = height - newHeight;
           newY = y + actualDeltaHeight;
         }
+
+        console.log({
+          dir: direction,
+          w: newWidth,
+          h: newHeight,
+        });
 
         const finalBounds = {
           x: Math.round(newX),
@@ -81,6 +93,7 @@ export default function ResizeHandles() {
       };
 
       const handleMouseUp = () => {
+        console.log("Mouse Up");
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
       };

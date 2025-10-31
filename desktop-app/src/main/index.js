@@ -2,6 +2,9 @@ import { app, shell, BrowserWindow, ipcMain } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
+const { autoUpdater } = require("electron-updater");
+
+autoUpdater.autoDownload = true;
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -47,6 +50,20 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  autoUpdater.on("update-downloaded", (info) => {
+    console.log("Update downloaded. Will restart now.");
+    autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    console.log("An update is available:", info.version);
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("Error during update:", err);
+  });
+
+  autoUpdater.checkForUpdates();
   electronApp.setAppUserModelId("com.electron");
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);

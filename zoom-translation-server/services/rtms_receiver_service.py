@@ -85,6 +85,7 @@ async def validate_token(token: str = Depends(get_auth_token)):
 def create_transcribe_router(viewer_manager, DEBUG_MODE):
     router = APIRouter()
 
+    # only accept first attempt per meetingid?
     @router.websocket("/ws/transcribe")
     async def websocket_transcribe_endpoint(
         websocket: WebSocket, is_authenticated: bool = Depends(validate_token)

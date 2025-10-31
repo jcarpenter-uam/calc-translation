@@ -24,15 +24,13 @@ const directions = [
   "bottomRight",
 ];
 
-// BUG: Diagnal resizing does not work
+// TODO: Double clicking the header resizes to default 800x300
 export default function ResizeHandles() {
   const initialBounds = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const initialMouse = useRef({ x: 0, y: 0 });
 
   const handleMouseDown = (e, direction) => {
     e.preventDefault();
-
-    console.log("Mouse Down On:", direction);
 
     window.electron.getWindowBounds().then((bounds) => {
       initialBounds.current = bounds;
@@ -91,12 +89,6 @@ export default function ResizeHandles() {
           newHeight = Math.max(minHeight, height + deltaY);
         }
 
-        console.log({
-          dir: direction,
-          w: newWidth,
-          h: newHeight,
-        });
-
         const finalBounds = {
           x: Math.round(newX),
           y: Math.round(newY),
@@ -108,7 +100,6 @@ export default function ResizeHandles() {
       };
 
       const handleMouseUp = () => {
-        console.log("Mouse Up");
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
       };

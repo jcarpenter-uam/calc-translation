@@ -3,11 +3,11 @@ FROM node:24-slim AS builder
 
 WORKDIR /app/web
 
-COPY web/package*.json ./
+COPY clients/web/package*.json ./
 
 RUN npm install
 
-COPY web/ ./
+COPY clients/web/ ./
 
 RUN npm run build
 
@@ -23,15 +23,15 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY server/requirements.txt ./
 RUN pip install -r requirements.txt
 
 RUN addgroup --system zoom-translator && adduser --system --ingroup zoom-translator --shell /bin/sh zoom-translator
 
 COPY --from=builder /app/web/dist ./web/dist
 
-COPY main.py ./
-COPY services ./services/
+COPY server/main.py ./
+COPY server/services ./services/
 RUN mkdir -p /app/session_history
 RUN mkdir -p /app/debug
 

@@ -17,3 +17,4 @@ out
 
 # SECRETS
 .env
+docker-compose.yaml

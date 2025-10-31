@@ -19,7 +19,7 @@ graph TD
     F --> H["Re-translate corrected text<br>- Qwen-MT-Turbo"];
     H --> I["Publish correction event to frontend<br>(edit/update message)"];
 
-    G --> J["Frontend (Zoom embed / url)<br>- display live transcription/translation<br>- apply inline replacements"];
+    G --> J["Frontend (web/desktop)<br>- display live transcription/translation<br>- apply inline replacements"];
     I -- "WebSocket updates" --> J;
 
     J --> K["( User sees immediate translation → then corrected revision )"];
@@ -112,17 +112,3 @@ WS_TRANSCRIBE_SECRET_TOKEN=defaultwstoken
 # True also saves audio files per session
 DEBUG_MODE=False # True/False as options
 ```
-
-## Todo:
-
-- Auth middleware
-- Require token for all endpoints
-- restrict /ws/transcribe to first connection
-- Auto scroll should allow downward scrolling
-- reimplement denoising with new solution
-
-## Inprovements:
-
-- IaC for datacrunch GPU server based on zoom meeting calender?
-- Send final transcript to all meeting participants
-- Auto fine tuning?

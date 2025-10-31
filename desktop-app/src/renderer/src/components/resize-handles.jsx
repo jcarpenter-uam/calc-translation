@@ -24,7 +24,6 @@ const directions = [
   "bottomRight",
 ];
 
-// TODO: Double clicking the header resizes to default 800x300
 export default function ResizeHandles() {
   const initialBounds = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const initialMouse = useRef({ x: 0, y: 0 });

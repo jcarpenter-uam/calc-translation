@@ -114,6 +114,7 @@ app.whenReady().then(() => {
           type: "info",
           title: "Update Available",
           message: "A new version of CALC Translation has been downloaded.",
+          // TODO: Display github release notes
           detail: "Do you want to install it now or on the next app start?",
           buttons: ["Install Now", "Install on Next Start"],
           defaultId: 0, // 'Install Now' is the default
@@ -122,6 +123,7 @@ app.whenReady().then(() => {
         .then((result) => {
           if (result.response === 0) {
             console.log("User chose 'Install Now'. Quitting and installing.");
+            // BUG: App does not repoen
             autoUpdater.quitAndInstall(true);
           } else {
             console.log(
@@ -132,7 +134,6 @@ app.whenReady().then(() => {
     }
   });
 
-  // TODO: Round corner
   createWindow();
 
   electronApp.setAppUserModelId("com.electron");

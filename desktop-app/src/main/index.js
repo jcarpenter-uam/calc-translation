@@ -37,19 +37,11 @@ function createWindow() {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
-  ipcMain.on("window-minimize", () => {
+  ipcMain.handle("minimize-window", () => {
     mainWindow.minimize();
   });
 
-  ipcMain.on("window-toggle-maximize", () => {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow.maximize();
-    }
-  });
-
-  ipcMain.on("window-close", () => {
+  ipcMain.handle("close-window", () => {
     mainWindow.close();
   });
 }

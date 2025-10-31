@@ -6,6 +6,7 @@ const baseButtonStyles =
 
 /**
  * Buttons for minimize and close on the header.
+ * BUG: Center icons
  */
 export default function OsControls() {
   const handleMinimize = () => {

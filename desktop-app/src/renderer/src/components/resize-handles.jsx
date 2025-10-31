@@ -54,10 +54,6 @@ export default function ResizeHandles() {
         let newWidth = width;
         let newHeight = height;
 
-        if (direction.includes("right")) {
-          newWidth = Math.max(minWidth, width + deltaX);
-        }
-
         if (direction.includes("left")) {
           const potentialWidth = width - deltaX;
           newWidth = Math.max(minWidth, potentialWidth);
@@ -65,8 +61,8 @@ export default function ResizeHandles() {
           newX = x + actualDeltaWidth;
         }
 
-        if (direction.includes("bottom")) {
-          newHeight = Math.max(minHeight, height + deltaY);
+        if (direction.includes("right")) {
+          newWidth = Math.max(minWidth, width + deltaX);
         }
 
         if (direction.includes("top")) {
@@ -74,6 +70,10 @@ export default function ResizeHandles() {
           newHeight = Math.max(minHeight, potentialHeight);
           const actualDeltaHeight = height - newHeight;
           newY = y + actualDeltaHeight;
+        }
+
+        if (direction.includes("bottom")) {
+          newHeight = Math.max(minHeight, height + deltaY);
         }
 
         console.log({

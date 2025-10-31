@@ -2,9 +2,12 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 const ThemeContext = createContext();
 
+/**
+ * Context for users preffered theme
+ * First checks browsers default then defaults to light
+ */
 export function ThemeProvider({ children }) {
   const [darkMode, setDarkMode] = useState(() => {
-    // Read once on mount
     const stored =
       typeof window !== "undefined" && localStorage.getItem("theme");
     if (stored) return stored === "dark";
@@ -14,7 +17,6 @@ export function ThemeProvider({ children }) {
     );
   });
 
-  // Apply class + persist whenever darkMode changes
   useEffect(() => {
     const root = document.documentElement;
     if (darkMode) {
@@ -26,7 +28,6 @@ export function ThemeProvider({ children }) {
     }
   }, [darkMode]);
 
-  // Optional: keep in sync across tabs / other code paths
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === "theme" && e.newValue) {

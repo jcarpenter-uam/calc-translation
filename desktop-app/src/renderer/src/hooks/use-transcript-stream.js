@@ -2,22 +2,6 @@ import { useState, useEffect, useRef } from "react";
 
 /**
  * A custom hook to manage a WebSocket connection for live transcripts.
- * @param {string} url The WebSocket URL to connect to.
- * @returns {{
- * status: 'connecting' | 'connected' | 'disconnected';
- * transcripts: Array<{
- * id: string,
- * speaker: string,
- * translation: string,
- * transcription: string,
- * source_language: string,
- * target_language: string,
- * isFinalized: boolean,
- * type: 'update' | 'final' | 'correction' | 'status_update',
- * original?: { translation: string, transcription: string },
- * correctionStatus?: 'correcting' | 'corrected' | null
- * }>;
- * }}
  */
 export function useTranscriptStream(url) {
   const [status, setStatus] = useState("connecting");

@@ -3,7 +3,7 @@ import { HiOutlineSparkles, HiPencil } from "react-icons/hi";
 import { useLanguage } from "../context/language.jsx";
 
 /**
- * A component to display a visual status for the correction process.
+ * A component to display a visual status if correction is needed.
  */
 const CorrectionStatusIndicator = ({ status }) => {
   if (!status) return null;

@@ -4,8 +4,13 @@ const LanguageContext = createContext();
 
 const STORAGE_KEY = "app-language";
 
+/**
+ * Context for per user storage of preffered language with 3 steps for selecting the default.
+ * 1. Check for a saved value in localStorage (from previous use)
+ * 2. If no saved value, check the browser's language
+ * 3. Fallback to English
+ */
 function getInitialLanguage() {
-  // 1. Check for a saved value in localStorage
   try {
     const storedLanguage = window.localStorage.getItem(STORAGE_KEY);
     if (storedLanguage) {
@@ -15,14 +20,11 @@ function getInitialLanguage() {
     console.error("Error reading from localStorage", error);
   }
 
-  // 2. If no saved value, check the browser's language
-  //    'navigator.language' returns codes like "en-US", "en", "zh-CN", "zh"
   const browserLang = window.navigator.language;
   if (browserLang.startsWith("zh")) {
     return "chinese";
   }
 
-  // 3. Fallback to English
   return "english";
 }
 

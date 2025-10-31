@@ -1,22 +1,12 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useLanguage } from "../context/language.jsx";
 
-// Define the desired padding (in pixels) from the bottom of the viewport.
-// 96px = 6rem, which matches the pb-24 class.
 const SCROLL_PADDING_BOTTOM = 96;
 
 /**
  * A custom React hook that provides "smart" auto-scrolling for a dynamic list of content.
  * It automatically scrolls to the bottom when new items are added, but only if the user is already
  * near the bottom. It also provides notifications to the user about the auto-scroll status.
- *
- * @param {any[]} list A list of items (e.g., transcripts). The hook's primary scroll effect
- * is triggered when this list's reference changes.
- *
- * @returns {{
- * message: string;
- * visible: boolean;
- * }}
  */
 export function useSmartScroll(list, lastElementRef) {
   const [notification, setNotification] = useState({

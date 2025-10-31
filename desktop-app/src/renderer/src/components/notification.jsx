@@ -1,3 +1,6 @@
+/**
+ * Notification to indicate auto scroll state.
+ */
 export default function Notification({ message, visible }) {
   return (
     <div

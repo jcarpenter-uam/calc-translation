@@ -1,6 +1,9 @@
 import React from "react";
 import { useLanguage } from "../context/language.jsx";
 
+/**
+ * A component to swap primary language.
+ */
 export default function LanguageToggle() {
   const { language, setLanguage } = useLanguage();
 

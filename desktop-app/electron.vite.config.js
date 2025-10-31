@@ -11,16 +11,6 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
-    server: {
-      proxy: {
-        "/ws": {
-          target: "wss://translator.my-uam.com",
-          ws: true,
-          changeOrigin: true,
-          secure: true,
-        },
-      },
-    },
     plugins: [react(), tailwindcss()],
 
     resolve: {

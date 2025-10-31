@@ -24,6 +24,10 @@ const directions = [
   "bottomRight",
 ];
 
+/**
+ * Logic handling the resizing of the app.
+ * Due to frame: false we have to build our own until a solution is emplemented by electron
+ */
 export default function ResizeHandles() {
   const initialBounds = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const initialMouse = useRef({ x: 0, y: 0 });

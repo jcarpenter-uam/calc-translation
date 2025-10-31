@@ -1,6 +1,9 @@
 import React from "react";
 import { useTheme } from "../context/theme.jsx";
 
+/**
+ * Button to change between light and dark mode.
+ */
 export default function ThemeToggle() {
   const { darkMode, setDarkMode } = useTheme();
   const toggle = () => setDarkMode(!darkMode);

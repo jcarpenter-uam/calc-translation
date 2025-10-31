@@ -123,7 +123,7 @@ app.whenReady().then(() => {
         .then((result) => {
           if (result.response === 0) {
             console.log("User chose 'Install Now'. Quitting and installing.");
-            // BUG: App does not repoen
+            // BUG: App does not repoen 100% of the time
             autoUpdater.quitAndInstall(true);
           } else {
             console.log(

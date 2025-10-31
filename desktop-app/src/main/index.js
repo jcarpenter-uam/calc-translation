@@ -64,6 +64,32 @@ function createWindow() {
         { role: "reload" }, // Handles 'Control+R'
         { role: "forceReload" }, // Handles 'Control+Shift+R'
         { role: "toggleDevTools" }, // Handles 'Control+Shift+I'
+        {
+          label: "Reset Window Size", // Resizes the window to default
+          accelerator: "CmdOrCtrl+Shift+R",
+          click: () => {
+            const defaultWidth = 800;
+            const defaultHeight = 300;
+
+            if (mainWindow) {
+              console.log("Reset Window Size keybind triggered.");
+              const currentBounds = mainWindow.getBounds();
+
+              if (
+                currentBounds.width !== defaultWidth ||
+                currentBounds.height !== defaultHeight
+              ) {
+                console.log("Window size is NOT default. Resetting...");
+                mainWindow.setBounds({
+                  width: defaultWidth,
+                  height: defaultHeight,
+                });
+              } else {
+                console.log("Window size is already default. Doing nothing.");
+              }
+            }
+          },
+        },
       ],
     },
   ];

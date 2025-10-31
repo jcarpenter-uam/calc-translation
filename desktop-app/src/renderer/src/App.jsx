@@ -8,7 +8,6 @@ import Notification from "./components/notification.jsx";
 import { useTranscriptStream } from "./hooks/use-transcript-stream.js";
 import { useSmartScroll } from "./hooks/use-smart-scroll.js";
 import ResizeHandles from "./components/resize-handles.jsx";
-import { handleHeaderDoubleClick } from "./utils/reset-size.js";
 
 export default function App() {
   const { status: transcriptionStatus, transcripts } = useTranscriptStream(
@@ -21,28 +20,15 @@ export default function App() {
   return (
     // TODO: Find solution to uniform transparency
     <div className="min-h-screen bg-white/90 dark:bg-zinc-900/85 text-zinc-900 dark:text-zinc-100 transition-colors">
-      <header
-        className="relative sticky top-0 z-50 w-full bg-white/80 dark:bg-zinc-900/80"
-        onDoubleClick={handleHeaderDoubleClick}
-      >
-        <div className="absolute inset-0 app-region-drag" />
-        <div className="relative container mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-50 w-full bg-white/80 dark:bg-zinc-900/80 app-region-drag">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative flex items-center justify-between h-16">
-            <div
-              className="flex-shrink-0 flex items-center gap-2 app-region-no-drag"
-              onDoubleClick={(e) => e.stopPropagation()}
-            >
+            <div className="flex-shrink-0 flex items-center gap-2 app-region-no-drag">
               <ConnectionIndicator status={transcriptionStatus} />
               <ThemeToggle />
               <LanguageToggle />
             </div>
-
-            <div
-              className="app-region-no-drag"
-              onDoubleClick={(e) => e.stopPropagation()}
-            >
-              <OsControls />
-            </div>
+            <OsControls />
           </div>
         </div>
       </header>

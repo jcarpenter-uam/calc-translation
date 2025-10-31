@@ -1,6 +1,6 @@
 FROM node:24-slim
 
-LABEL org.opencontainers.image.source="https://github.com/jcarpenter-uam/zoom-translation"
+LABEL org.opencontainers.image.source="https://github.com/jcarpenter-uam/calc-translation"
 
 WORKDIR /app
 

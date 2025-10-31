@@ -14,7 +14,7 @@ RUN npm run build
 # Stage 2: Run the python app
 FROM python:3.13-slim
 
-LABEL org.opencontainers.image.source="https://github.com/jcarpenter-uam/zoom-translation"
+LABEL org.opencontainers.image.source="https://github.com/jcarpenter-uam/calc-translation"
 
 ENV PYTHONUNBUFFERED=1 \
   PIP_NO_CACHE_DIR=off \
@@ -26,7 +26,7 @@ WORKDIR /app
 COPY server/requirements.txt ./
 RUN pip install -r requirements.txt
 
-RUN addgroup --system zoom-translator && adduser --system --ingroup zoom-translator --shell /bin/sh zoom-translator
+RUN addgroup --system calc-translator && adduser --system --ingroup calc-translator --shell /bin/sh calc-translator
 
 COPY --from=builder /app/web/dist ./web/dist
 
@@ -35,9 +35,9 @@ COPY server/services ./services/
 RUN mkdir -p /app/session_history
 RUN mkdir -p /app/debug
 
-RUN chown -R zoom-translator:zoom-translator /app
+RUN chown -R calc-translator:calc-translator /app
 
-USER zoom-translator
+USER calc-translator
 
 EXPOSE 8000
 

@@ -1,4 +1,4 @@
-# Zoom Real-time Translation
+# CALC Real-time Translation
 
 ## About This Project
 
@@ -37,9 +37,9 @@ graph TD
 
 ```bash
 services:
-  zoom-translation-server:
-    image: ghcr.io/jcarpenter-uam/zoom-translation/zoom-translation-server:latest
-    container_name: zoom-translation-server
+  translation-server:
+    image: ghcr.io/jcarpenter-uam/calc-translation/translation-server:latest
+    container_name: translation-server
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -51,14 +51,14 @@ services:
       - WS_TRANSCRIBE_SECRET_TOKEN=${WS_TRANSCRIBE_SECRET_TOKEN}
       - DEBUG_MODE=${DEBUG_MODE}
     volumes:
-      - zoom-translation-data:/app/session_history
-      - zoom-translation-data:/app/debug
+      - translation-data:/app/session_history
+      - translation-data:/app/debug
     networks:
-      - zoom-translation
+      - calc-translation
 
-  zoom-rtms-server:
-    image: ghcr.io/jcarpenter-uam/zoom-translation/zoom-translation-rtms:latest
-    container_name: zoom-rtms-server
+  zoom-rtms:
+    image: ghcr.io/jcarpenter-uam/calc-translation/zoom-rtms:latest
+    container_name: zoom-rtms
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -66,18 +66,18 @@ services:
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - ZOOM_WEBHOOK_SECRET_TOKEN=${ZOOM_WEBHOOK_SECRET_TOKEN}
-      - ZOOM_TRANSLATION_SERVER_URL=${ZOOM_TRANSLATION_SERVER_URL}
+      - TRANSLATION_SERVER_URL=${TRANSLATION_SERVER_URL}
       - WS_TRANSCRIBE_SECRET_TOKEN=${WS_TRANSCRIBE_SECRET_TOKEN}
     depends_on:
-      - zoom-translation-server
+      - translation-server
     networks:
-      - zoom-translation
+      - calc-translation
 
 volumes:
-  zoom-translation-data:
+  translation-data:
 
 networks:
-  zoom-translation:
+  calc-translation:
     driver: bridge
 ```
 
@@ -88,7 +88,7 @@ ZM_RTMS_CLIENT=
 ZM_RTMS_SECRET=
 ZOOM_WEBHOOK_SECRET_TOKEN=
 
-ZOOM_TRANSLATION_SERVER_URL="ws://zoom-translation-server:8000/ws/transcribe"
+TRANSLATION_SERVER_URL="ws://translation-server:8000/ws/transcribe"
 
 # Soniox API
 SONIOX_API_KEY=

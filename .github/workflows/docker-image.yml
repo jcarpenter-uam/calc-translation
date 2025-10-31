@@ -29,7 +29,7 @@ jobs:
         id: meta_server
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/zoom-translation-server
+          images: ghcr.io/${{ github.repository }}/translation-server
 
       - name: Build and push server docker image
         uses: docker/build-push-action@v5
@@ -39,13 +39,13 @@ jobs:
           tags: ${{ steps.meta_server.outputs.tags }}
           labels: ${{ steps.meta_server.outputs.labels }}
 
-      - name: Extract metadata for rtms
+      - name: Extract metadata for zoom rtms
         id: meta_rtms
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/zoom-translation-rtms
+          images: ghcr.io/${{ github.repository }}/zoom-rtms
 
-      - name: Build and push rtms docker image
+      - name: Build and push zoom rtms docker image
         uses: docker/build-push-action@v5
         with:
           context: ./integrations/zoom-rtms

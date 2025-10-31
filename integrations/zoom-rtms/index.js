@@ -19,7 +19,7 @@ if (!fs.existsSync(logDir)) {
   console.log(`Created directory: ${logDir}`);
 }
 
-const ZOOM_TRANSLATION_SERVER_URL = process.env.ZOOM_TRANSLATION_SERVER_URL;
+const TRANSLATION_SERVER_URL = process.env.TRANSLATION_SERVER_URL;
 const WS_TRANSCRIBE_SECRET_TOKEN = process.env.WS_TRANSCRIBE_SECRET_TOKEN;
 const ZOOM_WEBHOOK_SECRET_TOKEN = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
 
@@ -171,13 +171,13 @@ function handleRtmsStarted(payload, streamId) {
   };
 
   // Create a new WebSocket client for the translation server with token
-  const wsClient = new WebSocket(ZOOM_TRANSLATION_SERVER_URL, {
+  const wsClient = new WebSocket(TRANSLATION_SERVER_URL, {
     headers: authHeader,
   });
 
   wsClient.on("open", () => {
     console.log(
-      `WebSocket connection to ${ZOOM_TRANSLATION_SERVER_URL} established for stream ${streamId}`,
+      `WebSocket connection to ${TRANSLATION_SERVER_URL} established for stream ${streamId}`,
     );
   });
 

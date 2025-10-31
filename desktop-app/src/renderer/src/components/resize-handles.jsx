@@ -24,6 +24,7 @@ const directions = [
   "bottomRight",
 ];
 
+// BUG: Diagnal resizing does not work
 export default function ResizeHandles() {
   const initialBounds = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const initialMouse = useRef({ x: 0, y: 0 });
@@ -54,25 +55,39 @@ export default function ResizeHandles() {
         let newWidth = width;
         let newHeight = height;
 
-        if (direction.includes("left")) {
+        // Horizontal resize
+        if (
+          direction === "left" ||
+          direction === "topLeft" ||
+          direction === "bottomLeft"
+        ) {
           const potentialWidth = width - deltaX;
           newWidth = Math.max(minWidth, potentialWidth);
           const actualDeltaWidth = width - newWidth;
           newX = x + actualDeltaWidth;
-        }
-
-        if (direction.includes("right")) {
+        } else if (
+          direction === "right" ||
+          direction === "topRight" ||
+          direction === "bottomRight"
+        ) {
           newWidth = Math.max(minWidth, width + deltaX);
         }
 
-        if (direction.includes("top")) {
+        // Vertical resize
+        if (
+          direction === "top" ||
+          direction === "topLeft" ||
+          direction === "topRight"
+        ) {
           const potentialHeight = height - deltaY;
           newHeight = Math.max(minHeight, potentialHeight);
           const actualDeltaHeight = height - newHeight;
           newY = y + actualDeltaHeight;
-        }
-
-        if (direction.includes("bottom")) {
+        } else if (
+          direction === "bottom" ||
+          direction === "bottomLeft" ||
+          direction === "bottomRight"
+        ) {
           newHeight = Math.max(minHeight, height + deltaY);
         }
 

@@ -7,6 +7,7 @@ import Transcript from "./components/transcript.jsx";
 import Notification from "./components/notification.jsx";
 import { useTranscriptStream } from "./hooks/use-transcript-stream.js";
 import { useSmartScroll } from "./hooks/use-smart-scroll.js";
+import ResizeHandles from "./components/resize-handles.jsx";
 
 export default function App() {
   const { status: transcriptionStatus, transcripts } = useTranscriptStream(
@@ -49,6 +50,7 @@ export default function App() {
         message={notification.message}
         visible={notification.visible}
       />
+      <ResizeHandles />
     </div>
   );
 }

@@ -40,6 +40,14 @@ function createWindow() {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
+  ipcMain.handle("get-window-bounds", () => {
+    return mainWindow.getBounds();
+  });
+
+  ipcMain.on("set-window-bounds", (event, bounds) => {
+    mainWindow.setBounds(bounds);
+  });
+
   ipcMain.handle("minimize-window", () => {
     mainWindow.minimize();
   });

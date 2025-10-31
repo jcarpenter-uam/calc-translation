@@ -1,6 +1,6 @@
 {
   "name": "calc-zoom-translation-desktop",
-  "version": "1.0.0-desktop",
+  "version": "1.0.1-desktop",
   "description": "A desktop app for the Zoom Translation web app",
   "main": "out/main/index.js",
   "scripts": {

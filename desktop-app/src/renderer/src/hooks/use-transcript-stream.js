@@ -41,7 +41,7 @@ export function useTranscriptStream(url) {
       setStatus("connecting");
 
       ws.current.onopen = () => {
-        console.log(`WebSocket connected to ${url}`);
+        console.log(`WebSocket connected`);
         setStatus("connected");
       };
 
@@ -52,7 +52,7 @@ export function useTranscriptStream(url) {
       };
 
       ws.current.onerror = (error) => {
-        console.error(`WebSocket error on ${url}:`, error);
+        console.error(`WebSocket error on:`, error);
         ws.current.close();
       };
 

@@ -1,13 +1,14 @@
-import { app, shell, BrowserWindow, ipcMain } from "electron";
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 const { autoUpdater } = require("electron-updater");
 
 autoUpdater.autoDownload = true;
+let mainWindow;
 
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 300,
     show: false,
@@ -37,7 +38,6 @@ function createWindow() {
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
     mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
   } else {
-    mainWindow.webContents.openDevTools();
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
@@ -56,14 +56,23 @@ function createWindow() {
   ipcMain.handle("close-window", () => {
     mainWindow.close();
   });
+
+  const menuTemplate = [
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" }, // Handles 'Control+R'
+        { role: "forceReload" }, // Handles 'Control+Shift+R'
+        { role: "toggleDevTools" }, // Handles 'Control+Shift+I'
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(menuTemplate);
+  Menu.setApplicationMenu(menu);
 }
 
 app.whenReady().then(() => {
-  autoUpdater.on("update-downloaded", (info) => {
-    console.log("Update downloaded. Will restart now.");
-    autoUpdater.quitAndInstall();
-  });
-
   autoUpdater.on("update-available", (info) => {
     console.log("An update is available:", info.version);
   });
@@ -72,17 +81,49 @@ app.whenReady().then(() => {
     console.error("Error during update:", err);
   });
 
-  autoUpdater.checkForUpdates();
+  autoUpdater.on("update-downloaded", (info) => {
+    console.log("Update downloaded. Prompting user...");
+
+    const window = mainWindow || BrowserWindow.getAllWindows()[0];
+
+    if (window) {
+      dialog
+        .showMessageBox(window, {
+          type: "info",
+          title: "Update Available",
+          message: "A new version has been downloaded.",
+          detail: "Do you want to install it now or on the next app start?",
+          buttons: ["Install Now", "Install on Next Start"],
+          defaultId: 0, // 'Install Now' is the default
+          cancelId: 1, // 'Install on Next Start' is the "cancel" action
+        })
+        .then((result) => {
+          if (result.response === 0) {
+            console.log("User chose 'Install Now'. Quitting and installing.");
+            autoUpdater.quitAndInstall();
+          } else {
+            console.log(
+              "User chose 'Install on Next Start'. Update will be installed on next launch.",
+            );
+          }
+        });
+    }
+  });
+
+  // TODO: Round corner
+  createWindow();
+
   electronApp.setAppUserModelId("com.electron");
+
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
 
-  createWindow();
-
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  autoUpdater.checkForUpdates();
 });
 
 app.on("window-all-closed", () => {

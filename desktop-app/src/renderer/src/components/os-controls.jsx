@@ -3,6 +3,7 @@ import React from "react";
 const baseButtonStyles =
   "w-10 h-10 flex items-center justify-center rounded-full text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-zinc-900";
 
+// BUG: Fix icon placement in div
 export default function OsControls() {
   return (
     <div className="flex items-center gap-2 app-region-no-drag">

@@ -36,9 +36,9 @@ export default function PinToggle() {
       ].join(" ")}
     >
       {isPinned ? (
-        <PushPin size={20} weight="fill" />
+        <PushPin className="w-5 h-5" />
       ) : (
-        <PushPinSlash size={20} weight="fill" />
+        <PushPinSlash className="w-5 h-5" />
       )}
     </button>
   );

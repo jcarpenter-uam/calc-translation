@@ -1,20 +1,17 @@
-import React, { useState } from "react";
+import React from "react";
 import { SquaresFour } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { Square } from "@phosphor-icons/react/dist/csr/Square";
+import { useTileable } from "../context/tileable.jsx";
 
 /**
  * Button to change between tileable and nontileable.
  */
 export default function TileableToggle() {
-  const [isTileable, setIsTileable] = useState(false);
-
-  const toggle = () => {
-    setIsTileable((prev) => !prev);
-  };
+  const { isTileable, toggleTileable } = useTileable();
 
   return (
     <button
-      onClick={toggle}
+      onClick={toggleTileable}
       className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900"
       aria-label="Toggle tileable"
       aria-pressed={isTileable}

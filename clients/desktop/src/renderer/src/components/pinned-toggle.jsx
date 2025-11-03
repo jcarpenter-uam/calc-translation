@@ -14,7 +14,6 @@ export default function PinToggle() {
       onClick={togglePin}
       aria-pressed={isPinned}
       aria-label={isPinned ? "Unpin window" : "Pin window"}
-      title={isPinned ? "Unpin window" : "Pin window"}
       className={[
         "p-2 rounded-full transition-colors duration-150",
         "flex items-center justify-center",

@@ -26,7 +26,7 @@ function createWindow() {
     autoHideMenuBar: true,
     frame: false,
     transparent: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
 
     ...(process.platform === "linux" ? { icon } : {}),
     webPreferences: {
@@ -66,6 +66,16 @@ function createWindow() {
 
   ipcMain.handle("close-window", () => {
     mainWindow.close();
+  });
+
+  ipcMain.handle("toggle-always-on-top", () => {
+    if (mainWindow) {
+      const newState = !mainWindow.isAlwaysOnTop();
+      mainWindow.setAlwaysOnTop(newState);
+
+      return newState;
+    }
+    return false;
   });
 
   const menuTemplate = [

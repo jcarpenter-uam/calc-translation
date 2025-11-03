@@ -18,4 +18,8 @@ contextBridge.exposeInMainWorld("electron", {
     log.info("IPC: Sending set-window-bounds", bounds);
     return ipcRenderer.send("set-window-bounds", bounds);
   },
+  toggleAlwaysOnTop: () => {
+    log.info("IPC: Invoking toggle-always-on-top");
+    return ipcRenderer.invoke("toggle-always-on-top");
+  },
 });

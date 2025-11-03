@@ -17,9 +17,9 @@ export default function TileableToggle() {
       aria-pressed={isTileable}
     >
       {isTileable ? (
-        <Square className="w-5 h-5" />
-      ) : (
         <SquaresFour className="w-5 h-5" />
+      ) : (
+        <Square className="w-5 h-5" />
       )}
     </button>
   );

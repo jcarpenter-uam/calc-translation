@@ -22,4 +22,12 @@ contextBridge.exposeInMainWorld("electron", {
     log.info("IPC: Invoking toggle-always-on-top");
     return ipcRenderer.invoke("toggle-always-on-top");
   },
+  toggleTileable: () => {
+    log.info("IPC: Invoking toggle-tileable");
+    return ipcRenderer.invoke("toggle-tileable");
+  },
+  isTileable: () => {
+    log.info("IPC: Invoking is-tileable");
+    return ipcRenderer.invoke("is-tileable");
+  },
 });

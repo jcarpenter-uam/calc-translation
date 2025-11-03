@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 const { autoUpdater } = require("electron-updater");
 import log from "electron-log/main";
+const Store = require("electron-store").default;
 
 // This will set up the default file logging (1MB size, 1 rotation)
 // Along with automatically catch and log unhandled errors
@@ -17,15 +18,21 @@ log.errorHandler.startCatching();
 autoUpdater.autoDownload = true;
 let mainWindow;
 
+const store = new Store();
+
 function createWindow() {
   log.info("Creating main window...");
+
+  const isTileable = store.get("isTileable", false);
+  log.info(`Creating window. Tileable state: ${isTileable}`);
+
   mainWindow = new BrowserWindow({
     width: 800,
     height: 300,
     show: false,
     autoHideMenuBar: true,
-    frame: false,
-    transparent: true,
+    frame: isTileable,
+    transparent: !isTileable,
     alwaysOnTop: false,
 
     ...(process.platform === "linux" ? { icon } : {}),
@@ -76,6 +83,23 @@ function createWindow() {
       return newState;
     }
     return false;
+  });
+
+  ipcMain.handle("is-tileable", () => {
+    return store.get("isTileable", false);
+  });
+
+  ipcMain.handle("toggle-tileable", () => {
+    const currentTileableState = store.get("isTileable", false);
+    const newState = !currentTileableState;
+
+    log.info(`Setting tileable state to: ${newState} and relaunching.`);
+    store.set("isTileable", newState);
+
+    app.relaunch();
+    app.quit();
+
+    return newState;
   });
 
   const menuTemplate = [

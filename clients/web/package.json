@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview --host 0.0.0.0",
-    "audit": "npm audit --json > ../../reports/web-npm_audit_report.json"
+    "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.13",

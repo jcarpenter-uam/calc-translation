@@ -1,6 +1,4 @@
-import React from "react";
-import ThemeToggle from "./components/theme-toggle.jsx";
-import LanguageToggle from "./components/language-toggle.jsx";
+import React, { useState } from "react";
 import ConnectionIndicator from "./components/connection-indicator.jsx";
 import OsControls from "./components/os-controls.jsx";
 import Transcript from "./components/transcript.jsx";
@@ -8,7 +6,8 @@ import Notification from "./components/notification.jsx";
 import { useTranscriptStream } from "./hooks/use-transcript-stream.js";
 import { useSmartScroll } from "./hooks/use-smart-scroll.js";
 import ResizeHandles from "./components/resize-handles.jsx";
-import PinToggle from "./components/pinned-toggle.jsx";
+import { Gear } from "@phosphor-icons/react/dist/csr/Gear";
+import SettingsModal from "./models/settings.jsx";
 
 export default function App() {
   const { status: transcriptionStatus, transcripts } = useTranscriptStream(
@@ -17,6 +16,12 @@ export default function App() {
 
   const lastTopTextRef = React.useRef(null);
   const notification = useSmartScroll(transcripts, lastTopTextRef);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const handleSettingsClick = () => {
+    setIsSettingsOpen(true);
+    console.log("Opening settings model");
+  };
 
   return (
     // TODO: Find solution to uniform transparency
@@ -26,10 +31,15 @@ export default function App() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative flex items-center justify-between h-16">
             <div className="flex-shrink-0 flex items-center gap-2 app-region-no-drag">
+              <button
+                type="button"
+                onClick={handleSettingsClick}
+                className="p-2 rounded-full text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                aria-label="Open settings"
+              >
+                <Gear className="w-6 h-6" />
+              </button>
               <ConnectionIndicator status={transcriptionStatus} />
-              <ThemeToggle />
-              <LanguageToggle />
-              <PinToggle />
             </div>
             <OsControls />
           </div>
@@ -55,6 +65,11 @@ export default function App() {
         visible={notification.visible}
       />
       <ResizeHandles />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 }

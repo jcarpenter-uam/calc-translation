@@ -4,6 +4,7 @@ import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
 import PinToggle from "../components/pinned-toggle.jsx";
 import { useLanguage } from "../context/language.jsx";
+import TileableToggle from "../components/tileable-toggle.jsx";
 
 const SettingsRow = ({ label, children }) => (
   <div className="flex items-center justify-between">
@@ -36,7 +37,7 @@ export default function SettingsModal({ isOpen, onClose }) {
         className="w-full max-w-md overflow-hidden rounded-lg bg-white dark:bg-zinc-900 shadow-2xl app-region-drag"
         onClick={handlePanelClick}
       >
-        <header className="flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-700/80 px-4 py-3">
+        <header className="flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-700/80 px-4 py-2">
           <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {language === "english" ? "Settings" : "设置"}
           </h3>
@@ -50,15 +51,19 @@ export default function SettingsModal({ isOpen, onClose }) {
           </button>
         </header>
 
-        <main className="px-6 py-4 space-y-3">
+        <main className="px-6 py-3 space-y-2">
           <SettingsRow label={language === "english" ? "Appearance" : "外观"}>
             <ThemeToggle />
           </SettingsRow>
-          <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-3"></div>
+          <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-2"></div>
           <SettingsRow label={language === "english" ? "Pin to Top" : "置顶"}>
             <PinToggle />
           </SettingsRow>
-          <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-3"></div>
+          <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-2"></div>
+          <SettingsRow label={language === "english" ? "Tileable" : "窗口化"}>
+            <TileableToggle />
+          </SettingsRow>
+          <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-2"></div>
           <SettingsRow label={language === "english" ? "Language" : "语言"}>
             <LanguageToggle />
           </SettingsRow>

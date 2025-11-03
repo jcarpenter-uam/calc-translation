@@ -1,6 +1,6 @@
 # CALC Translation
 
-[![Latest Desktop Release](https://img.shields.io/github/v/release/jcarpenter-uam/calc-translation?filter=*-desktop&label=latest%20desktop%20release)](https://github.com/jcarpenter-uam/calc-translation/releases/latest)
+[![Latest Desktop Release](https://img.shields.io/github/v/release/jcarpenter-uam/calc-translation?filter=*-desktop&label=latest%20desktop%20release)](https://github.com/jcarpenter-uam/calc-translation/releases/tag/v1.0.0-desktop)
 
 ## About This Project
 

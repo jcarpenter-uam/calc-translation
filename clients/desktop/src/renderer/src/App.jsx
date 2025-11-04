@@ -8,6 +8,7 @@ import { useSmartScroll } from "./hooks/use-smart-scroll.js";
 import ResizeHandles from "./components/resize-handles.jsx";
 import { Gear } from "@phosphor-icons/react/dist/csr/Gear";
 import SettingsModal from "./models/settings.jsx";
+import { useTileable } from "./context/tileable.jsx";
 
 export default function App() {
   const { status: transcriptionStatus, transcripts } = useTranscriptStream(
@@ -17,6 +18,7 @@ export default function App() {
   const lastTopTextRef = React.useRef(null);
   const notification = useSmartScroll(transcripts, lastTopTextRef);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { isTileable, toggleTileable } = useTileable();
 
   const handleSettingsClick = () => {
     setIsSettingsOpen(true);
@@ -41,7 +43,7 @@ export default function App() {
               </button>
               <ConnectionIndicator status={transcriptionStatus} />
             </div>
-            <OsControls />
+            {isTileable ? null : <OsControls />}
           </div>
         </div>
       </header>

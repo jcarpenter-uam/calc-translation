@@ -156,10 +156,12 @@ class TranscriptCache:
             if msg_id in self._cache_dict
         ]
 
+    # TODO: Add timestamps per utterance that align with meeting timeframes
+    # 01:21:35.850 --> 01:21:36.780
     def save_history_and_clear(self, output_dir: str = "session_history"):
         """
-        Saves the current cache history to a timestamped JSON file
-        in the specified directory and then clears the cache.
+        Saves the current cache history to a timestamped .txt file
+        in the specified format and then clears the cache.
         """
         try:
             transcript_history = self.get_history()
@@ -172,11 +174,29 @@ class TranscriptCache:
             os.makedirs(output_dir, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_name = f"history_{timestamp}.json"
+            file_name = f"history_{timestamp}.vtt"
             cache_filepath = os.path.join(output_dir, file_name)
 
+            formatted_lines = []
+            for i, entry in enumerate(transcript_history):
+                utterance_num = i + 1
+                speaker = entry.get("speaker", "Unknown")
+                transcription = entry.get("transcription", "").strip()
+                translation = entry.get("translation", "").strip()
+
+                timestamp_str = "null"
+
+                formatted_lines.append(f"{utterance_num}")
+                formatted_lines.append(f"{timestamp_str}")
+                formatted_lines.append(f"{speaker}: {transcription}")
+
+                if translation:
+                    formatted_lines.append(f"{translation}")
+
+                formatted_lines.append("")
+
             with open(cache_filepath, "w", encoding="utf-8") as f:
-                json.dump(transcript_history, f, indent=4, ensure_ascii=False)
+                f.write("\n".join(formatted_lines))
 
             log_pipeline_step(
                 "CACHE",

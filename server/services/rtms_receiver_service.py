@@ -24,6 +24,7 @@ from .debug_service import (
     save_audio_to_wav,
 )
 from .soniox_service import SonioxResult, SonioxService
+from .timestamp_service import TimestampService
 
 try:
     APP_SECRET_TOKEN = os.environ["WS_TRANSCRIBE_SECRET_TOKEN"]
@@ -85,6 +86,7 @@ async def validate_token(token: str = Depends(get_auth_token)):
 def create_transcribe_router(viewer_manager, DEBUG_MODE):
     router = APIRouter()
 
+    # TODO:
     # only accept first attempt per meetingid?
     @router.websocket("/ws/transcribe")
     async def websocket_transcribe_endpoint(
@@ -92,6 +94,8 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
     ):
         await websocket.accept()
         log_pipeline_step("SESSION", "Transcription client connected.", detailed=False)
+
+        timestamp_service = TimestampService()
 
         loop = asyncio.get_running_loop()
         audio_processor = AudioProcessingService()
@@ -188,6 +192,16 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
 
             if has_text:
                 payload_type = "final" if result.is_final else "partial"
+
+                vtt_timestamp = None
+                if payload_type == "partial":
+                    timestamp_service.mark_utterance_start(current_message_id)
+
+                if payload_type == "final":
+                    vtt_timestamp = timestamp_service.complete_utterance(
+                        current_message_id
+                    )
+
                 payload = {
                     "message_id": current_message_id,
                     "transcription": result.transcription,
@@ -197,6 +211,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     "speaker": current_speaker,
                     "type": payload_type,
                     "isfinalize": result.is_final,
+                    "vtt_timestamp": vtt_timestamp,
                 }
                 await viewer_manager.broadcast(payload)
             else:

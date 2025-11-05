@@ -1,4 +1,3 @@
-import json
 import os
 from collections import deque
 from datetime import datetime
@@ -156,11 +155,9 @@ class TranscriptCache:
             if msg_id in self._cache_dict
         ]
 
-    # TODO: Add timestamps per utterance that align with meeting timeframes
-    # 01:21:35.850 --> 01:21:36.780
     def save_history_and_clear(self, output_dir: str = "session_history"):
         """
-        Saves the current cache history to a timestamped .txt file
+        Saves the current cache history to a timestamped .vtt file
         in the specified format and then clears the cache.
         """
         try:
@@ -177,14 +174,17 @@ class TranscriptCache:
             file_name = f"history_{timestamp}.vtt"
             cache_filepath = os.path.join(output_dir, file_name)
 
-            formatted_lines = []
+            formatted_lines = ["WEBVTT", ""]
+
             for i, entry in enumerate(transcript_history):
                 utterance_num = i + 1
                 speaker = entry.get("speaker", "Unknown")
                 transcription = entry.get("transcription", "").strip()
                 translation = entry.get("translation", "").strip()
 
-                timestamp_str = "null"
+                timestamp_str = entry.get(
+                    "vtt_timestamp", "00:00:00.000 --> 00:00:00.000"
+                )
 
                 formatted_lines.append(f"{utterance_num}")
                 formatted_lines.append(f"{timestamp_str}")

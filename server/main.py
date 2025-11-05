@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from services.cache_service import TranscriptCache
 from services.connection_manager_service import ConnectionManager
 from services.debug_service import log_pipeline_step
-from services.rtms_receiver_service import create_transcribe_router
+from services.receiver_service import create_transcribe_router
 
 app = FastAPI(
     title="Real-Time Transcription and Translation API",
@@ -27,11 +27,11 @@ log_pipeline_step(
 transcript_cache = TranscriptCache()
 viewer_manager = ConnectionManager(cache=transcript_cache)
 
-rtms_router = create_transcribe_router(
+router = create_transcribe_router(
     viewer_manager=viewer_manager,
     DEBUG_MODE=DEBUG_MODE,
 )
-app.include_router(rtms_router)
+app.include_router(router)
 
 
 @app.websocket("/ws/view_transcript")

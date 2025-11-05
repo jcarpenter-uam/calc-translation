@@ -16,6 +16,7 @@ from fastapi import (
 )
 
 from .audio_processing_service import AudioProcessingService
+from .auth_service import validate_token
 from .correction_service import CorrectionService
 from .debug_service import (
     log_pipeline_step,
@@ -25,62 +26,6 @@ from .debug_service import (
 )
 from .soniox_service import SonioxResult, SonioxService
 from .timestamp_service import TimestampService
-
-try:
-    APP_SECRET_TOKEN = os.environ["WS_TRANSCRIBE_SECRET_TOKEN"]
-    log_pipeline_step(
-        "SYSTEM", f"Successfully loaded 'WS_TRANSCRIBE_SECRET_TOKEN'.", detailed=True
-    )
-except KeyError:
-    log_pipeline_step(
-        "SYSTEM",
-        "FATAL: 'WS_TRANSCRIBE_SECRET_TOKEN' environment variable is not set. Application cannot start.",
-        detailed=False,
-    )
-    raise RuntimeError(
-        "Required environment variable 'WS_TRANSCRIBE_SECRET_TOKEN' is not set."
-    )
-
-
-async def get_auth_token(
-    authorization: str | None = Header(None),
-) -> str:
-    """
-    Extracts the Bearer token from the Authorization header.
-    """
-    if not authorization:
-        log_pipeline_step(
-            "SESSION", "Auth failed: No Authorization header.", detailed=False
-        )
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Missing Authorization header"
-        )
-
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0] != "Bearer":
-        log_pipeline_step(
-            "SESSION", "Auth failed: Invalid header format.", detailed=False
-        )
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION,
-            reason="Invalid Authorization header format. Expected 'Bearer <token>'",
-        )
-
-    return parts[1]
-
-
-async def validate_token(token: str = Depends(get_auth_token)):
-    """
-    Validates the extracted token.
-    For this simple case, we just check our shared secret.
-    """
-    if token != APP_SECRET_TOKEN:
-        log_pipeline_step("SESSION", "Auth failed: Invalid token.", detailed=False)
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or expired token"
-        )
-
-    return True
 
 
 def create_transcribe_router(viewer_manager, DEBUG_MODE):
@@ -385,6 +330,7 @@ def create_transcribe_router(viewer_manager, DEBUG_MODE):
                     "processed.wav",
                 )
 
+            # TODO: This should broadcast an END message to the viewer for downloading the .vtt
             viewer_manager.cache.save_history_and_clear("session_history")
 
     return router

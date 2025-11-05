@@ -5,15 +5,7 @@ import os
 import uuid
 from datetime import datetime
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    Header,
-    WebSocket,
-    WebSocketDisconnect,
-    WebSocketException,
-    status,
-)
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from .audio_processing_service import AudioProcessingService
 from .auth_service import validate_token
@@ -28,7 +20,7 @@ from .soniox_service import SonioxResult, SonioxService
 from .timestamp_service import TimestampService
 
 
-def create_transcribe_router(viewer_manager, DEBUG_MODE):
+def create_receiver_router(viewer_manager, DEBUG_MODE):
     router = APIRouter()
 
     # TODO:

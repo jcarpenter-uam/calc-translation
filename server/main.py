@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from services.cache_service import TranscriptCache
 from services.connection_manager_service import ConnectionManager
 from services.debug_service import log_pipeline_step
+from services.download_transcript_service import create_download_router
 from services.receiver_service import create_receiver_router
 from services.viewer_service import create_viewer_router
 
@@ -37,10 +38,8 @@ app.include_router(receiver_router)
 viewer_router = create_viewer_router(viewer_manager=viewer_manager)
 app.include_router(viewer_router)
 
-
-# TODO:
-# Endpoint to download most recent .vtt file
-# Need something to force delay if cache[] > 0 until proper meeting ids can be used
+download_router = create_download_router()
+app.include_router(download_router)
 
 
 app.mount("/", StaticFiles(directory="web/dist", html=True), name="web")

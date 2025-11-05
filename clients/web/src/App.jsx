@@ -9,15 +9,14 @@ import { useTranscriptStream } from "./hooks/use-transcript-stream.js";
 import { useSmartScroll } from "./hooks/use-smart-scroll.js";
 
 export default function App() {
-  const { status: transcriptionStatus, transcripts } = useTranscriptStream(
-    "/ws/view_transcript",
-  );
+  const {
+    status: transcriptionStatus,
+    transcripts,
+    isDownloadable,
+  } = useTranscriptStream("/ws/view_transcript");
 
   const lastTopTextRef = React.useRef(null);
   const notification = useSmartScroll(transcripts, lastTopTextRef);
-
-  // TODO: Replace placeholder with real logic
-  const YOUR_SESSION_ID = "current";
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors">
@@ -28,7 +27,7 @@ export default function App() {
               <ConnectionIndicator status={transcriptionStatus} />
               <ThemeToggle />
               <LanguageToggle />
-              <DownloadVttButton sessionId={YOUR_SESSION_ID} />
+              <DownloadVttButton isDownloadable={isDownloadable} />
             </div>
           </div>
         </div>

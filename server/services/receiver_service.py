@@ -322,7 +322,17 @@ def create_receiver_router(viewer_manager, DEBUG_MODE):
                     "processed.wav",
                 )
 
-            # TODO: This should broadcast an END message to the viewer for downloading the .vtt
             viewer_manager.cache.save_history_and_clear("session_history")
+
+            log_pipeline_step(
+                "SESSION",
+                "Broadcasting session_end event to viewers.",
+                detailed=False,
+            )
+            end_payload = {
+                "type": "session_end",
+                "message": "The transcription session has concluded.",
+            }
+            await viewer_manager.broadcast(end_payload)
 
     return router

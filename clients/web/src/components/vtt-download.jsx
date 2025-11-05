@@ -10,16 +10,17 @@ const LoadingIcon = () => <SpinnerBall size={23} />;
 
 /**
  * An icon-button component to download a .vtt transcript file.
+ * Becomes green and enabled when isDownloadable is true.
  */
-function DownloadVttButton({ sessionId }) {
+function DownloadVttButton({ isDownloadable }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleDownload = async () => {
-    if (isLoading) return;
+    if (isLoading || !isDownloadable) return;
 
     setIsLoading(true);
 
-    const downloadUrl = `${DOWNLOAD_API_URL}?sessionId=${sessionId}`;
+    const downloadUrl = DOWNLOAD_API_URL;
 
     try {
       const response = await fetch(downloadUrl, {
@@ -46,12 +47,27 @@ function DownloadVttButton({ sessionId }) {
     }
   };
 
+  const baseClasses =
+    "p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
+
+  const activeClasses =
+    "bg-green-200 text-green-800 dark:bg-green-700 dark:text-green-100 hover:bg-green-300 dark:hover:bg-green-600";
+
+  const inactiveClasses =
+    "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800";
+
   return (
     <button
       onClick={handleDownload}
-      disabled={isLoading || !sessionId}
-      className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed"
-      aria-label="Download transcript"
+      disabled={isLoading || !isDownloadable}
+      className={`${baseClasses} ${
+        isDownloadable ? activeClasses : inactiveClasses
+      }`}
+      aria-label={
+        isDownloadable
+          ? "Download transcript (available for a limited time)"
+          : "Download transcript (not yet available)"
+      }
     >
       {isLoading ? <LoadingIcon /> : <DownloadIcon />}
     </button>

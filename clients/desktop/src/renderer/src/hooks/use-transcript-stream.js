@@ -1,12 +1,33 @@
 import { useState, useEffect, useRef } from "react";
-import log from "electron-log/renderer";
+
+const DOWNLOAD_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * A custom hook to manage a WebSocket connection for live transcripts.
+ * @param {string} url The WebSocket URL to connect to.
+ * @returns {{
+ * status: 'connecting' | 'connected' | 'disconnected';
+ * transcripts: Array<{
+ * id: string,
+ * speaker: string,
+ * translation: string,
+ * transcription: string,
+ * source_language: string,
+ * target_language: string,
+ * isFinalized: boolean,
+ * type: 'update' | 'final' | 'correction' | 'status_update',
+ * original?: { translation: string, transcription: string },
+ * correctionStatus?: 'correcting' | 'corrected' | null
+ * }>;
+ * }}
  */
 export function useTranscriptStream(url) {
   const [status, setStatus] = useState("connecting");
   const [transcripts, setTranscripts] = useState([]);
+
+  const [isDownloadable, setIsDownloadable] = useState(false);
+  const hideTimerRef = useRef(null);
+
   const ws = useRef(null);
 
   useEffect(() => {
@@ -14,35 +35,30 @@ export function useTranscriptStream(url) {
 
     function connect() {
       if (typeof url !== "string") {
-        log.warn("useTranscriptStream: No URL provided, disconnecting.");
         setStatus("disconnected");
         return;
       }
       if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
-        log.info("useTranscriptStream: Closing existing WebSocket.");
         ws.current.close();
       }
 
-      log.info(`useTranscriptStream: Connecting to ${url}...`);
       setTranscripts([]);
       ws.current = new WebSocket(url);
       setStatus("connecting");
 
       ws.current.onopen = () => {
-        log.info(`useTranscriptStream: WebSocket connected to ${url}.`);
+        console.log(`WebSocket connected to ${url}`);
         setStatus("connected");
       };
 
       ws.current.onclose = () => {
-        log.warn(
-          `useTranscriptStream: WebSocket disconnected. Reconnecting in 3 seconds...`,
-        );
+        console.log(`WebSocket disconnected. Reconnecting in 3 seconds...`);
         setStatus("disconnected");
         reconnectTimeoutId = setTimeout(connect, 3000);
       };
 
       ws.current.onerror = (error) => {
-        log.error(`useTranscriptStream: WebSocket error:`, error);
+        console.error(`WebSocket error on ${url}:`, error);
         ws.current.close();
       };
 
@@ -50,12 +66,20 @@ export function useTranscriptStream(url) {
         try {
           const data = JSON.parse(event.data);
 
+          if (data.type === "session_end") {
+            if (!hideTimerRef.current) {
+              setIsDownloadable(true);
+
+              hideTimerRef.current = setTimeout(() => {
+                setIsDownloadable(false);
+                hideTimerRef.current = null;
+              }, DOWNLOAD_WINDOW_MS);
+            }
+
+            return;
+          }
+
           if (!data.message_id || !data.type) return;
-          log.debug(
-            "useTranscriptStream: Received message",
-            data.type,
-            data.message_id,
-          );
 
           setTranscripts((prevTranscripts) => {
             const existingIndex = prevTranscripts.findIndex(
@@ -120,10 +144,7 @@ export function useTranscriptStream(url) {
             return newTranscripts;
           });
         } catch (error) {
-          log.error(
-            "useTranscriptStream: Failed to parse WebSocket message:",
-            error,
-          );
+          console.error("Failed to parse WebSocket message:", error);
         }
       };
     }
@@ -131,8 +152,10 @@ export function useTranscriptStream(url) {
     connect();
 
     return () => {
-      log.info("useTranscriptStream: Cleaning up WebSocket effect.");
       clearTimeout(reconnectTimeoutId);
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+      }
       if (ws.current) {
         ws.current.onclose = null;
         ws.current.close();
@@ -140,5 +163,5 @@ export function useTranscriptStream(url) {
     };
   }, [url]);
 
-  return { status, transcripts };
+  return { status, transcripts, isDownloadable };
 }

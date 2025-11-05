@@ -30,4 +30,8 @@ contextBridge.exposeInMainWorld("electron", {
     log.info("IPC: Invoking is-tileable");
     return ipcRenderer.invoke("is-tileable");
   },
+  downloadVtt: () => {
+    log.info("IPC: Invoking download-vtt");
+    return ipcRenderer.invoke("download-vtt");
+  },
 });

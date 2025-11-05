@@ -9,11 +9,14 @@ import ResizeHandles from "./components/resize-handles.jsx";
 import { Gear } from "@phosphor-icons/react/dist/csr/Gear";
 import SettingsModal from "./models/settings.jsx";
 import { useTileable } from "./context/tileable.jsx";
+import DownloadVttButton from "./components/vtt-download.jsx";
 
 export default function App() {
-  const { status: transcriptionStatus, transcripts } = useTranscriptStream(
-    "wss://translator.my-uam.com/ws/view_transcript",
-  );
+  const {
+    status: transcriptionStatus,
+    transcripts,
+    isDownloadable,
+  } = useTranscriptStream("wss://translator.my-uam.com/ws/view_transcript");
 
   const lastTopTextRef = React.useRef(null);
   const notification = useSmartScroll(transcripts, lastTopTextRef);
@@ -42,6 +45,7 @@ export default function App() {
                 <Gear className="w-6 h-6" />
               </button>
               <ConnectionIndicator status={transcriptionStatus} />
+              <DownloadVttButton isDownloadable={isDownloadable} />
             </div>
             {isTileable ? null : <OsControls />}
           </div>

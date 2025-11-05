@@ -44,6 +44,11 @@ async def websocket_viewer_endpoint(websocket: WebSocket):
         viewer_manager.disconnect(websocket)
 
 
+# TODO:
+# Endpoint to download most recent .vtt file
+# Need something to force delay if cache[] > 0 until proper meeting ids can be used
+
+
 app.mount("/", StaticFiles(directory="web/dist", html=True), name="web")
 
 

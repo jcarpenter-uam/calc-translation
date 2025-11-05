@@ -20,15 +20,13 @@ if (!fs.existsSync(logDir)) {
 }
 
 const TRANSLATION_SERVER_URL = process.env.TRANSLATION_SERVER_URL;
-const WS_TRANSCRIBE_SECRET_TOKEN = process.env.WS_TRANSCRIBE_SECRET_TOKEN;
+const SECRET_TOKEN = process.env.SECRET_TOKEN;
 const ZOOM_WEBHOOK_SECRET_TOKEN = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
 
 const PORT = process.env.PORT || 8080;
 
-if (!WS_TRANSCRIBE_SECRET_TOKEN) {
-  console.error(
-    "FATAL: WS_TRANSCRIBE_SECRET_TOKEN is not defined in .env file!",
-  );
+if (!SECRET_TOKEN) {
+  console.error("FATAL: SECRET_TOKEN is not defined in .env file!");
   console.error("Cannot connect to translation server without it.");
   process.exit(1);
 }
@@ -167,7 +165,7 @@ function handleRtmsStarted(payload, streamId) {
   const rtmsClient = new rtms.Client();
 
   const authHeader = {
-    Authorization: `Bearer ${WS_TRANSCRIBE_SECRET_TOKEN}`,
+    Authorization: `Bearer ${SECRET_TOKEN}`,
   };
 
   // Create a new WebSocket client for the translation server with token

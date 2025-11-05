@@ -50,7 +50,7 @@ services:
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
-      - WS_TRANSCRIBE_SECRET_TOKEN=${WS_TRANSCRIBE_SECRET_TOKEN}
+      - SECRET_TOKEN=${SECRET_TOKEN}
       - DEBUG_MODE=${DEBUG_MODE}
     volumes:
       - translation-data:/app/session_history
@@ -69,7 +69,7 @@ services:
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - ZOOM_WEBHOOK_SECRET_TOKEN=${ZOOM_WEBHOOK_SECRET_TOKEN}
       - TRANSLATION_SERVER_URL=${TRANSLATION_SERVER_URL}
-      - WS_TRANSCRIBE_SECRET_TOKEN=${WS_TRANSCRIBE_SECRET_TOKEN}
+      - SECRET_TOKEN=${SECRET_TOKEN}
     depends_on:
       - translation-server
     networks:
@@ -106,9 +106,9 @@ OLLAMA_URL="http://localhost:11434"
 # Default is 10MB unless specified otherwise
 MAX_CACHE_MB=
 
-# Secure token for the /ws/transcibe endpoint
+# Secure token for endpoints
 # REQUIRED
-WS_TRANSCRIBE_SECRET_TOKEN=defaultwstoken
+SECRET_TOKEN=defaultwstoken
 
 # Logging state
 # True also saves audio files per session

@@ -5,19 +5,15 @@ from fastapi import Depends, Header, WebSocketException, status
 from .debug_service import log_pipeline_step
 
 try:
-    APP_SECRET_TOKEN = os.environ["WS_TRANSCRIBE_SECRET_TOKEN"]
-    log_pipeline_step(
-        "SYSTEM", f"Successfully loaded 'WS_TRANSCRIBE_SECRET_TOKEN'.", detailed=True
-    )
+    APP_SECRET_TOKEN = os.environ["SECRET_TOKEN"]
+    log_pipeline_step("SYSTEM", f"Successfully loaded 'SECRET_TOKEN'.", detailed=True)
 except KeyError:
     log_pipeline_step(
         "SYSTEM",
-        "FATAL: 'WS_TRANSCRIBE_SECRET_TOKEN' environment variable is not set. Application cannot start.",
+        "FATAL: 'SECRET_TOKEN' environment variable is not set. Application cannot start.",
         detailed=False,
     )
-    raise RuntimeError(
-        "Required environment variable 'WS_TRANSCRIBE_SECRET_TOKEN' is not set."
-    )
+    raise RuntimeError("Required environment variable 'SECRET_TOKEN' is not set.")
 
 
 async def get_auth_token(

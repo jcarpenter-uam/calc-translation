@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from .auth_service import validate_token
+# from .auth_service import validate_token
 from .connection_manager_service import ConnectionManager
 
 
@@ -14,7 +14,7 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
     @router.websocket("/ws/view_transcript")
     async def websocket_viewer_endpoint(
         websocket: WebSocket,
-        auth_ok: bool = Depends(validate_token),
+        # auth_ok: bool = Depends(validate_token),
     ):
         """
         WebSocket endpoint for clients to connect and view

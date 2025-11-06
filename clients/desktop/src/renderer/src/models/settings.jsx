@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { X } from "@phosphor-icons/react/dist/csr/X";
 import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
 import PinToggle from "../components/pinned-toggle.jsx";
 import { useLanguage } from "../context/language.jsx";
+import { useSettings } from "../context/settings.jsx";
 import BetaToggle from "../components/beta-toggle.jsx";
 
 const SettingsRow = ({ label, children }) => (
@@ -17,28 +18,7 @@ const SettingsRow = ({ label, children }) => (
 
 export default function SettingsModal({ isOpen, onClose }) {
   const { language } = useLanguage();
-
-  const [appVersion, setAppVersion] = useState("");
-
-  useEffect(() => {
-    if (isOpen) {
-      async function fetchVersion() {
-        try {
-          if (window.electron && window.electron.getAppVersion) {
-            const version = await window.electron.getAppVersion();
-            setAppVersion(version);
-          } else {
-            console.error("window.electron.getAppVersion is not defined!");
-            setAppVersion("N/A");
-          }
-        } catch (error) {
-          console.error("Failed to get app version:", error);
-          setAppVersion("N/A");
-        }
-      }
-      fetchVersion();
-    }
-  }, [isOpen]);
+  const { appVersion } = useSettings();
 
   if (!isOpen) {
     return null;

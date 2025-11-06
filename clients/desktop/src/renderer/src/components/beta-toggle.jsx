@@ -1,31 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useSettings } from "../context/settings.jsx";
 
 export default function BetaToggle() {
-  const [isBetaEnabled, setIsBetaEnabled] = useState(false);
+  const { isBetaEnabled, setBetaChannel } = useSettings();
 
-  useEffect(() => {
-    const savedSetting = localStorage.getItem("betaChannelEnabled");
-    const isEnabled = savedSetting === "true";
-    setIsBetaEnabled(isEnabled);
-  }, []);
-
-  async function handleBetaToggleChange(event) {
-    const isBeta = event.target.checked;
-
-    setIsBetaEnabled(isBeta);
-
-    localStorage.setItem("betaChannelEnabled", isBeta);
-
-    try {
-      if (window.electron && window.electron.setUpdateChannel) {
-        await window.electron.setUpdateChannel(isBeta);
-      } else {
-        console.error("window.electron.setUpdateChannel is not defined!");
-      }
-    } catch (error) {
-      console.error("Failed to set update channel:", error);
-    }
-  }
+  const handleBetaToggleChange = (event) => {
+    setBetaChannel(event.target.checked);
+  };
 
   return (
     <label className="relative inline-flex items-center cursor-pointer">

@@ -12,9 +12,6 @@ node_modules/
 logs/
 dist/
 
-# Desktop
-desktop/
-
 # Secrets
 .env
 docker-compose.yaml

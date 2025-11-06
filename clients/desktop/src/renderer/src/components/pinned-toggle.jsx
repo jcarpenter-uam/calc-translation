@@ -1,13 +1,12 @@
 import React from "react";
 import { PushPin, PushPinSlash } from "@phosphor-icons/react";
-import { usePin } from "../context/pin.jsx";
+import { useSettings } from "../context/settings.jsx";
 
 /**
  * A component to toggle the window's "always on top" state.
- * Color-matched to the ThemeToggle button for visual consistency.
  */
 export default function PinToggle() {
-  const { isPinned, togglePin } = usePin();
+  const { isPinned, togglePin } = useSettings();
 
   return (
     <button

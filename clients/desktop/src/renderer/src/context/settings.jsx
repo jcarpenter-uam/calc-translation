@@ -1,10 +1,17 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 
-const SettingsContext = createContext();
+const SettingsContext = createContext(null);
 
 export function SettingsProvider({ children }) {
   const [appVersion, setAppVersion] = useState("");
   const [isBetaEnabled, setIsBetaEnabled] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
 
   useEffect(() => {
     async function fetchVersion() {
@@ -16,10 +23,26 @@ export function SettingsProvider({ children }) {
         setAppVersion("N/A");
       }
     }
-    fetchVersion();
+
+    async function getInitialPinState() {
+      try {
+        if (
+          window.electron &&
+          typeof window.electron.isAlwaysOnTop === "function"
+        ) {
+          const initialState = await window.electron.isAlwaysOnTop();
+          setIsPinned(initialState);
+        }
+      } catch (error) {
+        console.error("Failed to get initial pin state:", error);
+      }
+    }
 
     const savedSetting = localStorage.getItem("betaChannelEnabled");
     setIsBetaEnabled(savedSetting === "true");
+
+    fetchVersion();
+    getInitialPinState();
   }, []);
 
   const setBetaChannel = async (isEnabled) => {
@@ -32,10 +55,21 @@ export function SettingsProvider({ children }) {
     }
   };
 
+  const togglePin = useCallback(async () => {
+    try {
+      const newState = await window.electron.toggleAlwaysOnTop();
+      setIsPinned(newState);
+    } catch (error) {
+      console.error("Failed to toggle pin:", error);
+    }
+  }, []);
+
   const value = {
     appVersion,
     isBetaEnabled,
     setBetaChannel,
+    isPinned,
+    togglePin,
   };
 
   return (
@@ -46,5 +80,9 @@ export function SettingsProvider({ children }) {
 }
 
 export const useSettings = () => {
-  return useContext(SettingsContext);
+  const context = useContext(SettingsContext);
+  if (!context) {
+    throw new Error("useSettings must be used within a SettingsProvider");
+  }
+  return context;
 };

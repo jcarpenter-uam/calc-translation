@@ -11,6 +11,7 @@ session_history/
 node_modules/
 logs/
 dist/
+out/
 
 # Secrets
 .env

@@ -39,10 +39,20 @@ export function SettingsProvider({ children }) {
     }
 
     const savedSetting = localStorage.getItem("betaChannelEnabled");
-    setIsBetaEnabled(savedSetting === "true");
+    const isEnabled = savedSetting === "true";
+    setIsBetaEnabled(isEnabled);
+
+    async function syncChannelSetting() {
+      try {
+        await window.electron.setUpdateChannel(isEnabled);
+      } catch (error) {
+        console.error("Failed to sync update channel on load:", error);
+      }
+    }
 
     fetchVersion();
     getInitialPinState();
+    syncChannelSetting();
   }, []);
 
   const setBetaChannel = async (isEnabled) => {

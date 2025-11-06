@@ -5,10 +5,7 @@ import log from "electron-log/main";
 import { createMainWindow } from "./modules/windowmanager";
 import { registerIpcHandlers } from "./modules/ipchandlers";
 import { createApplicationMenu } from "./modules/appmenu";
-import {
-  setupAutoUpdaterListeners,
-  checkForUpdates,
-} from "./modules/autoupdate";
+import { setupAutoUpdaterListeners } from "./modules/autoupdate";
 
 log.initialize();
 log.errorHandler.startCatching();
@@ -33,8 +30,6 @@ app.whenReady().then(() => {
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
-
-  checkForUpdates();
 });
 
 app.on("window-all-closed", () => {

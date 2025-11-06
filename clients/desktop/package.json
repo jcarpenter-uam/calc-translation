@@ -1,6 +1,6 @@
 {
   "name": "calc-translation-desktop",
-  "version": "1.0.8-beta.4-desktop",
+  "version": "1.0.8-beta.1-desktop",
   "description": "A desktop app for CALC Translation",
   "main": "out/main/index.js",
   "scripts": {

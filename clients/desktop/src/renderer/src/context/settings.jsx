@@ -18,9 +18,11 @@ export function SettingsProvider({ children }) {
       try {
         const version = await window.electron.getAppVersion();
         setAppVersion(version);
+        return version;
       } catch (error) {
         console.error("Failed to get app version:", error);
         setAppVersion("N/A");
+        return null;
       }
     }
 
@@ -38,11 +40,20 @@ export function SettingsProvider({ children }) {
       }
     }
 
-    const savedSetting = localStorage.getItem("betaChannelEnabled");
-    const isEnabled = savedSetting === "true";
-    setIsBetaEnabled(isEnabled);
+    async function initializeBetaChannel(currentVersion) {
+      let isEnabled = false;
+      const savedSetting = localStorage.getItem("betaChannelEnabled");
 
-    async function syncChannelSetting() {
+      if (savedSetting !== null) {
+        isEnabled = savedSetting === "true";
+      } else if (currentVersion) {
+        const isPrerelease = /[.-](beta|alpha|rc|pre)/.test(currentVersion);
+        isEnabled = isPrerelease;
+      }
+
+      setIsBetaEnabled(isEnabled);
+      localStorage.setItem("betaChannelEnabled", isEnabled.toString());
+
       try {
         await window.electron.setUpdateChannel(isEnabled);
       } catch (error) {
@@ -50,14 +61,18 @@ export function SettingsProvider({ children }) {
       }
     }
 
-    fetchVersion();
-    getInitialPinState();
-    syncChannelSetting();
+    async function initialize() {
+      const version = await fetchVersion();
+      await getInitialPinState();
+      await initializeBetaChannel(version);
+    }
+
+    initialize();
   }, []);
 
   const setBetaChannel = async (isEnabled) => {
     setIsBetaEnabled(isEnabled);
-    localStorage.setItem("betaChannelEnabled", isEnabled);
+    localStorage.setItem("betaChannelEnabled", isEnabled.toString());
     try {
       await window.electron.setUpdateChannel(isEnabled);
     } catch (error) {

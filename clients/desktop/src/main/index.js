@@ -14,33 +14,21 @@ const { autoUpdater } = require("electron-updater");
 import log from "electron-log/main";
 const Store = require("electron-store").default;
 
-// This will set up the default file logging (1MB size, 1 rotation)
-// Along with automatically catch and log unhandled errors
-// By default, it writes logs to the following locations:
-// on Linux: ~/.config/{app name}/logs/main.log
-// on macOS: ~/Library/Logs/{app name}/main.log
-// on Windows: %USERPROFILE%\AppData\Roaming\{app name}\logs\main.log
 log.initialize();
 log.errorHandler.startCatching();
 
 autoUpdater.autoDownload = true;
 let mainWindow;
 
-const store = new Store();
-
 function createWindow() {
   log.info("Creating main window...");
-
-  const isTileable = store.get("isTileable", false);
-  log.info(`Creating window. Tileable state: ${isTileable}`);
 
   mainWindow = new BrowserWindow({
     width: 800,
     height: 300,
     show: false,
     autoHideMenuBar: true,
-    frame: isTileable,
-    transparent: !isTileable,
+    frame: false,
     alwaysOnTop: false,
 
     ...(process.platform === "linux" ? { icon } : {}),
@@ -67,22 +55,6 @@ function createWindow() {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
-  ipcMain.handle("get-window-bounds", () => {
-    return mainWindow.getBounds();
-  });
-
-  ipcMain.on("set-window-bounds", (event, bounds) => {
-    mainWindow.setBounds(bounds);
-  });
-
-  ipcMain.handle("minimize-window", () => {
-    mainWindow.minimize();
-  });
-
-  ipcMain.handle("close-window", () => {
-    mainWindow.close();
-  });
-
   ipcMain.handle("toggle-always-on-top", () => {
     if (mainWindow) {
       const newState = !mainWindow.isAlwaysOnTop();
@@ -91,23 +63,6 @@ function createWindow() {
       return newState;
     }
     return false;
-  });
-
-  ipcMain.handle("is-tileable", () => {
-    return store.get("isTileable", false);
-  });
-
-  ipcMain.handle("toggle-tileable", () => {
-    const currentTileableState = store.get("isTileable", false);
-    const newState = !currentTileableState;
-
-    log.info(`Setting tileable state to: ${newState} and relaunching.`);
-    store.set("isTileable", newState);
-
-    app.relaunch();
-    app.quit();
-
-    return newState;
   });
 
   ipcMain.handle("download-vtt", async () => {

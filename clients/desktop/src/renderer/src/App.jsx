@@ -1,14 +1,11 @@
 import React, { useState } from "react";
 import ConnectionIndicator from "./components/connection-indicator.jsx";
-import OsControls from "./components/os-controls.jsx";
 import Transcript from "./components/transcript.jsx";
 import Notification from "./components/notification.jsx";
 import { useTranscriptStream } from "./hooks/use-transcript-stream.js";
 import { useSmartScroll } from "./hooks/use-smart-scroll.js";
-import ResizeHandles from "./components/resize-handles.jsx";
 import { Gear } from "@phosphor-icons/react/dist/csr/Gear";
 import SettingsModal from "./models/settings.jsx";
-import { useTileable } from "./context/tileable.jsx";
 import DownloadVttButton from "./components/vtt-download.jsx";
 
 export default function App() {
@@ -21,7 +18,6 @@ export default function App() {
   const lastTopTextRef = React.useRef(null);
   const notification = useSmartScroll(transcripts, lastTopTextRef);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const { isTileable, toggleTileable } = useTileable();
 
   const handleSettingsClick = () => {
     setIsSettingsOpen(true);
@@ -47,7 +43,6 @@ export default function App() {
               <ConnectionIndicator status={transcriptionStatus} />
               <DownloadVttButton isDownloadable={isDownloadable} />
             </div>
-            {isTileable ? null : <OsControls />}
           </div>
         </div>
       </header>
@@ -70,7 +65,6 @@ export default function App() {
         message={notification.message}
         visible={notification.visible}
       />
-      <ResizeHandles />
 
       <SettingsModal
         isOpen={isSettingsOpen}

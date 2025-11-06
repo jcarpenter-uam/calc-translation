@@ -1,44 +1,22 @@
 @import "tailwindcss";
 @config "../../../tailwind.config.mjs";
 
-/* Smoothen theme flips without animating layout-heavy props */
 :root * {
-  transition-property: background-color, color, border-color, fill, stroke;
-  transition-duration: 200ms;
-  transition-timing-function: ease;
-  border-radius: 10px;
-  /* BUG: Overflow hidden makes menu buttons look funny, but without it */
-  /* the corners alter between rounded and squared */
+  /* transition-property: background-color, color, border-color, fill, stroke; */
+  /* transition-duration: 200ms; */
+  /* transition-timing-function: ease; */
+  /* border-radius: 10px; */
 }
 
 @layer base {
   /* Apply scrollbar hiding to the whole window */
   html,
   body {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
-
-  /* Hide scrollbar for Chrome, Safari and Opera */
   html::-webkit-scrollbar,
   body::-webkit-scrollbar {
     display: none;
   }
-}
-
-/* Respect users who prefer reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  :root * {
-    transition: none !important;
-  }
-}
-
-/* Make a region draggable */
-.app-region-drag {
-  -webkit-app-region: drag;
-}
-
-/* Make elements inside a draggable region clickable again */
-.app-region-no-drag {
-  -webkit-app-region: no-drag;
 }

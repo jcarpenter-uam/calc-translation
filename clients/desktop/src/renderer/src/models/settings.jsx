@@ -4,7 +4,6 @@ import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
 import PinToggle from "../components/pinned-toggle.jsx";
 import { useLanguage } from "../context/language.jsx";
-import TileableToggle from "../components/tileable-toggle.jsx";
 
 const SettingsRow = ({ label, children }) => (
   <div className="flex items-center justify-between">
@@ -58,10 +57,6 @@ export default function SettingsModal({ isOpen, onClose }) {
           <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-2"></div>
           <SettingsRow label={language === "english" ? "Pin to Top" : "置顶"}>
             <PinToggle />
-          </SettingsRow>
-          <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-2"></div>
-          <SettingsRow label={language === "english" ? "Tileable" : "窗口化"}>
-            <TileableToggle />
           </SettingsRow>
           <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-2"></div>
           <SettingsRow label={language === "english" ? "Language" : "语言"}>

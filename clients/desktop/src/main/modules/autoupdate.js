@@ -5,7 +5,7 @@ import { getMainWindow } from "./windowmanager";
 
 export function setupAutoUpdaterListeners() {
   autoUpdater.channel = "desktop";
-  autoUpdater.allowPrerelease = false;
+  autoUpdater.allowPrerelease = true;
   autoUpdater.autoDownload = true;
 
   autoUpdater.on("update-available", (info) => {
@@ -47,19 +47,20 @@ export function setupAutoUpdaterListeners() {
 }
 
 export function checkForUpdates() {
-  log.info("Checking for updates...");
+  log.info(`Checking for updates on channel: ${autoUpdater.channel}...`);
   autoUpdater.checkForUpdates();
 }
 
 export function setUpdateChannel(isBetaEnabled) {
-  autoUpdater.channel = "desktop";
   if (isBetaEnabled) {
-    autoUpdater.allowPrerelease = true;
-    log.info("Switched to BETA update channel.");
+    autoUpdater.channel = "desktop-beta";
+    log.info("Switched to BETA update channel (desktop-beta).");
   } else {
-    autoUpdater.allowPrerelease = false;
-    log.info("Switched to STABLE update channel.");
+    autoUpdater.channel = "desktop";
+    log.info("Switched to STABLE update channel (desktop).");
   }
+
+  autoUpdater.allowPrerelease = true;
 
   checkForUpdates();
 }

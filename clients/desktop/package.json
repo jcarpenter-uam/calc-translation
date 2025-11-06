@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "publish": "npm run build && electron-builder -w --publish always"
+    "publish": "npm run build && electron-builder -w --publish always",
+    "publish-beta": "npm run build && electron-builder -w --publish always -c.publish.channel=desktop-beta"
   },
   "keywords": [],
   "author": "Jonah Carpenter",

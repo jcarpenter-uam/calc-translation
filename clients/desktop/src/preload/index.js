@@ -1,13 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
-import log from "electron-log/renderer";
 
 contextBridge.exposeInMainWorld("electron", {
-  toggleAlwaysOnTop: () => {
-    log.info("IPC: Invoking toggle-always-on-top");
-    return ipcRenderer.invoke("toggle-always-on-top");
-  },
-  downloadVtt: () => {
-    log.info("IPC: Invoking download-vtt");
-    return ipcRenderer.invoke("download-vtt");
-  },
+  minimize: () => ipcRenderer.invoke("minimize-window"),
+  maximize: () => ipcRenderer.invoke("maximize-window"),
+  close: () => ipcRenderer.invoke("close-window"),
+  setUpdateChannel: (isBeta) =>
+    ipcRenderer.invoke("set-update-channel", isBeta),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  toggleAlwaysOnTop: () => ipcRenderer.invoke("toggle-always-on-top"),
+  downloadVtt: () => ipcRenderer.invoke("download-vtt"),
 });

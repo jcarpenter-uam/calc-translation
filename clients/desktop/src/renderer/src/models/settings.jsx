@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { X } from "@phosphor-icons/react/dist/csr/X";
 import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
 import PinToggle from "../components/pinned-toggle.jsx";
 import { useLanguage } from "../context/language.jsx";
+import BetaToggle from "../components/beta-toggle.jsx";
 
 const SettingsRow = ({ label, children }) => (
   <div className="flex items-center justify-between">
@@ -16,6 +17,28 @@ const SettingsRow = ({ label, children }) => (
 
 export default function SettingsModal({ isOpen, onClose }) {
   const { language } = useLanguage();
+
+  const [appVersion, setAppVersion] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      async function fetchVersion() {
+        try {
+          if (window.electron && window.electron.getAppVersion) {
+            const version = await window.electron.getAppVersion();
+            setAppVersion(version);
+          } else {
+            console.error("window.electron.getAppVersion is not defined!");
+            setAppVersion("N/A");
+          }
+        } catch (error) {
+          console.error("Failed to get app version:", error);
+          setAppVersion("N/A");
+        }
+      }
+      fetchVersion();
+    }
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
@@ -62,7 +85,18 @@ export default function SettingsModal({ isOpen, onClose }) {
           <SettingsRow label={language === "english" ? "Language" : "语言"}>
             <LanguageToggle />
           </SettingsRow>
+          <div className="border-b border-zinc-200/80 dark:border-zinc-700/80 !my-2"></div>
+          <SettingsRow
+            label={language === "english" ? "Beta Updates" : "测试版更新"}
+          >
+            <BetaToggle />
+          </SettingsRow>
         </main>
+        <footer className="px-6 py-3 text-center border-t border-zinc-200/80 dark:border-zinc-700/80">
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            {language === "english" ? "Version" : "版本"} {appVersion}
+          </span>
+        </footer>
       </div>
     </div>
   );

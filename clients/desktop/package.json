@@ -1,6 +1,6 @@
 {
   "name": "calc-translation-desktop",
-  "version": "1.0.8-beta.2-desktop",
+  "version": "1.0.8-beta.3-desktop",
   "description": "A desktop app for CALC Translation",
   "main": "out/main/index.js",
   "scripts": {
@@ -55,6 +55,7 @@
     ],
     "publish": {
       "provider": "github",
+      "channel": "desktop",
       "owner": "jcarpenter-uam",
       "repo": "calc-translation"
     }

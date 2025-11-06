@@ -4,8 +4,8 @@ import log from "electron-log/main";
 import { getMainWindow } from "./windowmanager";
 
 export function setupAutoUpdaterListeners() {
+  autoUpdater.channel = "desktop";
   autoUpdater.allowPrerelease = false;
-
   autoUpdater.autoDownload = true;
 
   autoUpdater.on("update-available", (info) => {
@@ -52,6 +52,7 @@ export function checkForUpdates() {
 }
 
 export function setUpdateChannel(isBetaEnabled) {
+  autoUpdater.channel = "desktop";
   if (isBetaEnabled) {
     autoUpdater.allowPrerelease = true;
     log.info("Switched to BETA update channel.");

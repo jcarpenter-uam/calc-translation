@@ -1,10 +1,8 @@
 import { app, BrowserWindow } from "electron";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { autoUpdater } from "electron-updater";
 import log from "electron-log/main";
 
-// Import your new modules
-import { createMainWindow, getMainWindow } from "./modules/windowmanager";
+import { createMainWindow } from "./modules/windowmanager";
 import { registerIpcHandlers } from "./modules/ipchandlers";
 import { createApplicationMenu } from "./modules/appmenu";
 import {
@@ -18,16 +16,12 @@ log.errorHandler.startCatching();
 app.whenReady().then(() => {
   log.info("App is ready.");
 
-  // Setup listeners *before* creating the window or checking
   setupAutoUpdaterListeners();
 
-  // Create the window
   createMainWindow();
 
-  // Register IPC handlers now that the window exists
   registerIpcHandlers();
 
-  // Create the application menu
   createApplicationMenu();
 
   electronApp.setAppUserModelId("com.electron");
@@ -40,7 +34,6 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
 
-  // Now, check for updates
   checkForUpdates();
 });
 

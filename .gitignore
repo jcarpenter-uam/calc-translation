@@ -7,11 +7,11 @@ venv/
 debug/
 session_history/
 
-# Web/Desktop
+# Web
 node_modules/
 logs/
 dist/
-out
+out/
 
 # Secrets
 .env

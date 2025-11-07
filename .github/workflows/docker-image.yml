@@ -6,9 +6,6 @@ on:
 
 jobs:
   build-and-push:
-    # This job will now only run if the release tag *does not* end with '-desktop'
-    if: endsWith(github.event.release.tag_name, '-desktop') == false
-
     runs-on: ubuntu-latest
     permissions:
       contents: read

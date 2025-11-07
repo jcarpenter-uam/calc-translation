@@ -14,7 +14,7 @@ load_dotenv()
 
 # --- Configuration ---
 WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe")
-SPEAKER_NAME = "Jonah"
+SPEAKER_NAME = "CALC IT"
 TARGET_SAMPLE_RATE = 16000
 
 WS_SECRET_TOKEN = os.getenv("WS_SECRET_TOKEN")

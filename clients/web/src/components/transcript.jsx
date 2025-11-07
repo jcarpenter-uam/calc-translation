@@ -3,7 +3,7 @@ import { HiOutlineSparkles, HiPencil } from "react-icons/hi";
 import { useLanguage } from "../context/language.jsx";
 
 /**
- * A component to display a visual status for the correction process.
+ * A component to display a visual status if correction is needed.
  */
 const CorrectionStatusIndicator = ({ status }) => {
   if (!status) return null;
@@ -77,10 +77,10 @@ export default function Transcript({
   }
 
   return (
-    <div className="grid grid-cols-[auto_1fr] gap-x-3 mb-6 pb-6 border-b border-zinc-200 dark:border-zinc-800 last:border-b-0 last:mb-0 last:pb-0">
+    <div className="grid grid-cols-[9rem_1fr] gap-x-3 mb-6 pb-6 border-b border-zinc-200 dark:border-zinc-800 last:border-b-0 last:mb-0 last:pb-0">
       {/* Speaker Name and Status Icon*/}
-      <div className="flex items-center gap-2">
-        <div className="font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap text-base sm:text-lg">
+      <div className="flex items-center justify-end gap-2">
+        <div className="font-semibold text-zinc-900 dark:text-zinc-100 text-right text-base sm:text-lg">
           {speaker}:
         </div>
         <CorrectionStatusIndicator status={correctionStatus} />

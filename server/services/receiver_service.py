@@ -216,15 +216,6 @@ def create_receiver_router(viewer_manager, DEBUG_MODE):
                 message = json.loads(raw_message)
                 current_speaker = message.get("userName", "Unknown")
                 audio_chunk = base64.b64decode(message.get("audio"))
-                log_pipeline_step(
-                    "SESSION",
-                    "Received audio chunk from client.",
-                    extra={
-                        "speaker": current_speaker,
-                        "chunk_bytes": len(audio_chunk),
-                    },
-                    detailed=True,
-                )
 
                 if DEBUG_MODE:
                     session_raw_audio.append(audio_chunk)

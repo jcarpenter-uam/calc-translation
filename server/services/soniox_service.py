@@ -46,6 +46,7 @@ class SonioxService:
         self.loop = loop
         self.ws = None
         self.receive_task = None
+        self._is_connected = False
         self.SONIOX_WEBSOCKET_URL = "wss://stt-rt.soniox.com/transcribe-websocket"
 
         self.final_transcription_tokens = []
@@ -241,6 +242,7 @@ class SonioxService:
             log_pipeline_step("SONIOX", f"Receive loop error: {e}", detailed=False)
             await self.on_error_callback(str(e))
         finally:
+            self._is_connected = False
             if self.ws:
                 self.ws.close()
 
@@ -253,9 +255,11 @@ class SonioxService:
             config = self._get_config()
             self.ws = connect(self.SONIOX_WEBSOCKET_URL)
             self.ws.send(json.dumps(config))
+            self._is_connected = True
             self.receive_task = self.loop.create_task(self._receive_loop())
             log_pipeline_step("SONIOX", "Soniox service connected.", detailed=True)
         except Exception as e:
+            self._is_connected = False
             log_pipeline_step("SONIOX", f"Soniox connection error: {e}", detailed=False)
             raise
 
@@ -264,18 +268,37 @@ class SonioxService:
         * Sends a chunk of audio data to the websocket.
         * This is run in an executor by the caller.
         """
-        if self.ws:
-            self.ws.send(chunk)
+        if self.ws and self._is_connected:
+            try:
+                self.ws.send(chunk)
+            except Exception as e:
+                log_pipeline_step("SONIOX", f"Send chunk error: {e}", detailed=False)
+                self._is_connected = False
 
     def finalize_stream(self):
         """
         * Signals the end of the *entire* audio stream (session end).
         * This is run in an executor by the caller.
         """
-        if self.ws:
-            self.ws.send("")
+        if self.ws and self._is_connected:
+            try:
+                self.ws.send("")
+                log_pipeline_step(
+                    "SONIOX",
+                    "Soniox stream finalized (session end).",
+                    detailed=True,
+                )
+            except Exception as e:
+                log_pipeline_step(
+                    "SONIOX",
+                    f"Finalize stream error (connection likely closed): {e}",
+                    detailed=True,
+                )
+            finally:
+                self._is_connected = False
+        else:
             log_pipeline_step(
                 "SONIOX",
-                "Soniox stream finalized (session end).",
+                "Skipping finalize_stream: connection already closed.",
                 detailed=True,
             )

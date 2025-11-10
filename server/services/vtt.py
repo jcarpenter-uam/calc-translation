@@ -114,7 +114,7 @@ def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, A
             )
             return
 
-        output_dir = os.path.join("..", "output", integration, session_id)
+        output_dir = os.path.join("output", integration, session_id)
         os.makedirs(output_dir, exist_ok=True)
 
         vtt_filepath = os.path.join(output_dir, "transcript.vtt")

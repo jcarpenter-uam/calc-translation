@@ -3,8 +3,8 @@ __pycache__/
 venv/
 logs/*
 !logs/README.md
-output/*
-!output/README.md
+server/output/*
+!server/output/README.md
 # WILL BE REMOVED
 debug/
 session_history/

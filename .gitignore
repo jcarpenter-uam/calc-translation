@@ -1,9 +1,9 @@
 # ----- server -----
 __pycache__/
 venv/
-logs/
+logs/*
 !logs/README.md
-output/
+output/*
 !output/README.md
 # WILL BE REMOVED
 debug/
@@ -16,6 +16,7 @@ session_history/
 node_modules/
 dist/
 out/
+logs/node*
 
 # Secrets
 .env

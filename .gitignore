@@ -1,18 +1,21 @@
-# Correction Model
-*.gguf
-
-# Server
+# ----- server -----
 __pycache__/
 venv/
+logs/
+!logs/README.md
+output/
+!output/README.md
+# WILL BE REMOVED
 debug/
 session_history/
 
+# Correction Model
+*.gguf
+
 # Web
 node_modules/
-logs/
 dist/
 out/
 
 # Secrets
 .env
-docker-compose.yaml

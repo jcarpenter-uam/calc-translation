@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from api.clients import create_clients_router
-from api.monitoring import create_monitoring_router
 from api.transcribe import create_transcribe_router
 from api.viewing import create_viewer_router
 from fastapi import FastAPI
@@ -39,9 +38,6 @@ app.include_router(viewer_router)
 
 clients_router = create_clients_router(viewer_manager=viewer_manager)
 app.include_router(clients_router)
-
-monitoring_router = create_monitoring_router(viewer_manager=viewer_manager)
-app.include_router(monitoring_router)
 
 download_router = create_download_router()
 app.include_router(download_router)

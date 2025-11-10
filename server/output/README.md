@@ -4,11 +4,7 @@ For example:
 
 ```
 ./{integration}/{session}
-    - meeting.m4a
-    - {user}.m4a
     - transcipt.vtt
 ./{integration}/{session}
-    - meeting.m4a
-    - {user}.m4a
     - transcipt.vtt
 ```

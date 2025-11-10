@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Any, Dict, List, Set
 
 from fastapi import WebSocket
@@ -13,8 +14,27 @@ class ConnectionManager:
     def __init__(self, cache: TranscriptCache):
         """Initializes the manager with connections and a transcript cache."""
         self.sessions: Dict[str, List[WebSocket]] = {}
-        self.active_transcription_sessions: Set[str] = set()
+        self.active_transcription_sessions: Dict[str, Dict[str, Any]] = {}
+        self.monitoring_subscriptions: Dict[WebSocket, Set[str]] = {}
         self.cache = cache
+        log_pipeline_step("MANAGER", "ConnectionManager initialized.", detailed=True)
+
+    async def connect_monitor(self, websocket: WebSocket):
+        """Registers a new monitoring client."""
+        await websocket.accept()
+        self.monitoring_subscriptions[websocket] = set()
+        log_pipeline_step("MONITOR", "Monitoring client connected.")
+
+    def disconnect_monitor(self, websocket: WebSocket):
+        """Removes a monitoring client."""
+        self.monitoring_subscriptions.pop(websocket, None)
+        log_pipeline_step("MONITOR", "Monitoring client disconnected.")
+
+    def add_subscription(self, websocket: WebSocket, topic: str):
+        """Adds a topic subscription to a monitoring client."""
+        if websocket in self.monitoring_subscriptions:
+            self.monitoring_subscriptions[websocket].add(topic)
+            log_pipeline_step("MONITOR", f"Client subscribed to topic: {topic}")
 
     def register_transcription_session(self, session_id: str):
         """Marks a transcription session as active."""
@@ -25,15 +45,64 @@ class ConnectionManager:
             extra={"session": session_id},
         )
 
-    def deregister_transcription_session(self, session_id: str):
+    async def broadcast_to_monitors(
+        self, event_payload: Dict[str, Any], integration: str, session_id: str
+    ):
+        """Broadcasts an event to subscribed monitoring clients."""
+        tasks = []
+        client_topic = f"clients:{integration}"
+        session_topic = f"session:{integration}:{session_id}"
+
+        for ws, subscriptions in self.monitoring_subscriptions.items():
+            if (
+                "clients:all" in subscriptions
+                or client_topic in subscriptions
+                or session_topic in subscriptions
+            ):
+                if ws.application_state == 1:
+                    tasks.append(ws.send_json(event_payload))
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def register_transcription_session(self, session_id: str, integration: str):
+        """Marks a transcription session as active and stores its data."""
+        session_data = {
+            "integration": integration,
+            "start_time": datetime.utcnow().isoformat(),
+        }
+        self.active_transcription_sessions[session_id] = session_data
+
+        log_pipeline_step(
+            "MANAGER",
+            f"Transcription session '{session_id}' registered as active.",
+            extra={"session": session_id, "integration": integration},
+        )
+
+        payload = {
+            "event": "client_connect",
+            "session_id": session_id,
+            "data": session_data,
+        }
+        await self.broadcast_to_monitors(payload, integration, session_id)
+
+    async def deregister_transcription_session(self, session_id: str):
         """Marks a transcription session as inactive."""
         if session_id in self.active_transcription_sessions:
-            self.active_transcription_sessions.remove(session_id)
+            session_data = self.active_transcription_sessions.pop(session_id)
+            integration = session_data.get("integration", "unknown")
+
             log_pipeline_step(
                 "MANAGER",
                 f"Transcription session '{session_id}' deregistered.",
-                extra={"session": session_id},
+                extra={"session": session_id, "integration": integration},
             )
+
+            payload = {
+                "event": "client_disconnect",
+                "session_id": session_id,
+                "data": session_data,
+            }
+            await self.broadcast_to_monitors(payload, integration, session_id)
 
     def is_session_active(self, session_id: str) -> bool:
         """Checks if a transcription session is currently active."""
@@ -96,3 +165,15 @@ class ConnectionManager:
         if session_id in self.sessions:
             tasks = [conn.send_json(payload) for conn in self.sessions[session_id]]
             await asyncio.gather(*tasks, return_exceptions=True)
+
+        if payload.get("type") in ["partial", "final", "correction"]:
+            log_payload = {
+                "event": "session_log",
+                "session_id": session_id,
+                "log": payload,
+            }
+            if session_id in self.active_transcription_sessions:
+                integration = self.active_transcription_sessions[session_id].get(
+                    "integration", "unknown"
+                )
+                await self.broadcast_to_monitors(log_payload, integration, session_id)

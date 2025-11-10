@@ -1,3 +1,6 @@
+# TODO: Need a way to allow N:N sessions so that multiple meetings can use the app at a time
+# This will come with additions to security using zoom meeting ID and pass
+
 import asyncio
 import base64
 import json
@@ -23,8 +26,6 @@ from .timestamp import TimestampService
 def create_receiver_router(viewer_manager, DEBUG_MODE):
     router = APIRouter()
 
-    # TODO:
-    # only accept first attempt per meetingid?
     @router.websocket("/ws/transcribe")
     async def websocket_transcribe_endpoint(
         websocket: WebSocket, is_authenticated: bool = Depends(validate_token)
@@ -169,7 +170,6 @@ def create_receiver_router(viewer_manager, DEBUG_MODE):
                     correction_service
                     and result.transcription
                     and result.transcription.strip()
-                    # Only send Chinese to correction model
                     and result.source_language == "zh"
                 ):
                     utterance_to_store = {
@@ -226,8 +226,10 @@ def create_receiver_router(viewer_manager, DEBUG_MODE):
                 # )
                 # if DEBUG_MODE:
                 #     session_processed.append(processed_audio)
+                # await loop.run_in_executor(
+                #     None, transcription_service.send_chunk, processed_audio
+                # )
 
-                # BUG: Send processed_audio once that is fixed
                 await loop.run_in_executor(
                     None, transcription_service.send_chunk, audio_chunk
                 )

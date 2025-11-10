@@ -1,13 +1,10 @@
+# BUG: This service is not currently in use due to lack of time to evaluate solutions
+# The goal is to find a lightweight denoising solution that is actually effective at isolating vocals
+
 import noisereduce as nr
 import numpy as np
 
 from .debug import log_pipeline_step
-
-# BUG:
-# /usr/local/lib/python3.13/site-packages/noisereduce/spectralgate/nonstationary.py:70: RuntimeWarning: invalid value encountered in divide
-# sig_mult_above_thresh = (abs_sig_stft - sig_stft_smooth) / sig_stft_smooth
-# /app/services/audio_processing_service.py:41: RuntimeWarning: invalid value encountered in cast
-# return reduced_noise_audio.astype(np.int16)
 
 
 class AudioProcessingService:

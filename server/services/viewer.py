@@ -1,3 +1,5 @@
+# TODO: This endpoint will be protected
+
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 # from .auth_service import validate_token

@@ -34,7 +34,6 @@ class TimestampService:
         """
         total_seconds = td.total_seconds()
 
-        # Ensure time is not negative
         if total_seconds < 0:
             total_seconds = 0
 
@@ -68,13 +67,9 @@ class TimestampService:
         """
         utterance_end_time = datetime.now()
 
-        # Retrieve the start time, removing it from the tracking dict
         utterance_start_time = self._utterance_start_times.pop(message_id, None)
 
         if not utterance_start_time:
-            # This could happen if a final is received without a partial,
-            # or if the utterance was too fast. We'll use the end time as
-            # a fallback start time to provide a valid, if 0-duration, timestamp.
             utterance_start_time = utterance_end_time
             log_pipeline_step(
                 "TIMESTAMP",
@@ -83,15 +78,12 @@ class TimestampService:
                 detailed=True,
             )
 
-        # Calculate deltas from the session "zero point"
         start_delta = utterance_start_time - self._session_start_time
         end_delta = utterance_end_time - self._session_start_time
 
-        # Ensure end time is never before start time
         if end_delta < start_delta:
             end_delta = start_delta
 
-        # Format into strings
         start_str = self._format_timedelta(start_delta)
         end_str = self._format_timedelta(end_delta)
 

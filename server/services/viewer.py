@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 # from .auth_service import validate_token
-from .connection_manager_service import ConnectionManager
+from .connection_manager import ConnectionManager
 
 
 def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:

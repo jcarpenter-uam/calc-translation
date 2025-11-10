@@ -2,7 +2,7 @@ import os
 
 from fastapi import Depends, Header, WebSocketException, status
 
-from .debug_service import log_pipeline_step
+from .debug import log_pipeline_step
 
 try:
     APP_SECRET_TOKEN = os.environ["SECRET_TOKEN"]

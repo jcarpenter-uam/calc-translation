@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from starlette.responses import FileResponse
 
 try:
-    from .debug_service import log_pipeline_step
+    from .debug import log_pipeline_step
 except ImportError:
 
     def log_pipeline_step(tag, message, **kwargs):

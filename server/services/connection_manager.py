@@ -3,8 +3,8 @@ from typing import Any, Dict, List
 
 from fastapi import WebSocket
 
-from .cache_service import TranscriptCache
-from .debug_service import log_pipeline_step
+from .cache import TranscriptCache
+from .debug import log_pipeline_step
 
 
 class ConnectionManager:

@@ -7,12 +7,12 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from services.cache_service import TranscriptCache
-from services.connection_manager_service import ConnectionManager
-from services.debug_service import log_pipeline_step
-from services.download_transcript_service import create_download_router
-from services.receiver_service import create_receiver_router
-from services.viewer_service import create_viewer_router
+from services.cache import TranscriptCache
+from services.connection_manager import ConnectionManager
+from services.debug import log_pipeline_step
+from services.download_transcript import create_download_router
+from services.receiver import create_receiver_router
+from services.viewer import create_viewer_router
 
 app = FastAPI(
     title="CALC Transcription and Translation API",

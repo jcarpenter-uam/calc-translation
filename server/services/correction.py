@@ -8,7 +8,7 @@ import ollama
 from dotenv import load_dotenv
 from openai import APIError, AsyncOpenAI
 
-from .debug_service import log_pipeline_step, log_utterance_step
+from .debug import log_pipeline_step, log_utterance_step
 
 
 class RetranslationService:

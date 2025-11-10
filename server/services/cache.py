@@ -5,7 +5,7 @@ from typing import Any, Deque, Dict, List
 
 from pympler.asizeof import asizeof
 
-from .debug_service import log_pipeline_step
+from .debug import log_pipeline_step
 
 _DEFAULT_FALLBACK_MB = 10
 _max_cache_mb_str = os.getenv("MAX_CACHE_MB", str(_DEFAULT_FALLBACK_MB))

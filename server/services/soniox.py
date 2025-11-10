@@ -7,7 +7,7 @@ from typing import Awaitable, Callable, Optional
 from websockets import ConnectionClosedOK
 from websockets.sync.client import connect
 
-from .debug_service import log_pipeline_step
+from .debug import log_pipeline_step
 
 
 @dataclass

@@ -7,17 +7,17 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from .audio_processing_service import AudioProcessingService
-from .auth_service import validate_token
-from .correction_service import CorrectionService
-from .debug_service import (
+from .audio_processing import AudioProcessingService
+from .auth import validate_token
+from .correction import CorrectionService
+from .debug import (
     log_pipeline_step,
     log_utterance_end,
     log_utterance_start,
     save_audio_to_wav,
 )
-from .soniox_service import SonioxResult, SonioxService
-from .timestamp_service import TimestampService
+from .soniox import SonioxResult, SonioxService
+from .timestamp import TimestampService
 
 
 def create_receiver_router(viewer_manager, DEBUG_MODE):

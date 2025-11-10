@@ -1,7 +1,7 @@
 import noisereduce as nr
 import numpy as np
 
-from .debug_service import log_pipeline_step
+from .debug import log_pipeline_step
 
 # BUG:
 # /usr/local/lib/python3.13/site-packages/noisereduce/spectralgate/nonstationary.py:70: RuntimeWarning: invalid value encountered in divide

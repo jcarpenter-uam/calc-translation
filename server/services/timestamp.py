@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Dict
 
-from .debug_service import log_pipeline_step
+from .debug import log_pipeline_step
 
 
 class TimestampService:

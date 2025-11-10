@@ -25,7 +25,7 @@ def log_pipeline_step(
     *,
     message_id: Optional[str] = None,
     speaker: Optional[str] = None,
-    extra: Optional[Dict[str, Union[str, int, float]]] = None,
+    extra: Optional[Dict[str, Union[str, int, float, bool]]] = None,
     detailed: bool = True,
     stream: TextIO = sys.stdout,
 ) -> None:
@@ -44,6 +44,14 @@ def log_pipeline_step(
         return
 
     prefix = _format_prefix(message_id=message_id, speaker=speaker, step=step)
+
+    session_id = None
+    if extra and "session" in extra:
+        session_id = extra.pop("session", None)
+
+    if session_id:
+        prefix = f"{prefix} [session={session_id}]"
+
     print(f"{prefix} {message}", file=stream)
 
     if DEBUG_MODE and extra:
@@ -51,7 +59,9 @@ def log_pipeline_step(
             print(f"{prefix}    - {key}: {value}", file=stream)
 
 
-def log_utterance_start(message_id: str, speaker: Optional[str]) -> None:
+def log_utterance_start(
+    message_id: str, speaker: Optional[str], session_id: str = "unknown"
+) -> None:
     """Logs when processing of an utterance begins."""
 
     log_pipeline_step(
@@ -59,6 +69,7 @@ def log_utterance_start(message_id: str, speaker: Optional[str]) -> None:
         "Starting pipeline for utterance.",
         message_id=message_id,
         speaker=speaker,
+        extra={"session": session_id},
         detailed=False,
     )
 
@@ -69,7 +80,7 @@ def log_utterance_step(
     description: str,
     *,
     speaker: Optional[str] = None,
-    extra: Optional[Dict[str, Union[str, int, float]]] = None,
+    extra: Optional[Dict[str, Union[str, int, float, bool]]] = None,
     detailed: bool = True,
 ) -> None:
     """Helper to log a detailed step within an utterance pipeline."""
@@ -84,7 +95,9 @@ def log_utterance_step(
     )
 
 
-def log_utterance_end(message_id: str, speaker: Optional[str]) -> None:
+def log_utterance_end(
+    message_id: str, speaker: Optional[str], session_id: str = "unknown"
+) -> None:
     """Logs when processing of an utterance is complete."""
 
     log_pipeline_step(
@@ -92,6 +105,7 @@ def log_utterance_end(message_id: str, speaker: Optional[str]) -> None:
         "Finished pipeline for utterance.",
         message_id=message_id,
         speaker=speaker,
+        extra={"session": session_id},
         detailed=False,
     )
 

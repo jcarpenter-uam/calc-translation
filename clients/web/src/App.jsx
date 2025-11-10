@@ -13,7 +13,7 @@ export default function App() {
     status: transcriptionStatus,
     transcripts,
     isDownloadable,
-  } = useTranscriptStream("/ws/view_transcript");
+  } = useTranscriptStream("/ws/view/test/test");
 
   const lastTopTextRef = React.useRef(null);
   const notification = useSmartScroll(transcripts, lastTopTextRef);

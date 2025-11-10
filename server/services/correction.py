@@ -36,7 +36,7 @@ class RetranslationService:
         )
 
     async def translate_stream(
-        self, text_to_translate: str
+        self, text_to_translate: str, session_id: str = "unknown"
     ) -> AsyncGenerator[str, None]:
         """
         Retranslates a block of text using the Qwen model and streams the results.
@@ -51,7 +51,7 @@ class RetranslationService:
         log_pipeline_step(
             "RETRANSLATION",
             "Submitting text for retranslation.",
-            extra={"characters": len(text_to_translate)},
+            extra={"characters": len(text_to_translate), "session": session_id},
             detailed=False,
         )
 
@@ -78,6 +78,7 @@ class RetranslationService:
                         extra={
                             "delta_length": len(content),
                             "has_more": not chunk.choices[0].finish_reason,
+                            "session": session_id,
                         },
                         detailed=True,
                     )
@@ -85,6 +86,7 @@ class RetranslationService:
             log_pipeline_step(
                 "RETRANSLATION",
                 "Retranslation stream completed successfully.",
+                extra={"session": session_id},
                 detailed=False,
             )
         except APIError as e:
@@ -92,6 +94,7 @@ class RetranslationService:
             log_pipeline_step(
                 "RETRANSLATION",
                 f"Alibaba Qwen API error: {e}",
+                extra={"session": session_id},
                 detailed=False,
             )
             yield error_message
@@ -99,6 +102,7 @@ class RetranslationService:
             log_pipeline_step(
                 "RETRANSLATION",
                 f"An unexpected error occurred during retranslation: {e}",
+                extra={"session": session_id},
                 detailed=False,
             )
             yield "[Translation Error]"
@@ -110,23 +114,32 @@ class CorrectionService:
     This service is stateful and manages the utterance history.
     """
 
-    def __init__(self, ollama_url: str, viewer_manager, model: str = "correction"):
+    def __init__(
+        self,
+        ollama_url: str,
+        viewer_manager,
+        session_id: str,
+        model: str = "correction",
+    ):
         """
         Initializes the service.
 
         Args:
             ollama_url (str): The base URL for the Ollama API.
             viewer_manager: The WebSocket manager for broadcasting updates.
+            session_id (str): The unique ID for this session.
             model (str): The name of the model to use for corrections.
         """
         log_pipeline_step(
             "CORRECTION",
             f"Initializing Stateful Correction Service with model '{model}' at {ollama_url}...",
+            extra={"session": session_id},
             detailed=False,
         )
         self.model = model
         self.client = ollama.AsyncClient(host=ollama_url)
         self.viewer_manager = viewer_manager
+        self.session_id = session_id
         self.retranslation_service = RetranslationService()
         self.utterance_history = deque(maxlen=5)
         self.CORRECTION_CONTEXT_THRESHOLD = 5
@@ -134,7 +147,7 @@ class CorrectionService:
         log_pipeline_step(
             "CORRECTION",
             "Ollama correction client initialized.",
-            extra={"model": model, "host": ollama_url},
+            extra={"model": model, "host": ollama_url, "session": self.session_id},
             detailed=True,
         )
 
@@ -153,6 +166,7 @@ class CorrectionService:
         log_pipeline_step(
             "CORRECTION",
             f"Sending prompt to Ollama: {prompt}",
+            extra={"session": self.session_id},
             detailed=False,
         )
 
@@ -165,7 +179,10 @@ class CorrectionService:
             log_pipeline_step(
                 "CORRECTION",
                 "Received raw correction response.",
-                extra={"response_length": len(response_content)},
+                extra={
+                    "response_length": len(response_content),
+                    "session": self.session_id,
+                },
                 detailed=True,
             )
 
@@ -191,6 +208,7 @@ class CorrectionService:
                         "has_corrected_sentence": bool(
                             response_data.get("corrected_sentence")
                         ),
+                        "session": self.session_id,
                     },
                     detailed=False,
                 )
@@ -203,7 +221,7 @@ class CorrectionService:
             log_pipeline_step(
                 "CORRECTION",
                 f"Error: Could not extract valid JSON from response. RAW_RESPONSE: '{response_content}'",
-                extra={"response": response_content},
+                extra={"response": response_content, "session": self.session_id},
                 detailed=False,
             )
             return {
@@ -215,6 +233,7 @@ class CorrectionService:
             log_pipeline_step(
                 "CORRECTION",
                 f"Error calling Ollama: {e}",
+                extra={"session": self.session_id},
                 detailed=False,
             )
             return {
@@ -233,6 +252,7 @@ class CorrectionService:
             extra={
                 "target_transcription": target_utterance["transcription"],
                 "history_size": len(self.utterance_history),
+                "session": self.session_id,
             },
         )
 
@@ -252,6 +272,7 @@ class CorrectionService:
                 target_utterance["message_id"],
                 "Target utterance not found in history; sending without context.",
                 speaker=target_utterance["speaker"],
+                extra={"session": self.session_id},
             )
 
         response_data = await self.correct_with_context(
@@ -269,24 +290,29 @@ class CorrectionService:
             and corrected_transcription.strip()
             != target_utterance["transcription"].strip()
         ):
-            await self.viewer_manager.broadcast(
+            await self.viewer_manager.broadcast_to_session(
+                self.session_id,
                 {
                     "message_id": target_utterance["message_id"],
                     "type": "status_update",
                     "correction_status": "correcting",
-                }
+                },
             )
             log_utterance_step(
                 "CORRECTION",
                 target_utterance["message_id"],
                 "Correction is needed and will be applied.",
                 speaker=target_utterance["speaker"],
-                extra={"reason": reason, "corrected_text": corrected_transcription},
+                extra={
+                    "reason": reason,
+                    "corrected_text": corrected_transcription,
+                    "session": self.session_id,
+                },
             )
 
             full_corrected_translation = ""
             async for chunk in self.retranslation_service.translate_stream(
-                text_to_translate=corrected_transcription
+                text_to_translate=corrected_transcription, session_id=self.session_id
             ):
                 full_corrected_translation = chunk
 
@@ -298,12 +324,13 @@ class CorrectionService:
                 "type": "correction",
                 "isfinalize": True,
             }
-            await self.viewer_manager.broadcast(payload)
+            await self.viewer_manager.broadcast_to_session(self.session_id, payload)
             log_utterance_step(
                 "CORRECTION",
                 target_utterance["message_id"],
                 "Correction broadcast complete.",
                 speaker=target_utterance["speaker"],
+                extra={"session": self.session_id},
                 detailed=False,
             )
         else:
@@ -317,7 +344,7 @@ class CorrectionService:
                 target_utterance["message_id"],
                 "No correction applied.",
                 speaker=target_utterance["speaker"],
-                extra={"reason": log_reason},
+                extra={"reason": log_reason, "session": self.session_id},
                 detailed=False,
             )
 
@@ -339,7 +366,10 @@ class CorrectionService:
             utterance["message_id"],
             "Received final utterance for history.",
             speaker=utterance["speaker"],
-            extra={"history_size": len(self.utterance_history)},
+            extra={
+                "history_size": len(self.utterance_history),
+                "session": self.session_id,
+            },
             detailed=True,
         )
         self.utterance_history.append(utterance)
@@ -357,6 +387,7 @@ class CorrectionService:
             log_pipeline_step(
                 "SESSION",
                 f"Performing final correction check on last {len(final_targets)} utterance(s).",
+                extra={"session": self.session_id},
                 detailed=False,
             )
             for utterance in final_targets:
@@ -365,6 +396,7 @@ class CorrectionService:
             log_pipeline_step(
                 "SESSION",
                 f"Performing final correction check on all {len(self.utterance_history)} utterance(s).",
+                extra={"session": self.session_id},
                 detailed=False,
             )
             for utterance in list(self.utterance_history):
@@ -373,5 +405,6 @@ class CorrectionService:
             log_pipeline_step(
                 "SESSION",
                 f"Not enough history ({len(self.utterance_history)}) for final corrections check.",
+                extra={"session": self.session_id},
                 detailed=False,
             )

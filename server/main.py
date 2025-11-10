@@ -5,13 +5,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from api.transcribe import create_transcribe_router
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from services.cache import TranscriptCache
 from services.connection_manager import ConnectionManager
 from services.debug import log_pipeline_step
 from services.download_transcript import create_download_router
-from services.receiver import create_receiver_router
 from services.viewer import create_viewer_router
 
 app = FastAPI(
@@ -29,11 +29,8 @@ log_pipeline_step(
 transcript_cache = TranscriptCache()
 viewer_manager = ConnectionManager(cache=transcript_cache)
 
-receiver_router = create_receiver_router(
-    viewer_manager=viewer_manager,
-    DEBUG_MODE=DEBUG_MODE,
-)
-app.include_router(receiver_router)
+transcribe_router = create_transcribe_router(viewer_manager=viewer_manager)
+app.include_router(transcribe_router)
 
 viewer_router = create_viewer_router(viewer_manager=viewer_manager)
 app.include_router(viewer_router)

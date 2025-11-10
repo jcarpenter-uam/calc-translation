@@ -24,31 +24,26 @@ except ValueError:
     DEFAULT_MAX_CACHE_MB = _DEFAULT_FALLBACK_MB
 
 
-class TranscriptCache:
+class _SessionCache:
     """
-    Manages a bounded history cache for transcript messages,
+    Manages a bounded history cache for a *single* transcript session,
     limited by total size in megabytes.
-    Supports status updates and corrections via message_id.
     """
 
-    def __init__(self, max_size_mb: int = DEFAULT_MAX_CACHE_MB):
+    def __init__(self, max_size_bytes: int):
         """
-        Initializes the cache with a dictionary for lookups, a deque for order,
-        and a size limit in bytes.
+        Initializes the session cache with a size limit in bytes.
         """
-        if max_size_mb <= 0:
-            raise ValueError("max_size_mb must be a positive number.")
-        self._max_size_bytes = max_size_mb * 1024 * 1024
+        self._max_size_bytes = max_size_bytes
         self._current_size_bytes: int = 0
         self._cache_dict: Dict[str, Dict[str, Any]] = {}
         self._order_queue: Deque[str] = deque()
 
     def clear(self):
-        """Clears all entries from the cache."""
+        """Clears all entries from this session's cache."""
         self._cache_dict.clear()
         self._order_queue.clear()
         self._current_size_bytes = 0
-        log_pipeline_step("CACHE", "Transcript cache has been cleared.", detailed=False)
 
     def _evict_until_space(self, required_space: int = 0):
         """
@@ -60,11 +55,11 @@ class TranscriptCache:
             oldest_id = self._order_queue.popleft()
             old_item = self._cache_dict.pop(oldest_id, None)
             if old_item:
-                self._current_size_bytes -= asizeof(old_item)
+                old_item_size = asizeof(old_item)
                 self._current_size_bytes -= old_item_size
                 log_pipeline_step(
                     "CACHE",
-                    f"Evicted item from cache to free space. Size: {old_item_size} bytes.",
+                    f"Evicted item from cache. Size: {old_item_size} bytes.",
                     extra={
                         "evicted_message_id": oldest_id,
                         "size_bytes": old_item_size,
@@ -75,9 +70,7 @@ class TranscriptCache:
 
     def process_message(self, payload: Dict[str, Any]):
         """
-        Processes an incoming message. Adds a message to the cache only when
-        'isfinalize' is true. Updates existing messages for corrections or status changes.
-        Manages cache size by evicting oldest items.
+        Processes an incoming message for this session.
         """
         message_id = payload.get("message_id")
         if not message_id:
@@ -89,7 +82,6 @@ class TranscriptCache:
 
         if is_new_and_finalized:
             new_item_size = asizeof(payload)
-
             self._evict_until_space(required_space=new_item_size)
 
             self._order_queue.append(message_id)
@@ -113,6 +105,7 @@ class TranscriptCache:
             message_type = payload.get("type")
             old_item_size = asizeof(self._cache_dict[message_id])
             new_item_size = old_item_size
+            log_msg = ""
 
             if message_type == "correction":
                 self._cache_dict[message_id] = payload
@@ -147,7 +140,7 @@ class TranscriptCache:
 
     def get_history(self) -> List[Dict[str, Any]]:
         """
-        Retrieves the entire history from the cache in chronological order.
+        Retrieves the entire history for this session in chronological order.
         """
         return [
             self._cache_dict[msg_id]
@@ -155,23 +148,26 @@ class TranscriptCache:
             if msg_id in self._cache_dict
         ]
 
-    def save_history_and_clear(self, output_dir: str = "session_history"):
+    def save_history(self, session_id: str, output_dir: str):
         """
-        Saves the current cache history to a timestamped .vtt file
-        in the specified format and then clears the cache.
+        Saves this session's cache history to a timestamped .vtt file.
+        The session_id is used in the filename for identification.
         """
         try:
             transcript_history = self.get_history()
             if not transcript_history:
                 log_pipeline_step(
-                    "CACHE", "No history to save, cache is empty.", detailed=False
+                    "CACHE",
+                    f"No history to save for session {session_id}, cache is empty.",
+                    extra={"session": session_id},
+                    detailed=False,
                 )
                 return
 
             os.makedirs(output_dir, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_name = f"history_{timestamp}.vtt"
+            file_name = f"history_{session_id}_{timestamp}.vtt"
             cache_filepath = os.path.join(output_dir, file_name)
 
             formatted_lines = ["WEBVTT", ""]
@@ -181,7 +177,6 @@ class TranscriptCache:
                 speaker = entry.get("speaker", "Unknown")
                 transcription = entry.get("transcription", "").strip()
                 translation = entry.get("translation", "").strip()
-
                 timestamp_str = entry.get(
                     "vtt_timestamp", "00:00:00.000 --> 00:00:00.000"
                 )
@@ -189,10 +184,8 @@ class TranscriptCache:
                 formatted_lines.append(f"{utterance_num}")
                 formatted_lines.append(f"{timestamp_str}")
                 formatted_lines.append(f"{speaker}: {transcription}")
-
                 if translation:
                     formatted_lines.append(f"{translation}")
-
                 formatted_lines.append("")
 
             with open(cache_filepath, "w", encoding="utf-8") as f:
@@ -200,24 +193,100 @@ class TranscriptCache:
 
             log_pipeline_step(
                 "CACHE",
-                f"Transcript cache saved to file successfully. Total item size: {self._current_size_bytes} bytes.",
+                f"Transcript cache for session {session_id} saved. Size: {self._current_size_bytes} bytes.",
                 extra={
                     "path": cache_filepath,
                     "entries": len(transcript_history),
                     "size_bytes": self._current_size_bytes,
+                    "session": session_id,
                 },
                 detailed=True,
             )
 
-            self.clear()
-
         except Exception as e:
             log_pipeline_step(
                 "CACHE",
-                f"Failed to save history or clear transcript cache: {e}",
+                f"Failed to save history for session {session_id}: {e}",
+                extra={"session": session_id},
                 detailed=False,
             )
 
     def __len__(self) -> int:
         """Returns the current number of items in the cache."""
         return len(self._cache_dict)
+
+
+class TranscriptCache:
+    """
+    Manages multiple independent _SessionCache instances, one for each session_id.
+    """
+
+    def __init__(self, max_size_mb: int = DEFAULT_MAX_CACHE_MB):
+        """
+        Initializes the cache manager.
+        """
+        self._default_max_size_bytes = max_size_mb * 1024 * 1024
+        self.sessions: Dict[str, _SessionCache] = {}
+        log_pipeline_step(
+            "CACHE",
+            f"TranscriptCache Manager initialized. Default per-session limit: {max_size_mb}MB.",
+            detailed=False,
+        )
+
+    def _get_or_create_session(self, session_id: str) -> _SessionCache:
+        """
+        Retrieves or creates a _SessionCache instance for a given session_id.
+        """
+        if session_id not in self.sessions:
+            log_pipeline_step(
+                "CACHE",
+                f"Creating new session cache for: {session_id}",
+                extra={"session": session_id},
+                detailed=True,
+            )
+            self.sessions[session_id] = _SessionCache(
+                max_size_bytes=self._default_max_size_bytes
+            )
+        return self.sessions[session_id]
+
+    def process_message(self, session_id: str, payload: Dict[str, Any]):
+        """
+        Processes an incoming message for a specific session.
+        """
+        session_cache = self._get_or_create_session(session_id)
+        session_cache.process_message(payload)
+
+    def get_history(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Retrieves the entire history for a specific session.
+        """
+        session_cache = self._get_or_create_session(session_id)
+        return session_cache.get_history()
+
+    def save_history_and_clear(
+        self, session_id: str, output_dir: str = "session_history"
+    ):
+        """
+        Saves the history for a specific session and then clears that session
+        from the manager.
+        """
+        if session_id in self.sessions:
+            session_cache = self.sessions[session_id]
+            session_cache.save_history(session_id, output_dir)
+
+            session_cache.clear()
+            del self.sessions[session_id]
+
+            log_pipeline_step(
+                "CACHE",
+                f"Cleared cache for session: {session_id}",
+                extra={"session": session_id},
+                detailed=False,
+            )
+        else:
+            log_pipeline_step(
+                "CACHE",
+                f"No history to save for session {session_id}, cache is empty.",
+                extra={"session": session_id},
+                detailed=False,
+            )

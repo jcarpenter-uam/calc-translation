@@ -6,6 +6,7 @@ from typing import Any, Deque, Dict, List
 from pympler.asizeof import asizeof
 
 from .debug import log_pipeline_step
+from .vtt import create_vtt_file
 
 _DEFAULT_FALLBACK_MB = 10
 _max_cache_mb_str = os.getenv("MAX_CACHE_MB", str(_DEFAULT_FALLBACK_MB))
@@ -148,69 +149,6 @@ class _SessionCache:
             if msg_id in self._cache_dict
         ]
 
-    def save_history(self, session_id: str, output_dir: str):
-        """
-        Saves this session's cache history to a timestamped .vtt file.
-        The session_id is used in the filename for identification.
-        """
-        try:
-            transcript_history = self.get_history()
-            if not transcript_history:
-                log_pipeline_step(
-                    "CACHE",
-                    f"No history to save for session {session_id}, cache is empty.",
-                    extra={"session": session_id},
-                    detailed=False,
-                )
-                return
-
-            os.makedirs(output_dir, exist_ok=True)
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_name = f"history_{session_id}_{timestamp}.vtt"
-            cache_filepath = os.path.join(output_dir, file_name)
-
-            formatted_lines = ["WEBVTT", ""]
-
-            for i, entry in enumerate(transcript_history):
-                utterance_num = i + 1
-                speaker = entry.get("speaker", "Unknown")
-                transcription = entry.get("transcription", "").strip()
-                translation = entry.get("translation", "").strip()
-                timestamp_str = entry.get(
-                    "vtt_timestamp", "00:00:00.000 --> 00:00:00.000"
-                )
-
-                formatted_lines.append(f"{utterance_num}")
-                formatted_lines.append(f"{timestamp_str}")
-                formatted_lines.append(f"{speaker}: {transcription}")
-                if translation:
-                    formatted_lines.append(f"{translation}")
-                formatted_lines.append("")
-
-            with open(cache_filepath, "w", encoding="utf-8") as f:
-                f.write("\n".join(formatted_lines))
-
-            log_pipeline_step(
-                "CACHE",
-                f"Transcript cache for session {session_id} saved. Size: {self._current_size_bytes} bytes.",
-                extra={
-                    "path": cache_filepath,
-                    "entries": len(transcript_history),
-                    "size_bytes": self._current_size_bytes,
-                    "session": session_id,
-                },
-                detailed=True,
-            )
-
-        except Exception as e:
-            log_pipeline_step(
-                "CACHE",
-                f"Failed to save history for session {session_id}: {e}",
-                extra={"session": session_id},
-                detailed=False,
-            )
-
     def __len__(self) -> int:
         """Returns the current number of items in the cache."""
         return len(self._cache_dict)
@@ -263,16 +201,17 @@ class TranscriptCache:
         session_cache = self._get_or_create_session(session_id)
         return session_cache.get_history()
 
-    def save_history_and_clear(
-        self, session_id: str, output_dir: str = "session_history"
-    ):
+    def save_history_and_clear(self, session_id: str, integration: str):
         """
-        Saves the history for a specific session and then clears that session
-        from the manager.
+        Saves the history for a specific session (by calling the VTT service)
+        and then clears that session from the manager.
         """
         if session_id in self.sessions:
             session_cache = self.sessions[session_id]
-            session_cache.save_history(session_id, output_dir)
+
+            history = session_cache.get_history()
+
+            create_vtt_file(session_id, integration, history)
 
             session_cache.clear()
             del self.sessions[session_id]

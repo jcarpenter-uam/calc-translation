@@ -1,5 +1,6 @@
+import os
 from datetime import datetime, timedelta
-from typing import Dict
+from typing import Any, Dict, List
 
 from .debug import log_pipeline_step
 
@@ -97,3 +98,62 @@ class TimestampService:
         )
 
         return vtt_timestamp
+
+
+def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, Any]]):
+    """
+    Saves a session's transcript history to a .vtt file.
+    """
+    try:
+        if not history:
+            log_pipeline_step(
+                "VTT",
+                f"No history to save for session {session_id}, list is empty.",
+                extra={"session": session_id, "integration": integration},
+                detailed=False,
+            )
+            return
+
+        output_dir = os.path.join("..", "output", integration, session_id)
+        os.makedirs(output_dir, exist_ok=True)
+
+        vtt_filepath = os.path.join(output_dir, "transcript.vtt")
+
+        formatted_lines = ["WEBVTT", ""]
+
+        for i, entry in enumerate(history):
+            utterance_num = i + 1
+            speaker = entry.get("speaker", "Unknown")
+            transcription = entry.get("transcription", "").strip()
+            translation = entry.get("translation", "").strip()
+            timestamp_str = entry.get("vtt_timestamp", "00:00:00.000 --> 00:00:00.000")
+
+            formatted_lines.append(f"{utterance_num}")
+            formatted_lines.append(f"{timestamp_str}")
+            formatted_lines.append(f"{speaker}: {transcription}")
+            if translation:
+                formatted_lines.append(f"{translation}")
+            formatted_lines.append("")
+
+        with open(vtt_filepath, "w", encoding="utf-8") as f:
+            f.write("\n".join(formatted_lines))
+
+        log_pipeline_step(
+            "VTT",
+            f"Transcript VTT for session {session_id} saved.",
+            extra={
+                "path": vtt_filepath,
+                "entries": len(history),
+                "session": session_id,
+                "integration": integration,
+            },
+            detailed=True,
+        )
+
+    except Exception as e:
+        log_pipeline_step(
+            "VTT",
+            f"Failed to save VTT for session {session_id}: {e}",
+            extra={"session": session_id, "integration": integration},
+            detailed=False,
+        )

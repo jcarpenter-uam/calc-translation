@@ -14,7 +14,7 @@ from .audio_processing import AudioProcessingService
 from .correction import CorrectionService
 from .debug import log_pipeline_step, log_utterance_end, log_utterance_start
 from .soniox import SonioxResult, SonioxService
-from .timestamp import TimestampService
+from .vtt import TimestampService
 
 
 async def handle_receiver_session(
@@ -282,7 +282,7 @@ async def handle_receiver_session(
                 detailed=True,
             )
 
-        viewer_manager.cache.save_history_and_clear(session_id)
+        viewer_manager.cache.save_history_and_clear(session_id, integration)
 
         log_pipeline_step(
             "SESSION",

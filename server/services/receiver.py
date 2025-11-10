@@ -25,6 +25,7 @@ async def handle_receiver_session(
     transcription/interpretation WebSocket session.
     """
     await websocket.accept()
+    viewer_manager.register_transcription_session(session_id)
     log_pipeline_step(
         "SESSION",
         f"Client connected for session: {session_id}",
@@ -294,3 +295,4 @@ async def handle_receiver_session(
             "message": "The transcription session has concluded.",
         }
         await viewer_manager.broadcast_to_session(session_id, end_payload)
+        viewer_manager.deregister_transcription_session(session_id)

@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 from fastapi import WebSocket
 
@@ -13,7 +13,31 @@ class ConnectionManager:
     def __init__(self, cache: TranscriptCache):
         """Initializes the manager with connections and a transcript cache."""
         self.sessions: Dict[str, List[WebSocket]] = {}
+        self.active_transcription_sessions: Set[str] = set()
         self.cache = cache
+
+    def register_transcription_session(self, session_id: str):
+        """Marks a transcription session as active."""
+        self.active_transcription_sessions.add(session_id)
+        log_pipeline_step(
+            "MANAGER",
+            f"Transcription session '{session_id}' registered as active.",
+            extra={"session": session_id},
+        )
+
+    def deregister_transcription_session(self, session_id: str):
+        """Marks a transcription session as inactive."""
+        if session_id in self.active_transcription_sessions:
+            self.active_transcription_sessions.remove(session_id)
+            log_pipeline_step(
+                "MANAGER",
+                f"Transcription session '{session_id}' deregistered.",
+                extra={"session": session_id},
+            )
+
+    def is_session_active(self, session_id: str) -> bool:
+        """Checks if a transcription session is currently active."""
+        return session_id in self.active_transcription_sessions
 
     async def connect(self, websocket: WebSocket, session_id: str):
         """Accepts a new connection and replays the transcript history for a session."""

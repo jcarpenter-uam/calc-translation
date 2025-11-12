@@ -1,1 +1,1 @@
-# At some point I will need a database
+# Database to save meeting UUIDs with FKs to readable meeting ids

@@ -7,6 +7,9 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
 
+import colorama
+from colorama import Fore, Style
+
 from .config import settings
 
 message_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
@@ -39,30 +42,65 @@ def redact_url(message: str) -> str:
 
 class CustomFormatter(logging.Formatter):
     """
-    A custom formatter that injects context variables into the log prefix.
+    A custom formatter that injects context variables and colors.
     """
 
-    base_format = "[%(asctime)s.%(msecs)03d][%(levelname)s] [%(step)s]"
+    COLORS = {
+        "timestamp": Fore.LIGHTBLACK_EX,
+        "step": Fore.BLUE,
+        "speaker": Fore.CYAN,
+        "message_id": Fore.MAGENTA,
+        "session": Fore.GREEN,
+        "reset": Style.RESET_ALL,
+    }
+
+    LOG_LEVEL_COLORS = {
+        logging.DEBUG: Fore.CYAN,
+        logging.INFO: Fore.GREEN,
+        logging.WARNING: Fore.YELLOW,
+        logging.ERROR: Fore.RED,
+        logging.CRITICAL: Fore.RED + Style.BRIGHT,
+    }
 
     def format(self, record):
+        level_color = self.LOG_LEVEL_COLORS.get(record.levelno, self.COLORS["reset"])
+
+        t = datetime.fromtimestamp(record.created)
+        asctime = t.strftime("%Y-%m-%dT%H:%M:%S")
+        msecs = f"{int(record.msecs):03d}"
+        timestamp_str = f"[{asctime}.{msecs}]"
+
         record.step = step_var.get()
-        log_format = self.base_format
+
+        log_parts = [
+            f"{self.COLORS['timestamp']}{timestamp_str}{self.COLORS['reset']}",
+            f"{level_color}[{record.levelname}]{self.COLORS['reset']}",
+            f"{self.COLORS['step']}[{record.step}]{self.COLORS['reset']}",
+        ]
 
         if speaker := speaker_var.get():
-            log_format += f" [speaker={speaker}]"
+            log_parts.append(
+                f"{self.COLORS['speaker']} [speaker={speaker}]{self.COLORS['reset']}"
+            )
         if message_id := message_id_var.get():
-            log_format += f" [message_id={message_id}]"
+            log_parts.append(
+                f"{self.COLORS['message_id']} [message_id={message_id}]{self.COLORS['reset']}"
+            )
         if session_id := session_id_var.get():
-            log_format += f" [session={session_id}]"
+            log_parts.append(
+                f"{self.COLORS['session']} [session={session_id}]{self.COLORS['reset']}"
+            )
 
-        log_format += " %(message)s"
+        record.message = record.getMessage()
 
-        temp_formatter = logging.Formatter(log_format, datefmt="%Y-%m-%dT%H:%M:%S")
+        log_parts.append(f" {record.message}")
+
+        formatted_message = "".join(log_parts)
 
         if record.exc_info:
-            record.exc_text = temp_formatter.formatException(record.exc_info)
-
-        formatted_message = temp_formatter.format(record)
+            formatted_message += (
+                f"\n{self.COLORS['reset']}{self.formatException(record.exc_info)}"
+            )
 
         redacted_message = redact_url(formatted_message)
 
@@ -73,6 +111,8 @@ def setup_logging():
     """
     Configures the root logger for the application.
     """
+    colorama.init()
+
     level_str = settings.LOGGING_LEVEL.upper()
     log_level = LOG_LEVELS.get(level_str, logging.INFO)
 

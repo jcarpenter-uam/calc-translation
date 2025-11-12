@@ -5,8 +5,6 @@ server/logs/*
 !server/logs/README.md
 server/output/*
 !server/output/README.md
-# WILL BE REMOVED
-debug/
 
 # Correction Model
 *.gguf

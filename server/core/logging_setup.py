@@ -1,6 +1,7 @@
 import contextvars
 import logging
 import os
+import re
 import sys
 from contextlib import contextmanager
 from datetime import datetime
@@ -22,6 +23,18 @@ step_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
 )
 
 LOG_LEVELS = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "ERROR": logging.ERROR}
+
+URL_REGEX = re.compile(r'https?://[^/]+(/[^"\'\s<]*)?')
+
+
+def redact_url(message: str) -> str:
+    """Finds URLs in a log message and replaces them with just the path."""
+
+    def replacer(match):
+        path = match.group(1)
+        return path if path else "/"
+
+    return URL_REGEX.sub(replacer, message)
 
 
 class CustomFormatter(logging.Formatter):
@@ -49,7 +62,11 @@ class CustomFormatter(logging.Formatter):
         if record.exc_info:
             record.exc_text = temp_formatter.formatException(record.exc_info)
 
-        return temp_formatter.format(record)
+        formatted_message = temp_formatter.format(record)
+
+        redacted_message = redact_url(formatted_message)
+
+        return redacted_message
 
 
 def setup_logging():

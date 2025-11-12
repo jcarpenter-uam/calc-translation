@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     SONIOX_API_KEY: str
 
-    ALIBABA_API_KEY: str
+    ALIBABA_API_KEY: str = ""
 
     OLLAMA_URL: str = ""
 

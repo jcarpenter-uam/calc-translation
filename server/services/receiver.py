@@ -54,7 +54,7 @@ async def handle_receiver_session(
 
         audio_processor = AudioProcessingService()
 
-        if settings.OLLAMA_URL:
+        if settings.OLLAMA_URL and settings.ALIBABA_API_KEY:
             correction_service = CorrectionService(
                 viewer_manager=viewer_manager,
                 session_id=session_id,

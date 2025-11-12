@@ -51,10 +51,10 @@ services:
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
       - SECRET_TOKEN=${SECRET_TOKEN}
-      - DEBUG_MODE=${DEBUG_MODE}
+      - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
-      - translation-data:/app/session_history
-      - translation-data:/app/debug
+      - translation-data:/app/logs
+      - translation-data:/app/output
     networks:
       - calc-translation
 
@@ -86,32 +86,49 @@ networks:
 **Expected Variables**
 
 ```bash
+### ------ ZOOM_CLIENT ------
+## Core Configuration (Required)
+#
+# Get these for your app in the zoom dev interface
 ZM_RTMS_CLIENT=
 ZM_RTMS_SECRET=
 ZOOM_WEBHOOK_SECRET_TOKEN=
-
+#
+# The URL for the client to reach the server
 TRANSLATION_SERVER_URL="ws://translation-server:8000/ws/transcribe"
 
-# Soniox API
+### ------ SERVER ------
+## Core Configuration (Required)
+#
+# Get this from your Soniox account dashboard.
 SONIOX_API_KEY=
+#
+# A secret token to authenticate incoming WebSocket connections.
+# This should be a long, random string.
+SECRET_TOKEN=your_secure_random_token_here
 
-# QWEN-MT-Turbo Retranslation *OPTIONAL*
-# Not used if correction is disabled
-ALIBABA_API_KEY=
+## General Settings
+#
+# Log level for the console. Options: DEBUG, INFO, ERROR
+# Session log files are always saved at a detailed level.
+LOGGING_LEVEL=INFO # Default if not set
+#
+# The max size (in MB) for each session's in-memory transcript cache.
+# Once exceeded, the oldest entries are evicted.
+MAX_CACHE_MB=10 # Default if not set
 
-# Ollama URL *OPTIONAL*
-# If not set disables correction functionality
+## Optional: Transcription Correction & Retranslation
+#
+# This feature enables real-time correction of transcripts using a local
+# Ollama model, followed by re-translation of the corrected text using
+# Alibaba Qwen-MT.
+#
+# This entire feature is DISABLED unless BOTH of the following variables
+# are set.
+#
+# URL for your local Ollama instance (e.g., http://localhost:11434)
 OLLAMA_URL=
-
-# The max cache size for translations/transcriptions.
-# Once exceeded the oldest entry is evicted
-# Default is 10MB unless specified otherwise
-MAX_CACHE_MB=
-
-# Secure token for endpoints
-SECRET_TOKEN=defaultwstoken
-
-# Log level for console
-# Log files are saved per session at the debug level
-LOGGING_LEVEL=DEBUG # DEBUG, INFO, ERROR as options
+#
+# API Key for Alibaba DashScope (for Qwen-MT retranslation)
+ALIBABA_API_KEY=
 ```

@@ -31,9 +31,12 @@ RUN addgroup --system calc-translator && adduser --system --ingroup calc-transla
 COPY --from=builder /app/web/dist ./web/dist
 
 COPY server/main.py ./
+COPY server/core ./core/
+COPY server/api ./api/
+COPY server/integrations ./integrations/
 COPY server/services ./services/
-RUN mkdir -p /app/session_history
-RUN mkdir -p /app/debug
+RUN mkdir -p /app/logs
+RUN mkdir -p /app/output
 
 RUN chown -R calc-translator:calc-translator /app
 

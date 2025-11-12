@@ -10,7 +10,9 @@ from core.config import settings
 logger = logging.getLogger(__name__)
 
 logger.info(f"Configuration loaded. Log level set to: {settings.LOGGING_LEVEL}")
-correction_status = "Enabled" if settings.OLLAMA_URL else "Disabled"
+correction_status = (
+    "Enabled" if settings.OLLAMA_URL and settings.ALIBABA_API_KEY else "Disabled"
+)
 logger.info(f"Configuration loaded. Correction: {correction_status}")
 
 from api.clients import create_clients_router

@@ -76,86 +76,95 @@ async def handle_receiver_session(
         ):
             nonlocal current_message_id, is_new_utterance, current_speaker
 
-            if is_new_utterance and not result.is_final:
-                current_message_id = str(uuid.uuid4())
-                is_new_utterance = False
+            session_token = session_id_var.set(session_id)
+            speaker_token = speaker_var.set(current_speaker)
+            try:
+                if is_new_utterance and not result.is_final:
+                    current_message_id = str(uuid.uuid4())
+                    is_new_utterance = False
 
-                message_id_var.set(current_message_id)
-                with log_step("UTTERANCE"):
-                    logger.info("Starting pipeline for utterance.")
+                    message_id_var.set(current_message_id)
+                    with log_step("UTTERANCE"):
+                        logger.info("Starting pipeline for utterance.")
 
-            if not current_message_id:
+                if not current_message_id:
+                    with log_step("SONIOX"):
+                        logger.debug(
+                            f"Received result (is_final={result.is_final}) with no active utterance, dropping."
+                        )
+                    if result.is_final:
+                        is_new_utterance = True
+                    return
+
                 with log_step("SONIOX"):
                     logger.debug(
-                        f"Received result (is_final={result.is_final}) with no active utterance, dropping."
+                        f"Received T&T chunk (is_final={result.is_final}). "
+                        f"T: '{result.transcription}' | "
+                        f"TL: '{result.translation}'"
                     )
-                if result.is_final:
-                    is_new_utterance = True
-                return
 
-            with log_step("SONIOX"):
-                logger.debug(
-                    f"Received T&T chunk (is_final={result.is_final}). "
-                    f"T: '{result.transcription}' | "
-                    f"TL: '{result.translation}'"
+                has_text = (result.transcription and result.transcription.strip()) or (
+                    result.translation and result.translation.strip()
                 )
 
-            has_text = (result.transcription and result.transcription.strip()) or (
-                result.translation and result.translation.strip()
-            )
+                if has_text:
+                    payload_type = "final" if result.is_final else "partial"
 
-            if has_text:
-                payload_type = "final" if result.is_final else "partial"
+                    vtt_timestamp = None
+                    if payload_type == "partial":
+                        timestamp_service.mark_utterance_start(current_message_id)
 
-                vtt_timestamp = None
-                if payload_type == "partial":
-                    timestamp_service.mark_utterance_start(current_message_id)
+                    if payload_type == "final":
+                        vtt_timestamp = timestamp_service.complete_utterance(
+                            current_message_id
+                        )
 
-                if payload_type == "final":
-                    vtt_timestamp = timestamp_service.complete_utterance(
-                        current_message_id
-                    )
-
-                payload = {
-                    "message_id": current_message_id,
-                    "transcription": result.transcription,
-                    "translation": result.translation,
-                    "source_language": result.source_language,
-                    "target_language": result.target_language,
-                    "speaker": current_speaker,
-                    "type": payload_type,
-                    "isfinalize": result.is_final,
-                    "vtt_timestamp": vtt_timestamp,
-                }
-                await viewer_manager.broadcast_to_session(session_id, payload)
-            else:
-                with log_step("SONIOX"):
-                    logger.debug("Dropping empty partial result.")
-
-            if result.is_final:
-                with log_step("UTTERANCE"):
-                    logger.info("Finished pipeline for utterance.")
-
-                if (
-                    correction_service
-                    and result.transcription
-                    and result.transcription.strip()
-                    and result.source_language == "zh"
-                ):
-                    utterance_to_store = {
+                    payload = {
                         "message_id": current_message_id,
-                        "speaker": current_speaker,
                         "transcription": result.transcription,
+                        "translation": result.translation,
+                        "source_language": result.source_language,
+                        "target_language": result.target_language,
+                        "speaker": current_speaker,
+                        "type": payload_type,
+                        "isfinalize": result.is_final,
+                        "vtt_timestamp": vtt_timestamp,
                     }
-                    task = asyncio.create_task(
-                        correction_service.process_final_utterance(utterance_to_store)
-                    )
-                    active_correction_tasks.add(task)
-                    task.add_done_callback(active_correction_tasks.discard)
+                    await viewer_manager.broadcast_to_session(session_id, payload)
+                else:
+                    with log_step("SONIOX"):
+                        logger.debug("Dropping empty partial result.")
 
-                is_new_utterance = True
-                current_message_id = None
-                message_id_var.set(None)
+                if result.is_final:
+                    with log_step("UTTERANCE"):
+                        logger.info("Finished pipeline for utterance.")
+
+                    if (
+                        correction_service
+                        and result.transcription
+                        and result.transcription.strip()
+                        and result.source_language == "zh"
+                    ):
+                        utterance_to_store = {
+                            "message_id": current_message_id,
+                            "speaker": current_speaker,
+                            "transcription": result.transcription,
+                        }
+                        task = asyncio.create_task(
+                            correction_service.process_final_utterance(
+                                utterance_to_store
+                            )
+                        )
+                        active_correction_tasks.add(task)
+                        task.add_done_callback(active_correction_tasks.discard)
+
+                    is_new_utterance = True
+                    current_message_id = None
+                    message_id_var.set(None)
+
+            finally:
+                speaker_var.reset(speaker_token)
+                session_id_var.reset(session_token)
 
         async def on_service_close_local(code: int, reason: str):
             with log_step("SONIOX"):

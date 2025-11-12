@@ -175,6 +175,12 @@ def setup_logging():
     root_logger.addHandler(stdout_handler)
     root_logger.addHandler(stderr_handler)
 
+    logging.getLogger("websockets").setLevel(logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.INFO)
+    logging.getLogger("httpcore").setLevel(logging.INFO)
+    logging.getLogger("openai").setLevel(logging.INFO)
+    logging.getLogger("ollama").setLevel(logging.INFO)
+
 
 @contextmanager
 def log_step(name: str):

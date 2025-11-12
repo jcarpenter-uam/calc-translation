@@ -127,7 +127,7 @@ class TranscriptCache:
 
         with log_step("CACHE"):
             logger.debug(
-                f"TranscriptCache Manager initialized. Default per-session limit: {max_size_mb}MB."
+                f"TranscriptCache Manager initialized. Per-session limit: {max_size_mb}MB."
             )
 
     def _get_or_create_session(self, session_id: str) -> _SessionCache:

@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from core.logging_setup import log_step, session_id_var
+from core.logging_setup import log_step, message_id_var, session_id_var
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +57,13 @@ class TimestampService:
         """
         if message_id not in self._utterance_start_times:
             self._utterance_start_times[message_id] = datetime.now()
-            with log_step("TIMESTAMP"):
-                logger.debug(f"Marked start for utterance: {message_id}")
+
+            token = message_id_var.set(message_id)
+            try:
+                with log_step("TIMESTAMP"):
+                    logger.debug(f"Marked start for utterance: {message_id}")
+            finally:
+                message_id_var.reset(token)
 
     def complete_utterance(self, message_id: str) -> str:
         """
@@ -66,32 +71,36 @@ class TimestampService:
         VTT timestamp string (start --> end) relative to the session start.
         This should be called on the final result for an utterance.
         """
-        with log_step("TIMESTAMP"):
-            utterance_end_time = datetime.now()
-            utterance_start_time = self._utterance_start_times.pop(message_id, None)
+        token = message_id_var.set(message_id)
+        try:
+            with log_step("TIMESTAMP"):
+                utterance_end_time = datetime.now()
+                utterance_start_time = self._utterance_start_times.pop(message_id, None)
 
-            if not utterance_start_time:
-                utterance_start_time = utterance_end_time
-                logger.warning(
-                    f"Warning: Completed utterance '{message_id}' without a recorded start time. Using end time as start."
+                if not utterance_start_time:
+                    utterance_start_time = utterance_end_time
+                    logger.warning(
+                        f"Warning: Completed utterance '{message_id}' without a recorded start time. Using end time as start."
+                    )
+
+                start_delta = utterance_start_time - self._session_start_time
+                end_delta = utterance_end_time - self._session_start_time
+
+                if end_delta < start_delta:
+                    end_delta = start_delta
+
+                start_str = self._format_timedelta(start_delta)
+                end_str = self._format_timedelta(end_delta)
+
+                vtt_timestamp = f"{start_str} --> {end_str}"
+
+                logger.debug(
+                    f"Completed utterance '{message_id}'. Timestamp: {vtt_timestamp}"
                 )
 
-            start_delta = utterance_start_time - self._session_start_time
-            end_delta = utterance_end_time - self._session_start_time
-
-            if end_delta < start_delta:
-                end_delta = start_delta
-
-            start_str = self._format_timedelta(start_delta)
-            end_str = self._format_timedelta(end_delta)
-
-            vtt_timestamp = f"{start_str} --> {end_str}"
-
-            logger.debug(
-                f"Completed utterance '{message_id}'. Timestamp: {vtt_timestamp}"
-            )
-
-            return vtt_timestamp
+                return vtt_timestamp
+        finally:
+            message_id_var.reset(token)
 
 
 def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, Any]]):
@@ -133,7 +142,7 @@ def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, A
             with open(vtt_filepath, "w", encoding="utf-8") as f:
                 f.write("\n".join(formatted_lines))
 
-            logger.debug(
+            logger.info(
                 f"Transcript VTT saved to {vtt_filepath}. {len(history)} entries."
             )
 

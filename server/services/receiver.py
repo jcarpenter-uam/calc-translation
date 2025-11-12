@@ -18,7 +18,7 @@ from core.logging_setup import (
     session_id_var,
     speaker_var,
 )
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 
 from .audio_processing import AudioProcessingService
 from .correction import CorrectionService
@@ -186,6 +186,15 @@ async def handle_receiver_session(
                     None, transcription_service.send_chunk, audio_chunk
                 )
 
+        except WebSocketDisconnect as e:
+            if e.code == 1000:
+                with log_step("SESSION"):
+                    logger.info(f"Client disconnected gracefully)")
+            else:
+                with log_step("SESSION"):
+                    logger.warning(
+                        f"Client disconnected abnormally. (Code: {e.code}, Reason: '{e.reason}')"
+                    )
         except asyncio.CancelledError:
             with log_step("SESSION"):
                 logger.info("Client disconnected (CancelledError).")

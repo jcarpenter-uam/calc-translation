@@ -294,7 +294,6 @@ class CorrectionService:
         msg_id_token = message_id_var.set(utterance.get("message_id"))
         speaker_token = speaker_var.set(utterance.get("speaker"))
         try:
-            # <-- Replaces log_utterance_step
             with log_step("CORRECTION"):
                 logger.debug(
                     f"Received final utterance for history. "

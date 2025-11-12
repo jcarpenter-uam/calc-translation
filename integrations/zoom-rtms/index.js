@@ -1,31 +1,15 @@
-// Load env variables
 import "dotenv/config";
-// For zoom URL verification
 import crypto from "crypto";
-// Import Express to create an HTTP server
 import express from "express";
-// Import the RTMS SDK
 import rtms from "@zoom/rtms";
-// Import Websockets to send zoom audio to our server
 import { WebSocket } from "ws";
-// Import Pino for logging
 import pino from "pino";
 
+// BUG: Auto retry logic for backend connection if crashed
 const logDir = "logs";
 
-// TODO: Save log file with {meeting_id}_{YYYY-MM-DD_HH-MM-SS}.log format
 const transport = pino.transport({
   targets: [
-    {
-      level: "info",
-      target: "pino-pretty",
-      options: {
-        destination: `${logDir}/app.log`,
-        colorize: false,
-        mkdir: true, // Create the log directory if it doesn't exist
-        append: true, // Append to the log file
-      },
-    },
     {
       level: "info",
       target: "pino-pretty",
@@ -38,7 +22,6 @@ const transport = pino.transport({
 
 const logger = pino(transport);
 
-// Log fatal errors and crashes to the file before exiting
 process.on("uncaughtException", (err) => {
   logger.fatal(err, "UNCAUGHT EXCEPTION");
   process.exit(1);
@@ -47,6 +30,60 @@ process.on("unhandledRejection", (reason) => {
   logger.fatal({ reason }, "UNHANDLED REJECTION");
   process.exit(1);
 });
+
+function getTimestamp() {
+  const d = new Date();
+  const YYYY = d.getFullYear();
+  const MM = (d.getMonth() + 1).toString().padStart(2, "0");
+  const DD = d.getDate().toString().padStart(2, "0");
+  const HH = d.getHours().toString().padStart(2, "0");
+  const MIN = d.getMinutes().toString().padStart(2, "0");
+  const SS = d.getSeconds().toString().padStart(2, "0");
+  return `${YYYY}-${MM}-${DD}_${HH}-${MIN}-${SS}`;
+}
+
+/**
+ * Creates a new pino logger instance for a specific meeting.
+ * This logger writes to both the console and a unique file.
+ * @param {string} meeting_uuid - The UUID of the meeting
+ * @returns {{logger: pino.Logger, transport: object}}
+ */
+function createMeetingLogger(meeting_uuid) {
+  const timestamp = getTimestamp();
+  const fileName = `${meeting_uuid}_${timestamp}.log`;
+  const logPath = `${logDir}/${fileName}`;
+
+  logger.info(`Creating new log file for meeting: ${logPath}`);
+
+  const meetingTransport = pino.transport({
+    targets: [
+      {
+        level: "info",
+        target: "pino-pretty",
+        options: {
+          destination: logPath,
+          colorize: false,
+          mkdir: true, // Create the log directory if it doesn't exist
+          append: true,
+        },
+      },
+      {
+        level: "info",
+        target: "pino-pretty",
+        options: {
+          colorize: true,
+        },
+      },
+    ],
+  });
+
+  const meetingLogger = pino(meetingTransport);
+  meetingLogger.info(
+    `--- Log for Meeting ${meeting_uuid} started at ${timestamp} ---`,
+  );
+
+  return { logger: meetingLogger, transport: meetingTransport };
+}
 
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
@@ -59,18 +96,15 @@ const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 if (!SECRET_TOKEN) {
   logger.fatal("FATAL: SECRET_TOKEN is not defined in .env file!");
   logger.fatal("Cannot connect to translation server without it.");
-  process.exit(1); // The 'uncaughtException' handler won't catch this
+  process.exit(1);
 }
 
-// --- In-Memory Storage ---
-// Store active clients, keyed by streamId
 let clients = new Map();
 
 // ============================
 // --- Main Webhook Handler ---
 // ============================
 function rtmsWebhookHandler(req, res) {
-  // --- Check if secret is loaded ---
   if (!ZM_WEBHOOK_SECRET) {
     logger.error("FATAL: ZM_WEBHOOK_SECRET is not defined in .env file!");
     logger.error(
@@ -79,22 +113,19 @@ function rtmsWebhookHandler(req, res) {
     return res.status(500).send("Server configuration error");
   }
 
-  // Create the signature message from the raw Buffer to avoid string conversion.
   const timestamp = req.headers["x-zm-request-timestamp"];
   const msgPrefix = `v0:${timestamp}:`;
 
-  // We update the HMAC with the prefix and the buffer *separately*.
   const hashForVerify = crypto
     .createHmac("sha256", ZM_WEBHOOK_SECRET)
-    .update(msgPrefix) // First, update with the string prefix
-    .update(req.body) // Next, update with the raw body Buffer
+    .update(msgPrefix)
+    .update(req.body)
     .digest("hex");
 
   const signature = `v0=${hashForVerify}`;
 
-  // Now that verification is done, manually parse the Buffer into JSON.
   let bodyPayload;
-  let rawBodyString; // For logging
+  let rawBodyString;
   try {
     rawBodyString = req.body.toString("utf8");
     bodyPayload = JSON.parse(rawBodyString);
@@ -103,13 +134,9 @@ function rtmsWebhookHandler(req, res) {
     return res.status(400).send("Bad Request: Invalid JSON");
   }
 
-  // Get the event and payload from the *parsed* body.
   const { event, payload } = bodyPayload;
   const streamId = payload?.rtms_stream_id;
 
-  // --- Verify Webhook Signature ---
-  // The 'endpoint.url_validation' event is just a normal webhook
-  // and its signature should also be checked.
   if (req.headers["x-zm-signature"] !== signature) {
     logger.warn("--- SIGNATURE VALIDATION FAILED ---");
     logger.info(
@@ -128,28 +155,21 @@ function rtmsWebhookHandler(req, res) {
     return res.status(401).send("Invalid signature");
   }
 
-  // If we get here, the signature was VALID.
   logger.info(`Received valid webhook for event: ${event}`);
 
-  // --- Event Router ---
   switch (event) {
     case "endpoint.url_validation":
       logger.info("Handling endpoint.url_validation");
-      // This function will send the response
       return handleUrlValidation(payload, res);
 
     case "meeting.rtms_started":
       logger.info(`Handling meeting.rtms_started for stream: ${streamId}`);
-      // This function will start your clients
       handleRtmsStarted(payload, streamId);
-      // Acknowledge the webhook
       return res.status(200).send("OK");
 
     case "meeting.rtms_stopped":
       logger.info(`Handling meeting.rtms_stopped for stream: ${streamId}`);
-      // This function will stop your clients
       handleRtmsStopped(streamId);
-      // Acknowledge the webhook
       return res.status(200).send("OK");
 
     default:
@@ -189,42 +209,64 @@ function handleUrlValidation(payload, res) {
  * Handles RTMS start event by creating SDK and WebSocket clients
  */
 function handleRtmsStarted(payload, streamId) {
+  const meeting_uuid = payload?.meeting_uuid;
+
   if (!streamId) {
     logger.error("Cannot start RTMS: streamId is missing from payload.");
     return;
   }
+  if (!meeting_uuid) {
+    logger.error("Cannot start RTMS: meeting_uuid is missing from payload.");
+    return;
+  }
 
-  // Create a new RTMS client for the stream
-  const rtmsClient = new rtms.Client();
+  const { logger: meetingLogger, transport: meetingTransport } =
+    createMeetingLogger(meeting_uuid);
+
+  // BUG: Find a way to remove Zoom_RTMS log files
+  const rtmsClient = new rtms.Client({
+    log: { enable: false },
+  });
 
   const authHeader = {
     Authorization: `Bearer ${SECRET_TOKEN}`,
   };
 
-  // Create a new WebSocket client for the translation server with token
-  // TODO: Get meeting id from zoom sdk
-  const wsClient = new WebSocket(`${ZOOM_BASE_SERVER_URL}/${MEETING_ID}`, {
+  const wsClient = new WebSocket(`${ZOOM_BASE_SERVER_URL}/${meeting_uuid}`, {
     headers: authHeader,
   });
 
   wsClient.on("open", () => {
-    logger.info(
+    meetingLogger.info(
       `WebSocket connection to ${BASE_SERVER_URL} established for stream ${streamId}`,
     );
   });
 
   wsClient.on("error", (error) => {
-    logger.error(error, `WebSocket error for stream ${streamId}`);
+    meetingLogger.error(error, `WebSocket error for stream ${streamId}`);
   });
 
   wsClient.on("close", (code, reason) => {
-    logger.info(
+    meetingLogger.info(
       `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
     );
+
+    meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
+
+    meetingTransport.end(() => {
+      logger.info(`Log file for stream ${streamId} closed.`);
+    });
+
+    clients.delete(streamId);
   });
 
-  // Store both clients in the map
-  clients.set(streamId, { rtmsClient, wsClient });
+  // Store all clients in the map
+  clients.set(streamId, {
+    rtmsClient,
+    wsClient,
+    meetingLogger,
+    meetingTransport,
+  });
 
   rtmsClient.onAudioData((data, size, timestamp, metadata) => {
     const speakerName = metadata.userName || "Zoom RTMS";
@@ -236,13 +278,13 @@ function handleRtmsStarted(payload, streamId) {
       };
       wsClient.send(JSON.stringify(payload));
     } else {
-      logger.warn(
+      meetingLogger.warn(
         `WebSocket not open for stream ${streamId}. Skipping audio packet.`,
       );
     }
   });
 
-  // Join the meeting using the webhook payload directly
+  meetingLogger.info(`Joining RTMS for meeting: ${meeting_uuid}`);
   rtmsClient.join(payload);
 }
 
@@ -263,13 +305,14 @@ function handleRtmsStopped(streamId) {
     return;
   }
 
-  // Clean up both the RTMS client and the WebSocket client
-  logger.info(`Cleaning up clients for stream: ${streamId}`);
-  clientEntry.rtmsClient.leave();
-  if (clientEntry.wsClient) {
-    clientEntry.wsClient.close();
+  const { rtmsClient, wsClient, meetingLogger } = clientEntry;
+
+  meetingLogger.info(`Cleaning up clients for stream: ${streamId}`);
+  rtmsClient.leave();
+
+  if (wsClient) {
+    wsClient.close();
   }
-  clients.delete(streamId);
 }
 
 // ====================
@@ -278,18 +321,14 @@ function handleRtmsStopped(streamId) {
 
 const app = express();
 
-//  Use `express.raw()` to read ALL bodies for the /zoom route as a Buffer.
-//  This ensures req.body is *only* a Buffer inside our handler.
-//  We set a limit just in case.
 app.use(
   "/",
   express.raw({
     type: "application/json",
-    limit: "2mb", // Set a reasonable limit
+    limit: "2mb",
   }),
 );
 
-// Tell the server to use your main handler for this endpoint
 app.post("/", rtmsWebhookHandler);
 
 // Start the server

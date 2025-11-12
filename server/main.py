@@ -1,12 +1,17 @@
 import logging
 
 import uvicorn
-from core.config import settings
-from core.logging_setup import log_step, setup_logging
+from core.logging_setup import setup_logging
 
 setup_logging()
 
+from core.config import settings
+
 logger = logging.getLogger(__name__)
+
+logger.info(f"Configuration loaded. Log level set to: {settings.LOGGING_LEVEL}")
+correction_status = "Enabled" if settings.OLLAMA_URL else "Disabled"
+logger.info(f"Configuration loaded. Correction: {correction_status}")
 
 from api.clients import create_clients_router
 from api.sessions import router as sessions_router
@@ -21,11 +26,6 @@ app = FastAPI(
     title="CALC Transcription and Translation API",
     description="A WebSocket API to stream audio for real-time transcription and translation.",
 )
-
-with log_step("SYSTEM"):
-    logger.info(
-        f"Application starting up. Log level set to: {settings.LOGGING_LEVEL.upper()}"
-    )
 
 transcript_cache = TranscriptCache()
 viewer_manager = ConnectionManager(cache=transcript_cache)

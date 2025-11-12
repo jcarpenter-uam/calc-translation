@@ -9,6 +9,7 @@ import os
 import uuid
 from datetime import datetime
 
+from core.config import settings
 from core.logging_setup import (
     add_session_log_handler,
     log_step,
@@ -53,10 +54,11 @@ async def handle_receiver_session(
 
         audio_processor = AudioProcessingService()
 
-        correction_service = CorrectionService(
-            viewer_manager=viewer_manager,
-            session_id=session_id,
-        )
+        if settings.OLLAMA_URL:
+            correction_service = CorrectionService(
+                viewer_manager=viewer_manager,
+                session_id=session_id,
+            )
 
         current_message_id = None
         is_new_utterance = True

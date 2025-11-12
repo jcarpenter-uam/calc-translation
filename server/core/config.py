@@ -1,9 +1,6 @@
-import logging
 import sys
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -21,7 +18,7 @@ class Settings(BaseSettings):
 
     ALIBABA_API_KEY: str
 
-    OLLAMA_URL: str
+    OLLAMA_URL: str = ""
 
     MAX_CACHE_MB: int = 10
 
@@ -32,8 +29,6 @@ class Settings(BaseSettings):
 
 try:
     settings = Settings()
-
-    logger.info(f"Configuration loaded. Log level set to: {settings.LOGGING_LEVEL}")
 
 except Exception as e:
     logger.critical(f"FATAL: Failed to load application settings: {e}")

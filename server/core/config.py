@@ -31,5 +31,5 @@ try:
     settings = Settings()
 
 except Exception as e:
-    logger.critical(f"FATAL: Failed to load application settings: {e}")
+    print(f"FATAL: Failed to load application settings: {e}", file=sys.stderr)
     sys.exit("Failed to load configuration. Exiting.")

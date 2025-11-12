@@ -30,6 +30,8 @@ RUN addgroup --system calc-translator && adduser --system --ingroup calc-transla
 
 COPY --from=builder /app/web/dist ./web/dist
 
+# Explicialy copy files into container
+# Removes need for .dockerignore
 COPY server/main.py ./
 COPY server/core ./core/
 COPY server/api ./api/

@@ -40,6 +40,47 @@ def redact_url(message: str) -> str:
     return URL_REGEX.sub(replacer, message)
 
 
+class PlainFormatter(logging.Formatter):
+    """
+    A custom formatter for log files, without ANSI color codes.
+    Injects context variables.
+    """
+
+    def format(self, record):
+        t = datetime.fromtimestamp(record.created)
+        asctime = t.strftime("%Y-%m-%dT%H:%M:%S")
+        msecs = f"{int(record.msecs):03d}"
+        timestamp_str = f"[{asctime}.{msecs}]"
+
+        record.step = step_var.get()
+
+        log_parts = [
+            f"{timestamp_str}",
+            f"[{record.levelname}]",
+            f"[{record.step}]",
+        ]
+
+        if speaker := speaker_var.get():
+            log_parts.append(f" [speaker={speaker}]")
+        if message_id := message_id_var.get():
+            log_parts.append(f" [message_id={message_id}]")
+        if session_id := session_id_var.get():
+            log_parts.append(f" [session={session_id}]")
+
+        record.message = record.getMessage()
+
+        log_parts.append(f" {record.message}")
+
+        formatted_message = "".join(log_parts)
+
+        if record.exc_info:
+            formatted_message += f"\n{self.formatException(record.exc_info)}"
+
+        redacted_message = redact_url(formatted_message)
+
+        return redacted_message
+
+
 class CustomFormatter(logging.Formatter):
     """
     A custom formatter that injects context variables and colors.
@@ -160,7 +201,7 @@ def add_session_log_handler(
 
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(CustomFormatter())
+        file_handler.setFormatter(PlainFormatter())
 
         logging.getLogger().addHandler(file_handler)
 

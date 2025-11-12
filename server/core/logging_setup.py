@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Optional
 
 message_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
@@ -57,7 +58,7 @@ def setup_logging():
     log_level = LOG_LEVELS.get(level_str, logging.INFO)
 
     stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.setLevel(log_level)
     stdout_handler.addFilter(lambda record: record.levelno < logging.ERROR)
     stdout_handler.setFormatter(CustomFormatter())
 
@@ -66,7 +67,7 @@ def setup_logging():
     stderr_handler.setFormatter(CustomFormatter())
 
     root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
+    root_logger.setLevel(logging.DEBUG)
 
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
@@ -83,3 +84,42 @@ def log_step(name: str):
         yield
     finally:
         step_var.reset(token)
+
+
+def add_session_log_handler(
+    session_id: str, integration: str
+) -> Optional[logging.FileHandler]:
+    """
+    Dynamically adds a file log handler for a specific session.
+    """
+    try:
+        logs_dir = os.path.join("logs", integration)
+        os.makedirs(logs_dir, exist_ok=True)
+
+        date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_file = os.path.join(logs_dir, f"{session_id}_{date_str}.log")
+
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(CustomFormatter())
+
+        logging.getLogger().addHandler(file_handler)
+
+        return file_handler
+    except Exception as e:
+        logging.error(
+            f"[SYSTEM] Failed to create log file handler for session {session_id}: {e}"
+        )
+        return None
+
+
+def remove_session_log_handler(handler: logging.FileHandler):
+    """
+    Removes and closes a specific file log handler.
+    """
+    if handler:
+        try:
+            handler.close()
+            logging.getLogger().removeHandler(handler)
+        except Exception as e:
+            logging.error(f"[SYSTEM] Failed to remove log file handler: {e}")

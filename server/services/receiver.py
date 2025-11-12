@@ -9,7 +9,14 @@ import os
 import uuid
 from datetime import datetime
 
-from core.logging_setup import log_step, message_id_var, session_id_var, speaker_var
+from core.logging_setup import (
+    add_session_log_handler,
+    log_step,
+    message_id_var,
+    remove_session_log_handler,
+    session_id_var,
+    speaker_var,
+)
 from fastapi import WebSocket
 
 from .audio_processing import AudioProcessingService
@@ -33,10 +40,12 @@ async def handle_receiver_session(
     active_correction_tasks = set()
     final_message_processed = asyncio.Event()
     loop = asyncio.get_running_loop()
+    session_log_handler = None
 
     try:
         await websocket.accept()
         viewer_manager.register_transcription_session(session_id, integration)
+        session_log_handler = add_session_log_handler(session_id, integration)
         with log_step("SESSION"):
             logger.info(f"Client connected for integration: {integration}")
 
@@ -236,4 +245,10 @@ async def handle_receiver_session(
         }
         await viewer_manager.broadcast_to_session(session_id, end_payload)
         viewer_manager.deregister_transcription_session(session_id)
+        if session_log_handler:
+            with log_step("SESSION"):
+                logger.info(
+                    f"Stopping session file logging: {session_log_handler.baseFilename}"
+                )
+            remove_session_log_handler(session_log_handler)
         session_id_var.reset(session_token)

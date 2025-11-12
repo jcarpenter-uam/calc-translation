@@ -1,10 +1,10 @@
 import asyncio
 import json
 import logging
-import os
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
+from core.config import settings
 from core.logging_setup import log_step
 from websockets import ConnectionClosedOK
 from websockets.sync.client import connect
@@ -38,9 +38,7 @@ class SonioxService:
         on_close_callback: Callable[[int, str], Awaitable[None]],
         loop: asyncio.AbstractEventLoop,
     ):
-        self.api_key = os.environ.get("SONIOX_API_KEY")
-        if not self.api_key:
-            raise ValueError("The 'SONIOX_API_KEY' environment variable is not set.")
+        self.api_key = settings.SONIOX_API_KEY
 
         self.on_message_callback = on_message_callback
         self.on_error_callback = on_error_callback

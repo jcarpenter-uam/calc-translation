@@ -2,22 +2,12 @@
 # Emplementing zoom meeting pass and session code along with Entra ID to secure access
 
 import logging
-import os
 
+from core.config import settings
 from core.logging_setup import log_step
 from fastapi import Depends, Header, WebSocketException, status
 
 logger = logging.getLogger(__name__)
-
-try:
-    APP_SECRET_TOKEN = os.environ["SECRET_TOKEN"]
-    with log_step("SYSTEM"):
-        logger.debug("Successfully loaded 'SECRET_TOKEN'.")
-except KeyError:
-    logging.critical(
-        "[SYSTEM] FATAL: 'SECRET_TOKEN' environment variable is not set. Application cannot start."
-    )
-    raise RuntimeError("Required environment variable 'SECRET_TOKEN' is not set.")
 
 
 async def get_auth_token(
@@ -50,7 +40,7 @@ async def validate_token(token: str = Depends(get_auth_token)):
     Validates the extracted token.
     For this simple case, we just check our shared secret.
     """
-    if token != APP_SECRET_TOKEN:
+    if token != settings.SECRET_TOKEN:
         with log_step("SESSION"):
             logger.warning("Auth failed: Invalid token.")
         raise WebSocketException(

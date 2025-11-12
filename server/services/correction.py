@@ -6,8 +6,8 @@ from collections import deque
 from typing import AsyncGenerator
 
 import ollama
+from core.config import settings
 from core.logging_setup import log_step, message_id_var, speaker_var
-from dotenv import load_dotenv
 from openai import APIError, AsyncOpenAI
 
 logger = logging.getLogger(__name__)
@@ -20,14 +20,10 @@ class RetranslationService:
     """
 
     def __init__(self):
-        load_dotenv()
-        try:
-            self.client = AsyncOpenAI(
-                api_key=os.environ["ALIBABA_API_KEY"],
-                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            )
-        except KeyError:
-            raise ValueError("The 'ALIBABA_API_KEY' environment variable is not set.")
+        self.client = AsyncOpenAI(
+            api_key=settings.ALIBABA_API_KEY,
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        )
         with log_step("RETRANSLATION"):
             logger.debug("Initialized Qwen retranslation client.")
 
@@ -95,7 +91,6 @@ class CorrectionService:
 
     def __init__(
         self,
-        ollama_url: str,
         viewer_manager,
         session_id: str,
         model: str = "correction",
@@ -111,10 +106,10 @@ class CorrectionService:
         """
         with log_step("CORRECTION"):
             logger.info(
-                f"Initializing Stateful Correction Service with model '{model}' at {ollama_url}..."
+                f"Initializing Stateful Correction Service with model '{model}'..."
             )
         self.model = model
-        self.client = ollama.AsyncClient(host=ollama_url)
+        self.client = ollama.AsyncClient(host=settings.OLLAMA_URL)
         self.viewer_manager = viewer_manager
         self.session_id = session_id
         self.retranslation_service = RetranslationService()
@@ -122,9 +117,7 @@ class CorrectionService:
         self.CORRECTION_CONTEXT_THRESHOLD = 5
 
         with log_step("CORRECTION"):
-            logger.debug(
-                f"Ollama correction client initialized. Model: {model}, Host: {ollama_url}"
-            )
+            logger.debug(f"Ollama correction client initialized. Model: {model}")
 
     async def correct_with_context(
         self, text_to_correct: str, context_history: list[str]

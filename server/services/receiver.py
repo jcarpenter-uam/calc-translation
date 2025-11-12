@@ -53,18 +53,10 @@ async def handle_receiver_session(
 
         audio_processor = AudioProcessingService()
 
-        try:
-            ollama_url = os.environ["OLLAMA_URL"]
-            with log_step("SYSTEM"):
-                logger.info("Ollama Correction Service enabled.")
-            correction_service = CorrectionService(
-                ollama_url=ollama_url,
-                viewer_manager=viewer_manager,
-                session_id=session_id,
-            )
-        except KeyError:
-            with log_step("SYSTEM"):
-                logger.warning("OLLAMA_URL not set. Corrections disabled.")
+        correction_service = CorrectionService(
+            viewer_manager=viewer_manager,
+            session_id=session_id,
+        )
 
         current_message_id = None
         is_new_utterance = True

@@ -1,11 +1,7 @@
 import logging
-import os
 
 import uvicorn
-from dotenv import load_dotenv
-
-load_dotenv()
-
+from core.config import settings
 from core.logging_setup import log_step, setup_logging
 
 setup_logging()
@@ -28,7 +24,7 @@ app = FastAPI(
 
 with log_step("SYSTEM"):
     logger.info(
-        f"Application starting up. Log level set to: {os.getenv('LOGGING_LEVEL', 'INFO').upper()}"
+        f"Application starting up. Log level set to: {settings.LOGGING_LEVEL.upper()}"
     )
 
 transcript_cache = TranscriptCache()

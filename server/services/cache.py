@@ -4,26 +4,13 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Deque, Dict, List
 
+from core.config import settings
 from core.logging_setup import log_step, message_id_var, session_id_var
 from pympler.asizeof import asizeof
 
 from .vtt import create_vtt_file
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_FALLBACK_MB = 10
-_max_cache_mb_str = os.getenv("MAX_CACHE_MB", str(_DEFAULT_FALLBACK_MB))
-
-try:
-    DEFAULT_MAX_CACHE_MB = int(_max_cache_mb_str)
-    if DEFAULT_MAX_CACHE_MB <= 0:
-        raise ValueError("Cache size must be positive.")
-except ValueError:
-    logging.warning(
-        f"[CACHE] Invalid or non-positive MAX_CACHE_MB value '{_max_cache_mb_str}'. "
-        f"Falling back to default: {_DEFAULT_FALLBACK_MB}MB."
-    )
-    DEFAULT_MAX_CACHE_MB = _DEFAULT_FALLBACK_MB
 
 
 class _SessionCache:
@@ -134,12 +121,12 @@ class TranscriptCache:
     Manages multiple independent _SessionCache instances, one for each session_id.
     """
 
-    def __init__(self, max_size_mb: int = DEFAULT_MAX_CACHE_MB):
+    def __init__(self, max_size_mb: int = settings.MAX_CACHE_MB):
         self._default_max_size_bytes = max_size_mb * 1024 * 1024
         self.sessions: Dict[str, _SessionCache] = {}
 
         with log_step("CACHE"):
-            logger.info(
+            logger.debug(
                 f"TranscriptCache Manager initialized. Default per-session limit: {max_size_mb}MB."
             )
 

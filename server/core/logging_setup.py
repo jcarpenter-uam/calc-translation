@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
 
+from .config import settings
+
 message_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "message_id_var", default=None
 )
@@ -54,7 +56,7 @@ def setup_logging():
     """
     Configures the root logger for the application.
     """
-    level_str = os.getenv("LOGGING_LEVEL", "INFO").upper()
+    level_str = settings.LOGGING_LEVEL.upper()
     log_level = LOG_LEVELS.get(level_str, logging.INFO)
 
     stdout_handler = logging.StreamHandler(sys.stdout)

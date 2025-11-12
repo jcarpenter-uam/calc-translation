@@ -1,9 +1,16 @@
+import logging
 import os
 
 import uvicorn
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from core.logging_setup import log_step, setup_logging
+
+setup_logging()
+
+logger = logging.getLogger(__name__)
 
 from api.clients import create_clients_router
 from api.sessions import router as sessions_router
@@ -13,19 +20,16 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from services.cache import TranscriptCache
 from services.connection_manager import ConnectionManager
-from services.debug import log_pipeline_step
 
 app = FastAPI(
     title="CALC Transcription and Translation API",
     description="A WebSocket API to stream audio for real-time transcription and translation.",
 )
 
-DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() == "true"
-log_pipeline_step(
-    "SYSTEM",
-    f"Debug mode is: {'ON' if DEBUG_MODE else 'OFF'}",
-    detailed=False,
-)
+with log_step("SYSTEM"):
+    logger.info(
+        f"Application starting up. Log level set to: {os.getenv('LOGGING_LEVEL', 'INFO').upper()}"
+    )
 
 transcript_cache = TranscriptCache()
 viewer_manager = ConnectionManager(cache=transcript_cache)

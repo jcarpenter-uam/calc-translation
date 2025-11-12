@@ -1,10 +1,13 @@
 # BUG: This service is not currently in use due to lack of time to evaluate solutions
 # The goal is to find a lightweight denoising solution that is actually effective at isolating vocals
 
+import logging
+
 import noisereduce as nr
 import numpy as np
+from core.logging_setup import log_step
 
-from .debug import log_pipeline_step
+logger = logging.getLogger(__name__)
 
 
 class AudioProcessingService:
@@ -15,9 +18,6 @@ class AudioProcessingService:
     def __init__(self, sample_rate=16000):
         """
         Initializes the audio processor.
-
-        Args:
-            sample_rate (int): The sample rate of the audio.
         """
         self.sample_rate = sample_rate
 
@@ -32,12 +32,6 @@ class AudioProcessingService:
     def suppress_noise(self, audio_data: np.ndarray) -> np.ndarray:
         """
         Reduces stationary noise from the audio.
-
-        Args:
-            audio_data (np.ndarray): The audio data.
-
-        Returns:
-            np.ndarray: Audio data with noise reduced.
         """
         audio_float = audio_data.astype(np.float32)
         reduced_noise_audio = nr.reduce_noise(y=audio_float, sr=self.sample_rate)
@@ -46,13 +40,6 @@ class AudioProcessingService:
     def normalize_volume(self, audio_data: np.ndarray, target_peak=0.95) -> np.ndarray:
         """
         Normalizes the audio to a target peak amplitude.
-
-        Args:
-            audio_data (np.ndarray): The audio data.
-            target_peak (float): The target peak amplitude (0.0 to 1.0).
-
-        Returns:
-            np.ndarray: Normalized audio data.
         """
         max_val = np.max(np.abs(audio_data))
         if max_val == 0:
@@ -66,79 +53,40 @@ class AudioProcessingService:
     def process(self, audio_bytes: bytes) -> bytes:
         """
         Runs the full post-processing pipeline on an audio utterance.
-
-        Args:
-            audio_bytes (bytes): The complete raw audio utterance.
-
-        Returns:
-            bytes: The processed (denoised and normalized) audio utterance.
         """
-        if not audio_bytes:
-            log_pipeline_step(
-                "AUDIO_PROCESSING",
-                "Received empty audio payload. Skipping post-processing.",
-                detailed=False,
+        with log_step("AUDIO_PROCESSING"):
+            if not audio_bytes:
+                logger.info("Received empty audio payload. Skipping post-processing.")
+                return b""
+
+            raw_sample_count = len(audio_bytes) // 2
+
+            logger.debug(
+                f"Starting audio post-processing. Bytes: {len(audio_bytes)}, "
+                f"Samples: {raw_sample_count}"
             )
-            return b""
 
-        raw_sample_count = len(audio_bytes) // 2
-        log_pipeline_step(
-            "AUDIO_PROCESSING",
-            "Starting audio post-processing pipeline.",
-            extra={
-                "bytes_received": len(audio_bytes),
-                "estimated_samples": raw_sample_count,
-                "sample_rate": self.sample_rate,
-            },
-            detailed=True,
-        )
+            audio_data = self._bytes_to_audio(audio_bytes)
+            logger.debug(
+                f"Converted to numpy array. Shape: {audio_data.shape}, "
+                f"Min: {int(audio_data.min())}, Max: {int(audio_data.max())}"
+            )
 
-        audio_data = self._bytes_to_audio(audio_bytes)
-        log_pipeline_step(
-            "AUDIO_PROCESSING",
-            "Converted raw bytes to numpy array.",
-            extra={
-                "dtype": str(audio_data.dtype),
-                "array_shape": audio_data.shape,
-                "min": int(audio_data.min()),
-                "max": int(audio_data.max()),
-            },
-            detailed=True,
-        )
+            denoised_audio = self.suppress_noise(audio_data)
+            logger.debug(
+                f"Noise suppression complete. "
+                f"Min: {int(denoised_audio.min())}, Max: {int(denoised_audio.max())}"
+            )
 
-        denoised_audio = self.suppress_noise(audio_data)
-        log_pipeline_step(
-            "AUDIO_PROCESSING",
-            "Noise suppression complete.",
-            extra={
-                "dtype": str(denoised_audio.dtype),
-                "min": int(denoised_audio.min()),
-                "max": int(denoised_audio.max()),
-            },
-            detailed=True,
-        )
+            normalized_audio = self.normalize_volume(denoised_audio)
+            logger.debug(
+                f"Volume normalization complete. "
+                f"Min: {int(normalized_audio.min())}, Max: {int(normalized_audio.max())}"
+            )
 
-        normalized_audio = self.normalize_volume(denoised_audio)
-        log_pipeline_step(
-            "AUDIO_PROCESSING",
-            "Volume normalization complete.",
-            extra={
-                "dtype": str(normalized_audio.dtype),
-                "min": int(normalized_audio.min()),
-                "max": int(normalized_audio.max()),
-            },
-            detailed=True,
-        )
+            processed_bytes = self._audio_to_bytes(denoised_audio)
+            logger.debug(
+                f"Post-processing complete. Bytes emitted: {len(processed_bytes)}"
+            )
 
-        processed_bytes = self._audio_to_bytes(denoised_audio)
-        log_pipeline_step(
-            "AUDIO_PROCESSING",
-            "Audio Processor: Post-processing complete.",
-            extra={
-                "bytes_emitted": len(processed_bytes),
-                "sample_rate": self.sample_rate,
-            },
-            detailed=True,
-        )
-
-        return processed_bytes
+            return processed_bytes

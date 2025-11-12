@@ -1,14 +1,16 @@
 import asyncio
 import json
+import logging
 import os
 from collections import deque
 from typing import AsyncGenerator
 
 import ollama
+from core.logging_setup import log_step, message_id_var, speaker_var
 from dotenv import load_dotenv
 from openai import APIError, AsyncOpenAI
 
-from .debug import log_pipeline_step, log_utterance_step
+logger = logging.getLogger(__name__)
 
 
 class RetranslationService:
@@ -26,14 +28,8 @@ class RetranslationService:
             )
         except KeyError:
             raise ValueError("The 'ALIBABA_API_KEY' environment variable is not set.")
-        log_pipeline_step(
-            "RETRANSLATION",
-            "Initialized Qwen retranslation client.",
-            extra={
-                "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-            },
-            detailed=True,
-        )
+        with log_step("RETRANSLATION"):
+            logger.debug("Initialized Qwen retranslation client.")
 
     async def translate_stream(
         self, text_to_translate: str, session_id: str = "unknown"
@@ -48,12 +44,10 @@ class RetranslationService:
 
         user_prompt += f"\n\n[TEXT TO TRANSLATE]\n{text_to_translate}"
 
-        log_pipeline_step(
-            "RETRANSLATION",
-            "Submitting text for retranslation.",
-            extra={"characters": len(text_to_translate), "session": session_id},
-            detailed=False,
-        )
+        with log_step("RETRANSLATION"):
+            logger.info(
+                f"Submitting text for retranslation. Characters: {len(text_to_translate)}"
+            )
 
         try:
             stream = await self.client.chat.completions.create(
@@ -72,39 +66,24 @@ class RetranslationService:
             async for chunk in stream:
                 content = chunk.choices[0].delta.content or ""
                 if content:
-                    log_pipeline_step(
-                        "RETRANSLATION",
-                        "Received retranslation delta from Qwen.",
-                        extra={
-                            "delta_length": len(content),
-                            "has_more": not chunk.choices[0].finish_reason,
-                            "session": session_id,
-                        },
-                        detailed=True,
-                    )
+                    with log_step("RETRANSLATION"):
+                        logger.debug(
+                            f"Received retranslation delta. Length: {len(content)}"
+                        )
                     yield content
-            log_pipeline_step(
-                "RETRANSLATION",
-                "Retranslation stream completed successfully.",
-                extra={"session": session_id},
-                detailed=False,
-            )
+            with log_step("RETRANSLATION"):
+                logger.info("Retranslation stream completed successfully.")
         except APIError as e:
             error_message = f"[Translation Error: {e.message}]"
-            log_pipeline_step(
-                "RETRANSLATION",
-                f"Alibaba Qwen API error: {e}",
-                extra={"session": session_id},
-                detailed=False,
-            )
+            with log_step("RETRANSLATION"):
+                logger.error(f"Alibaba Qwen API error: {e}", exc_info=True)
             yield error_message
         except Exception as e:
-            log_pipeline_step(
-                "RETRANSLATION",
-                f"An unexpected error occurred during retranslation: {e}",
-                extra={"session": session_id},
-                detailed=False,
-            )
+            with log_step("RETRANSLATION"):
+                logger.error(
+                    f"An unexpected error occurred during retranslation: {e}",
+                    exc_info=True,
+                )
             yield "[Translation Error]"
 
 
@@ -130,12 +109,10 @@ class CorrectionService:
             session_id (str): The unique ID for this session.
             model (str): The name of the model to use for corrections.
         """
-        log_pipeline_step(
-            "CORRECTION",
-            f"Initializing Stateful Correction Service with model '{model}' at {ollama_url}...",
-            extra={"session": session_id},
-            detailed=False,
-        )
+        with log_step("CORRECTION"):
+            logger.info(
+                f"Initializing Stateful Correction Service with model '{model}' at {ollama_url}..."
+            )
         self.model = model
         self.client = ollama.AsyncClient(host=ollama_url)
         self.viewer_manager = viewer_manager
@@ -144,12 +121,10 @@ class CorrectionService:
         self.utterance_history = deque(maxlen=5)
         self.CORRECTION_CONTEXT_THRESHOLD = 5
 
-        log_pipeline_step(
-            "CORRECTION",
-            "Ollama correction client initialized.",
-            extra={"model": model, "host": ollama_url, "session": self.session_id},
-            detailed=True,
-        )
+        with log_step("CORRECTION"):
+            logger.debug(
+                f"Ollama correction client initialized. Model: {model}, Host: {ollama_url}"
+            )
 
     async def correct_with_context(
         self, text_to_correct: str, context_history: list[str]
@@ -163,12 +138,9 @@ class CorrectionService:
         }
         prompt = json.dumps(prompt_data, ensure_ascii=False)
         response_content = ""
-        log_pipeline_step(
-            "CORRECTION",
-            f"Sending prompt to Ollama: {prompt}",
-            extra={"session": self.session_id},
-            detailed=False,
-        )
+        with log_step("CORRECTION"):
+            logger.info("Sending prompt to Ollama.")
+            logger.debug(f"Ollama prompt: {prompt}")
 
         try:
             response = await self.client.chat(
@@ -176,15 +148,10 @@ class CorrectionService:
                 messages=[{"role": "user", "content": prompt}],
             )
             response_content = response["message"]["content"]
-            log_pipeline_step(
-                "CORRECTION",
-                "Received raw correction response.",
-                extra={
-                    "response_length": len(response_content),
-                    "session": self.session_id,
-                },
-                detailed=True,
-            )
+            with log_step("CORRECTION"):
+                logger.debug(
+                    f"Received raw correction response. Length: {len(response_content)}"
+                )
 
             json_start_index = response_content.find("{")
             json_end_index = response_content.rfind("}")
@@ -198,44 +165,30 @@ class CorrectionService:
                     json_string = response_content[json_start_index:] + "}"
 
                 response_data = json.loads(json_string)
-                log_pipeline_step(
-                    "CORRECTION",
-                    f"Parsed correction response JSON. '{response_data}'",
-                    extra={
-                        "is_correction_needed": response_data.get(
-                            "is_correction_needed", False
-                        ),
-                        "has_corrected_sentence": bool(
-                            response_data.get("corrected_sentence")
-                        ),
-                        "session": self.session_id,
-                    },
-                    detailed=False,
-                )
+                with log_step("CORRECTION"):
+                    logger.info(
+                        f"Parsed correction response. Needed: {response_data.get('is_correction_needed', False)}"
+                    )
+                    logger.debug(f"Full parsed JSON: {response_data}")
                 return response_data
             else:
                 raise json.JSONDecodeError(
                     "No JSON object found in response", response_content, 0
                 )
         except json.JSONDecodeError:
-            log_pipeline_step(
-                "CORRECTION",
-                f"Error: Could not extract valid JSON from response. RAW_RESPONSE: '{response_content}'",
-                extra={"response": response_content, "session": self.session_id},
-                detailed=False,
-            )
+            with log_step("CORRECTION"):
+                logger.error(
+                    f"Could not extract valid JSON from response. RAW_RESPONSE: '{response_content}'",
+                    exc_info=True,
+                )
             return {
                 "is_correction_needed": False,
                 "corrected_sentence": text_to_correct,
                 "reasoning": "JSON decode error.",
             }
         except Exception as e:
-            log_pipeline_step(
-                "CORRECTION",
-                f"Error calling Ollama: {e}",
-                extra={"session": self.session_id},
-                detailed=False,
-            )
+            with log_step("CORRECTION"):
+                logger.error(f"Error calling Ollama: {e}", exc_info=True)
             return {
                 "is_correction_needed": False,
                 "corrected_sentence": text_to_correct,
@@ -244,109 +197,93 @@ class CorrectionService:
 
     async def _perform_correction(self, target_utterance: dict):
         """Performs correction logic on a specific target utterance."""
-        log_utterance_step(
-            "CORRECTION",
-            target_utterance["message_id"],
-            "Running contextual correction.",
-            speaker=target_utterance["speaker"],
-            extra={
-                "target_transcription": target_utterance["transcription"],
-                "history_size": len(self.utterance_history),
-                "session": self.session_id,
-            },
-        )
+        msg_id_token = message_id_var.set(target_utterance.get("message_id"))
+        speaker_token = speaker_var.set(target_utterance.get("speaker"))
 
-        history_as_list = list(self.utterance_history)
-        context_list = []
         try:
-            target_index = next(
-                i
-                for i, u in enumerate(history_as_list)
-                if u["message_id"] == target_utterance["message_id"]
-            )
-            context_utterances = history_as_list[target_index + 1 : target_index + 3]
-            context_list = [u["transcription"] for u in context_utterances]
-        except StopIteration:
-            log_utterance_step(
-                "CORRECTION",
-                target_utterance["message_id"],
-                "Target utterance not found in history; sending without context.",
-                speaker=target_utterance["speaker"],
-                extra={"session": self.session_id},
-            )
+            with log_step("CORRECTION"):
+                logger.debug(
+                    f"Running contextual correction on: '{target_utterance['transcription']}'. "
+                    f"History size: {len(self.utterance_history)}"
+                )
 
-        response_data = await self.correct_with_context(
-            text_to_correct=target_utterance["transcription"],
-            context_history=context_list,
-        )
+            history_as_list = list(self.utterance_history)
+            context_list = []
+            try:
+                target_index = next(
+                    i
+                    for i, u in enumerate(history_as_list)
+                    if u["message_id"] == target_utterance["message_id"]
+                )
+                context_utterances = history_as_list[
+                    target_index + 1 : target_index + 3
+                ]
+                context_list = [u["transcription"] for u in context_utterances]
+            except StopIteration:
+                with log_step("CORRECTION"):
+                    logger.warning(
+                        "Target utterance not found in history; sending without context."
+                    )
 
-        is_needed = response_data.get("is_correction_needed", False)
-        reason = response_data.get("reasoning", "No reason provided.")
-        corrected_transcription = response_data.get("corrected_sentence")
-
-        if (
-            is_needed
-            and corrected_transcription
-            and corrected_transcription.strip()
-            != target_utterance["transcription"].strip()
-        ):
-            await self.viewer_manager.broadcast_to_session(
-                self.session_id,
-                {
-                    "message_id": target_utterance["message_id"],
-                    "type": "status_update",
-                    "correction_status": "correcting",
-                },
-            )
-            log_utterance_step(
-                "CORRECTION",
-                target_utterance["message_id"],
-                "Correction is needed and will be applied.",
-                speaker=target_utterance["speaker"],
-                extra={
-                    "reason": reason,
-                    "corrected_text": corrected_transcription,
-                    "session": self.session_id,
-                },
+            response_data = await self.correct_with_context(
+                text_to_correct=target_utterance["transcription"],
+                context_history=context_list,
             )
 
-            full_corrected_translation = ""
-            async for chunk in self.retranslation_service.translate_stream(
-                text_to_translate=corrected_transcription, session_id=self.session_id
+            is_needed = response_data.get("is_correction_needed", False)
+            reason = response_data.get("reasoning", "No reason provided.")
+            corrected_transcription = response_data.get("corrected_sentence")
+
+            if (
+                is_needed
+                and corrected_transcription
+                and corrected_transcription.strip()
+                != target_utterance["transcription"].strip()
             ):
-                full_corrected_translation = chunk
+                await self.viewer_manager.broadcast_to_session(
+                    self.session_id,
+                    {
+                        "message_id": target_utterance["message_id"],
+                        "type": "status_update",
+                        "correction_status": "correcting",
+                    },
+                )
+                with log_step("CORRECTION"):
+                    logger.info(
+                        f"Correction applied. Reason: {reason}. "
+                        f"Old: '{target_utterance['transcription']}' | "
+                        f"New: '{corrected_transcription}'"
+                    )
 
-            payload = {
-                "message_id": target_utterance["message_id"],
-                "transcription": corrected_transcription,
-                "translation": full_corrected_translation,
-                "speaker": target_utterance["speaker"],
-                "type": "correction",
-                "isfinalize": True,
-            }
-            await self.viewer_manager.broadcast_to_session(self.session_id, payload)
-            log_utterance_step(
-                "CORRECTION",
-                target_utterance["message_id"],
-                "Correction broadcast complete.",
-                speaker=target_utterance["speaker"],
-                extra={"session": self.session_id},
-                detailed=False,
-            )
-        else:
-            log_reason = (
-                reason
-                if not is_needed
-                else "Model suggested a correction, but it was empty or identical to the original."
-            )
-            log_utterance_step(
-                "CORRECTION",
-                target_utterance["message_id"],
-                "No correction applied.",
-                speaker=target_utterance["speaker"],
-                extra={"reason": log_reason, "session": self.session_id},
-                detailed=False,
-            )
+                full_corrected_translation = ""
+                async for chunk in self.retranslation_service.translate_stream(
+                    text_to_translate=corrected_transcription
+                ):
+                    full_corrected_translation = chunk
+
+                payload = {
+                    "message_id": target_utterance["message_id"],
+                    "transcription": corrected_transcription,
+                    "translation": full_corrected_translation,
+                    "speaker": target_utterance["speaker"],
+                    "type": "correction",
+                    "isfinalize": True,
+                }
+                await self.viewer_manager.broadcast_to_session(self.session_id, payload)
+                with log_step("CORRECTION"):
+                    logger.info("Correction broadcast complete.")
+            else:
+                log_reason = (
+                    reason
+                    if not is_needed
+                    else "Model suggested a correction, but it was empty or identical to the original."
+                )
+                with log_step("CORRECTION"):
+                    logger.info(f"No correction applied. Reason: {log_reason}")
+
+        finally:
+            message_id_var.reset(msg_id_token)
+            speaker_var.reset(speaker_token)
 
     async def _run_contextual_correction(self):
         """Internal helper to check and run correction on the target utterance."""
@@ -361,17 +298,19 @@ class CorrectionService:
         Public method to receive a new final utterance, store it,
         and trigger the correction pipeline.
         """
-        log_utterance_step(
-            "CORRECTION",
-            utterance["message_id"],
-            "Received final utterance for history.",
-            speaker=utterance["speaker"],
-            extra={
-                "history_size": len(self.utterance_history),
-                "session": self.session_id,
-            },
-            detailed=True,
-        )
+        msg_id_token = message_id_var.set(utterance.get("message_id"))
+        speaker_token = speaker_var.set(utterance.get("speaker"))
+        try:
+            # <-- Replaces log_utterance_step
+            with log_step("CORRECTION"):
+                logger.debug(
+                    f"Received final utterance for history. "
+                    f"History size: {len(self.utterance_history)}"
+                )
+        finally:
+            message_id_var.reset(msg_id_token)
+            speaker_var.reset(speaker_token)
+
         self.utterance_history.append(utterance)
         asyncio.create_task(self._run_contextual_correction())
 
@@ -384,27 +323,21 @@ class CorrectionService:
 
         if len(self.utterance_history) >= self.CORRECTION_CONTEXT_THRESHOLD:
             final_targets = list(self.utterance_history)[-num_final_to_check:]
-            log_pipeline_step(
-                "SESSION",
-                f"Performing final correction check on last {len(final_targets)} utterance(s).",
-                extra={"session": self.session_id},
-                detailed=False,
-            )
+            with log_step("SESSION"):
+                logger.info(
+                    f"Performing final correction check on last {len(final_targets)} utterance(s)."
+                )
             for utterance in final_targets:
                 await self._perform_correction(utterance)
         elif len(self.utterance_history) > 0:
-            log_pipeline_step(
-                "SESSION",
-                f"Performing final correction check on all {len(self.utterance_history)} utterance(s).",
-                extra={"session": self.session_id},
-                detailed=False,
-            )
+            with log_step("SESSION"):
+                logger.info(
+                    f"Performing final correction check on all {len(self.utterance_history)} utterance(s)."
+                )
             for utterance in list(self.utterance_history):
                 await self._perform_correction(utterance)
         else:
-            log_pipeline_step(
-                "SESSION",
-                f"Not enough history ({len(self.utterance_history)}) for final corrections check.",
-                extra={"session": self.session_id},
-                detailed=False,
-            )
+            with log_step("SESSION"):
+                logger.info(
+                    f"Not enough history ({len(self.utterance_history)}) for final corrections check."
+                )

@@ -1,3 +1,5 @@
+# BUG: Terminating the session before responses from the SONIOX API might result in 0'd timestamps
+
 import logging
 import os
 from datetime import datetime, timedelta

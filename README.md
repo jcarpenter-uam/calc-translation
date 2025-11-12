@@ -95,11 +95,13 @@ TRANSLATION_SERVER_URL="ws://translation-server:8000/ws/transcribe"
 # Soniox API
 SONIOX_API_KEY=
 
-# QWEN-MT-Turbo Retranslation
+# QWEN-MT-Turbo Retranslation *OPTIONAL*
+# Not used if correction is disabled
 ALIBABA_API_KEY=
 
-#Ollama
-OLLAMA_URL="http://localhost:11434"
+# Ollama URL *OPTIONAL*
+# If not set disables correction functionality
+OLLAMA_URL=
 
 # The max cache size for translations/transcriptions.
 # Once exceeded the oldest entry is evicted
@@ -107,10 +109,9 @@ OLLAMA_URL="http://localhost:11434"
 MAX_CACHE_MB=
 
 # Secure token for endpoints
-# REQUIRED
 SECRET_TOKEN=defaultwstoken
 
-# Logging state
-# True also saves audio files per session
-DEBUG_MODE=False # True/False as options
+# Log level for console
+# Log files are saved per session at the debug level
+LOGGING_LEVEL=DEBUG # DEBUG, INFO, ERROR as options
 ```

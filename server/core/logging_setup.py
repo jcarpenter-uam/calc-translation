@@ -206,7 +206,7 @@ def add_session_log_handler(
         log_file = os.path.join(logs_dir, f"{session_id}_{date_str}.log")
 
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        file_handler.setLevel(logging.INFO)
+        file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(PlainFormatter())
 
         logging.getLogger().addHandler(file_handler)

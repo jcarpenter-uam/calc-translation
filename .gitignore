@@ -6,6 +6,11 @@ server/logs/*
 server/output/*
 !server/output/README.md
 
+# ----- integrations -----
+# ----- zoom -----
+integrations/zoom-rtms/logs/*
+!integrations/zoom-rtms/logs/README.md
+
 # Correction Model
 *.gguf
 

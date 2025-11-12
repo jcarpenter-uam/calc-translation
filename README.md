@@ -67,8 +67,8 @@ services:
     environment:
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
-      - ZOOM_WEBHOOK_SECRET_TOKEN=${ZOOM_WEBHOOK_SECRET_TOKEN}
-      - TRANSLATION_SERVER_URL=${TRANSLATION_SERVER_URL}
+      - ZM_WEBHOOK_SECRET=${ZM_WEBHOOK_SECRET}
+      - BASE_SERVER_URL="ws://translation-server:8000/ws/transcribe"
       - SECRET_TOKEN=${SECRET_TOKEN}
     depends_on:
       - translation-server
@@ -86,16 +86,19 @@ networks:
 **Expected Variables**
 
 ```bash
-### ------ ZOOM_CLIENT ------
+### ------ ZOOM INTEGRATION ------
 ## Core Configuration (Required)
 #
 # Get these for your app in the zoom dev interface
 ZM_RTMS_CLIENT=
 ZM_RTMS_SECRET=
-ZOOM_WEBHOOK_SECRET_TOKEN=
+ZM_WEBHOOK_SECRET=
 #
-# The URL for the client to reach the server
-TRANSLATION_SERVER_URL="ws://translation-server:8000/ws/transcribe"
+# The URL for the integration to reach the server
+BASE_SERVER_URL="ws://localhost:8000/ws/transcribe" # Default if not set
+#
+# Port the server runs on
+PORT=8080 # Default if not set
 
 ### ------ SERVER ------
 ## Core Configuration (Required)

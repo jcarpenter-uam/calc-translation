@@ -19,11 +19,13 @@ if (!fs.existsSync(logDir)) {
   console.log(`Created directory: ${logDir}`);
 }
 
-const TRANSLATION_SERVER_URL = process.env.TRANSLATION_SERVER_URL;
+const BASE_SERVER_URL =
+  process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
 const SECRET_TOKEN = process.env.SECRET_TOKEN;
-const ZOOM_WEBHOOK_SECRET_TOKEN = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
-
+const ZM_WEBHOOK_SECRET = process.env.ZM_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 8080;
+
+const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 
 if (!SECRET_TOKEN) {
   console.error("FATAL: SECRET_TOKEN is not defined in .env file!");
@@ -40,10 +42,8 @@ let clients = new Map();
 // ============================
 function rtmsWebhookHandler(req, res) {
   // --- Check if secret is loaded ---
-  if (!ZOOM_WEBHOOK_SECRET_TOKEN) {
-    console.error(
-      "FATAL: ZOOM_WEBHOOK_SECRET_TOKEN is not defined in .env file!",
-    );
+  if (!ZM_WEBHOOK_SECRET) {
+    console.error("FATAL: ZM_WEBHOOK_SECRET is not defined in .env file!");
     console.error(
       "Please get this from your Zoom App's 'Features' -> 'Event Subscriptions' page.",
     );
@@ -56,7 +56,7 @@ function rtmsWebhookHandler(req, res) {
 
   // We update the HMAC with the prefix and the buffer *separately*.
   const hashForVerify = crypto
-    .createHmac("sha256", ZOOM_WEBHOOK_SECRET_TOKEN)
+    .createHmac("sha256", ZM_WEBHOOK_SECRET)
     .update(msgPrefix) // First, update with the string prefix
     .update(req.body) // Next, update with the raw body Buffer
     .digest("hex");
@@ -139,7 +139,7 @@ function handleUrlValidation(payload, res) {
   }
 
   const hashForValidate = crypto
-    .createHmac("sha256", ZOOM_WEBHOOK_SECRET_TOKEN)
+    .createHmac("sha256", ZM_WEBHOOK_SECRET)
     .update(payload.plainToken)
     .digest("hex");
 
@@ -169,13 +169,14 @@ function handleRtmsStarted(payload, streamId) {
   };
 
   // Create a new WebSocket client for the translation server with token
-  const wsClient = new WebSocket(TRANSLATION_SERVER_URL, {
+  // TODO: Get meeting id from zoom sdk
+  const wsClient = new WebSocket(`${ZOOM_BASE_SERVER_URL}/${MEETING_ID}`, {
     headers: authHeader,
   });
 
   wsClient.on("open", () => {
     console.log(
-      `WebSocket connection to ${TRANSLATION_SERVER_URL} established for stream ${streamId}`,
+      `WebSocket connection to ${BASE_SERVER_URL} established for stream ${streamId}`,
     );
   });
 
@@ -194,9 +195,6 @@ function handleRtmsStarted(payload, streamId) {
 
   rtmsClient.onAudioData((data, size, timestamp, metadata) => {
     const speakerName = metadata.userName || "Zoom RTMS";
-    // console.log( // This is very noisy
-    //   `Received ${size} bytes of audio data at ${timestamp} from ${metadata.userName}`,
-    // );
 
     if (wsClient.readyState === WebSocket.OPEN) {
       const payload = {

@@ -13,6 +13,7 @@ export default function App() {
     status: transcriptionStatus,
     transcripts,
     isDownloadable,
+    // TODO: This will become dynamic
   } = useTranscriptStream("/ws/view/test/test");
 
   const lastTopTextRef = React.useRef(null);

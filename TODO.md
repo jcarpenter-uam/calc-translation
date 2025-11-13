@@ -1,7 +1,6 @@
 ## Todo:
 
-- AzureID auth
-- N:N restructure using zooms session join codes
+- Frontend AUTH and inputting meeting ids to get redirected to session
 - Auto scroll should allow downward scrolling
 - reimplement denoising with new solution
 

@@ -1,2 +1,3 @@
-# Checks RBAC for zoom sessions
-# Will allow us to check the meeting id for a specific UUID
+# checks for the corresponding meetinguuid for a given meetingid
+# checks the passcord for that meetinguuid
+# returns auth status and meetinguuid to redirect the client

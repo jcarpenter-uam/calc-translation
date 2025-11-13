@@ -1,6 +1,5 @@
 import logging
 
-import uvicorn
 from core.logging_setup import setup_logging
 
 setup_logging()
@@ -44,7 +43,3 @@ app.include_router(clients_router)
 app.include_router(sessions_router)
 
 app.mount("/", StaticFiles(directory="web/dist", html=True), name="web")
-
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

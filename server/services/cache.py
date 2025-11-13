@@ -1,3 +1,5 @@
+# TODO: Cache should be built per session, and saved per session
+
 import logging
 import os
 from collections import deque

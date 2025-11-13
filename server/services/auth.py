@@ -1,6 +1,8 @@
 # TODO: Currently the view endpoints are unprotected, this is soon to change
 # Emplementing zoom meeting pass and session code along with Entra ID to secure access
 
+# BUG: Bad auth raises HTTP exception causing WS connection to fail
+
 import logging
 
 from core.config import settings

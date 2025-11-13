@@ -9,7 +9,10 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
 
-          <Route path="/sessions" element={<SessionPage />} />
+          <Route
+            path="/sessions/:integration/:sessionId"
+            element={<SessionPage />}
+          />
         </Routes>
       </BrowserRouter>
     </div>

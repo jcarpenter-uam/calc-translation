@@ -1,5 +1,9 @@
 // This is the new page that displays transcripts
 
+// This is the new page that displays transcripts
+
+import { useParams } from "react-router-dom";
+import { useRef } from "react";
 import Header from "../components/header";
 import Transcript from "../components/transcript.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
@@ -8,8 +12,10 @@ import DownloadVttButton from "../components/vtt-download.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 
 export default function SessionPage() {
-  const { transcripts, isDownloadable } =
-    useTranscriptStream("/ws/view/test/test");
+  const { integration, sessionId } = useParams();
+  const wsUrl = `/ws/view/${integration}/${sessionId}`;
+  const { transcripts, isDownloadable } = useTranscriptStream(wsUrl);
+  const lastTopTextRef = useRef(null);
 
   return (
     <>

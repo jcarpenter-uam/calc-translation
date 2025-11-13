@@ -220,6 +220,8 @@ function handleRtmsStarted(payload, streamId) {
     return;
   }
 
+  const safe_meeting_uuid = meeting_uuid.replace(/\//g, "_");
+
   const { logger: meetingLogger, transport: meetingTransport } =
     createMeetingLogger(meeting_uuid);
 
@@ -232,66 +234,109 @@ function handleRtmsStarted(payload, streamId) {
     Authorization: `Bearer ${SECRET_TOKEN}`,
   };
 
-  let hasLoggedWarning = false;
-
-  const wsClient = new WebSocket(`${ZOOM_BASE_SERVER_URL}/${meeting_uuid}`, {
-    headers: authHeader,
-  });
-
-  wsClient.on("open", () => {
-    meetingLogger.info(
-      `WebSocket connection to ${BASE_SERVER_URL} established for stream ${streamId}`,
-    );
-    hasLoggedWarning = false;
-  });
-
-  wsClient.on("error", (error) => {
-    meetingLogger.error(error, `WebSocket error for stream ${streamId}`);
-  });
-
-  wsClient.on("close", (code, reason) => {
-    meetingLogger.info(
-      `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
-    );
-
-    meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
-
-    meetingTransport.end(() => {
-      logger.info(`Log file for stream ${streamId} closed.`);
-    });
-
-    clients.delete(streamId);
-  });
-
-  // Store all clients in the map
-  clients.set(streamId, {
+  const clientEntry = {
     rtmsClient,
-    wsClient,
+    wsClient: null,
     meetingLogger,
     meetingTransport,
-  });
+    hasLoggedWarning: false,
+  };
+  clients.set(streamId, clientEntry);
+
+  /**
+   * Defines a recursive connect function with exponential backoff
+   */
+  function connect(retries = 0) {
+    if (!clients.has(streamId)) {
+      meetingLogger.info(
+        "Client entry removed, stopping WebSocket reconnect attempts.",
+      );
+      return;
+    }
+
+    meetingLogger.info(
+      `Attempting WebSocket connection to ${BASE_SERVER_URL} (attempt ${
+        retries + 1
+      })...`,
+    );
+
+    const wsClient = new WebSocket(
+      `${ZOOM_BASE_SERVER_URL}/${safe_meeting_uuid}`,
+      {
+        headers: authHeader,
+      },
+    );
+
+    clientEntry.wsClient = wsClient;
+
+    wsClient.on("open", () => {
+      meetingLogger.info(
+        `WebSocket connection to ${BASE_SERVER_URL} established for stream ${streamId}`,
+      );
+      clientEntry.hasLoggedWarning = false;
+      retries = 0;
+    });
+
+    wsClient.on("error", (error) => {
+      meetingLogger.error(error, `WebSocket error for stream ${streamId}`);
+    });
+
+    wsClient.on("close", (code, reason) => {
+      meetingLogger.info(
+        `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
+      );
+
+      if (!clients.has(streamId)) {
+        meetingLogger.info(
+          `Stream ${streamId} was intentionally stopped, not reconnecting.`,
+        );
+
+        meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
+        meetingTransport.end(() => {
+          logger.info(`Log file for stream ${streamId} closed.`);
+        });
+        // ---------------------
+        return;
+      }
+
+      // It was an unexpected close, so let's retry.
+      const nextRetries = retries + 1;
+      const delay = Math.min(1000 * 2 ** retries, 30000);
+
+      meetingLogger.info(
+        `Will retry WebSocket connection in ${delay / 1000} seconds...`,
+      );
+      setTimeout(() => connect(nextRetries), delay);
+    });
+  }
 
   rtmsClient.onAudioData((data, size, timestamp, metadata) => {
+    const currentClientEntry = clients.get(streamId);
+    if (!currentClientEntry) return;
+
+    const { wsClient, meetingLogger } = currentClientEntry;
     const speakerName = metadata.userName || "Zoom RTMS";
 
-    if (wsClient.readyState === WebSocket.OPEN) {
+    if (wsClient && wsClient.readyState === WebSocket.OPEN) {
       const payload = {
         userName: speakerName,
         audio: data.toString("base64"),
       };
       wsClient.send(JSON.stringify(payload));
     } else {
-      if (!hasLoggedWarning) {
+      if (!currentClientEntry.hasLoggedWarning) {
         meetingLogger.warn(
           `WebSocket not open for stream ${streamId}. Skipping audio packets until reconnected.`,
         );
-        hasLoggedWarning = true;
+        currentClientEntry.hasLoggedWarning = true;
       }
     }
   });
 
   meetingLogger.info(`Joining RTMS for meeting: ${meeting_uuid}`);
   rtmsClient.join(payload);
+
+  connect();
 }
 
 /**
@@ -311,15 +356,24 @@ function handleRtmsStopped(streamId) {
     return;
   }
 
-  const { rtmsClient, wsClient, meetingLogger } = clientEntry;
+  const { rtmsClient, wsClient, meetingLogger, meetingTransport } = clientEntry;
+
+  meetingLogger.info(`Cleaning up clients for stream: ${streamId}`);
+
+  rtmsClient.leave();
 
   clients.delete(streamId);
 
-  meetingLogger.info(`Cleaning up clients for stream: ${streamId}`);
-  rtmsClient.leave();
-
   if (wsClient) {
     wsClient.close();
+  } else {
+    meetingLogger.warn(
+      `Stream ${streamId} stopped, but WebSocket was never established. Cleaning up logger.`,
+    );
+    meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
+    meetingTransport.end(() => {
+      logger.info(`Log file for stream ${streamId} closed.`);
+    });
   }
 }
 

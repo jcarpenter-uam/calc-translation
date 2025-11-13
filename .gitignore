@@ -1,18 +1,24 @@
+# ----- server -----
+__pycache__/
+venv/
+server/logs/*
+!server/logs/README.md
+server/output/*
+!server/output/README.md
+
+# ----- integrations -----
+# ----- zoom -----
+integrations/zoom-rtms/logs/*
+!integrations/zoom-rtms/logs/README.md
+
 # Correction Model
 *.gguf
 
-# Server
-__pycache__/
-venv/
-debug/
-session_history/
-
 # Web
 node_modules/
-logs/
 dist/
 out/
+logs/node*
 
 # Secrets
 .env
-docker-compose.yaml

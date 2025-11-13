@@ -13,7 +13,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Configuration ---
-WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe")
+WEBSOCKET_URL = os.getenv(
+    "WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe/test/test"
+)
 SPEAKER_NAME = "CALC IT"
 TARGET_SAMPLE_RATE = 16000
 

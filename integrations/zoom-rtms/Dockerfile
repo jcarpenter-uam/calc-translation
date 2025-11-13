@@ -13,7 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 
 RUN npm install
 
-COPY . .
+# Explicialy copy files into container
+# Removes need for .dockerignore
+COPY ./index.js ./
+RUN mkdir -p /app/logs
 
 RUN chown -R node:node /app
 

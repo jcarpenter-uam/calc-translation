@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { FileArrowDown } from "@phosphor-icons/react/dist/csr/FileArrowDown";
 import { SpinnerBall } from "@phosphor-icons/react/dist/csr/SpinnerBall";
 
-const DOWNLOAD_API_URL = "/api/download-vtt";
+// TODO: Will become dynamic
+const DOWNLOAD_API_URL = "/api/session/test/test/download/vtt";
 
 const DownloadIcon = () => <FileArrowDown size={23} />;
 

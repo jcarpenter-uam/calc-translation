@@ -51,10 +51,10 @@ services:
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
       - SECRET_TOKEN=${SECRET_TOKEN}
-      - DEBUG_MODE=${DEBUG_MODE}
+      - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
-      - translation-data:/app/session_history
-      - translation-data:/app/debug
+      - translation-data:/app/logs
+      - translation-data:/app/output
     networks:
       - calc-translation
 
@@ -67,9 +67,11 @@ services:
     environment:
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
-      - ZOOM_WEBHOOK_SECRET_TOKEN=${ZOOM_WEBHOOK_SECRET_TOKEN}
-      - TRANSLATION_SERVER_URL=${TRANSLATION_SERVER_URL}
+      - ZM_WEBHOOK_SECRET=${ZM_WEBHOOK_SECRET}
+      - BASE_SERVER_URL="ws://translation-server:8000/ws/transcribe"
       - SECRET_TOKEN=${SECRET_TOKEN}
+    volumes:
+      - zoom_rtms-data:/app/logs
     depends_on:
       - translation-server
     networks:
@@ -77,6 +79,7 @@ services:
 
 volumes:
   translation-data:
+  zoom_rtms-data:
 
 networks:
   calc-translation:
@@ -86,31 +89,52 @@ networks:
 **Expected Variables**
 
 ```bash
+### ------ ZOOM INTEGRATION ------
+## Core Configuration (Required)
+#
+# Get these for your app in the zoom dev interface
 ZM_RTMS_CLIENT=
 ZM_RTMS_SECRET=
-ZOOM_WEBHOOK_SECRET_TOKEN=
+ZM_WEBHOOK_SECRET=
+#
+# The URL for the integration to reach the server
+BASE_SERVER_URL="ws://localhost:8000/ws/transcribe" # Default if not set
+#
+# Port the server runs on
+PORT=8080 # Default if not set
 
-TRANSLATION_SERVER_URL="ws://translation-server:8000/ws/transcribe"
-
-# Soniox API
+### ------ SERVER ------
+## Core Configuration (Required)
+#
+# Get this from your Soniox account dashboard.
 SONIOX_API_KEY=
+#
+# A secret token to authenticate incoming WebSocket connections.
+# This should be a long, random string.
+SECRET_TOKEN=your_secure_random_token_here
 
-# QWEN-MT-Turbo Retranslation
+## General Settings
+#
+# Log level for the console. Options: DEBUG, INFO, ERROR
+# Session log files are always saved at a detailed level.
+LOGGING_LEVEL=INFO # Default if not set
+#
+# The max size (in MB) for each session's in-memory transcript cache.
+# Once exceeded, the oldest entries are evicted.
+MAX_CACHE_MB=10 # Default if not set
+
+## Optional: Transcription Correction & Retranslation
+#
+# This feature enables real-time correction of transcripts using a local
+# Ollama model, followed by re-translation of the corrected text using
+# Alibaba Qwen-MT.
+#
+# This entire feature is DISABLED unless BOTH of the following variables
+# are set.
+#
+# URL for your local Ollama instance (e.g., http://localhost:11434)
+OLLAMA_URL=
+#
+# API Key for Alibaba DashScope (for Qwen-MT retranslation)
 ALIBABA_API_KEY=
-
-#Ollama
-OLLAMA_URL="http://localhost:11434"
-
-# The max cache size for translations/transcriptions.
-# Once exceeded the oldest entry is evicted
-# Default is 10MB unless specified otherwise
-MAX_CACHE_MB=
-
-# Secure token for endpoints
-# REQUIRED
-SECRET_TOKEN=defaultwstoken
-
-# Logging state
-# True also saves audio files per session
-DEBUG_MODE=False # True/False as options
 ```

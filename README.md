@@ -70,6 +70,8 @@ services:
       - ZM_WEBHOOK_SECRET=${ZM_WEBHOOK_SECRET}
       - BASE_SERVER_URL="ws://translation-server:8000/ws/transcribe"
       - SECRET_TOKEN=${SECRET_TOKEN}
+    volumes:
+      - zoom_rtms-data:/app/logs
     depends_on:
       - translation-server
     networks:
@@ -77,6 +79,7 @@ services:
 
 volumes:
   translation-data:
+  zoom_rtms-data:
 
 networks:
   calc-translation:

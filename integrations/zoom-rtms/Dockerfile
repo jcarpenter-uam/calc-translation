@@ -16,6 +16,7 @@ RUN npm install
 # Explicialy copy files into container
 # Removes need for .dockerignore
 COPY ./index.js ./
+RUN mkdir -p /app/logs
 
 RUN chown -R node:node /app
 

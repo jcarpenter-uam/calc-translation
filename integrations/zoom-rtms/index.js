@@ -50,7 +50,8 @@ function getTimestamp() {
  */
 function createMeetingLogger(meeting_uuid) {
   const timestamp = getTimestamp();
-  const fileName = `${meeting_uuid}_${timestamp}.log`;
+  const safe_uuid = meeting_uuid.replace(/\//g, "_"); // Replaces all '/' with '_'
+  const fileName = `${safe_uuid}_${timestamp}.log`;
   const logPath = `${logDir}/${fileName}`;
 
   logger.info(`Creating new log file for meeting: ${logPath}`);
@@ -232,6 +233,8 @@ function handleRtmsStarted(payload, streamId) {
     Authorization: `Bearer ${SECRET_TOKEN}`,
   };
 
+  let hasLoggedWarning = false;
+
   const wsClient = new ReconnectingWebSocket(
     `${ZOOM_BASE_SERVER_URL}/${meeting_uuid}`,
     [],
@@ -248,6 +251,8 @@ function handleRtmsStarted(payload, streamId) {
     meetingLogger.info(
       `WebSocket connection to ${BASE_SERVER_URL} established for stream ${streamId}`,
     );
+
+    hasLoggedWarning = false;
   };
 
   wsClient.onerror = (event) => {
@@ -278,9 +283,12 @@ function handleRtmsStarted(payload, streamId) {
       };
       wsClient.send(JSON.stringify(payload));
     } else {
-      meetingLogger.warn(
-        `WebSocket not open for stream ${streamId}. Skipping audio packet.`,
-      );
+      if (!hasLoggedWarning) {
+        meetingLogger.warn(
+          `WebSocket not open for stream ${streamId}. Skipping audio packets until reconnected.`,
+        );
+        hasLoggedWarning = true;
+      }
     }
   });
 

@@ -2,7 +2,6 @@ import "dotenv/config";
 import crypto from "crypto";
 import express from "express";
 import rtms from "@zoom/rtms";
-import ReconnectingWebSocket from "reconnecting-websocket";
 import { WebSocket } from "ws";
 import pino from "pino";
 
@@ -235,35 +234,34 @@ function handleRtmsStarted(payload, streamId) {
 
   let hasLoggedWarning = false;
 
-  const wsClient = new ReconnectingWebSocket(
-    `${ZOOM_BASE_SERVER_URL}/${meeting_uuid}`,
-    [],
-    {
-      headers: authHeader,
-      WebSocket: WebSocket,
-      maxRetries: 10, // Try to reconnect 10 times
-      minReconnectionDelay: 1000, // Start with a 1-second delay
-      maxReconnectionDelay: 10000, // Max delay of 10 seconds
-    },
-  );
+  const wsClient = new WebSocket(`${ZOOM_BASE_SERVER_URL}/${meeting_uuid}`, {
+    headers: authHeader,
+  });
 
-  wsClient.onopen = () => {
+  wsClient.on("open", () => {
     meetingLogger.info(
       `WebSocket connection to ${BASE_SERVER_URL} established for stream ${streamId}`,
     );
-
     hasLoggedWarning = false;
-  };
+  });
 
-  wsClient.onerror = (event) => {
-    meetingLogger.error(event.error, `WebSocket error for stream ${streamId}`);
-  };
+  wsClient.on("error", (error) => {
+    meetingLogger.error(error, `WebSocket error for stream ${streamId}`);
+  });
 
-  wsClient.onclose = (event) => {
+  wsClient.on("close", (code, reason) => {
     meetingLogger.info(
-      `WebSocket connection for stream ${streamId} closed. Code: ${event.code}, Reason: ${event.reason.toString()}`,
+      `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
     );
-  };
+
+    meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
+
+    meetingTransport.end(() => {
+      logger.info(`Log file for stream ${streamId} closed.`);
+    });
+
+    clients.delete(streamId);
+  });
 
   // Store all clients in the map
   clients.set(streamId, {
@@ -313,7 +311,7 @@ function handleRtmsStopped(streamId) {
     return;
   }
 
-  const { rtmsClient, wsClient, meetingLogger, meetingTransport } = clientEntry;
+  const { rtmsClient, wsClient, meetingLogger } = clientEntry;
 
   clients.delete(streamId);
 
@@ -321,13 +319,8 @@ function handleRtmsStopped(streamId) {
   rtmsClient.leave();
 
   if (wsClient) {
-    wsClient.close(1000, "Meeting ended by webhook");
+    wsClient.close();
   }
-
-  meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
-  meetingTransport.end(() => {
-    logger.info(`Log file for stream ${streamId} closed.`);
-  });
 }
 
 // ====================

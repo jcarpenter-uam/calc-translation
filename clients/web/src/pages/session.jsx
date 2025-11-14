@@ -13,9 +13,10 @@ export default function SessionPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const authorizedId = localStorage.getItem("authorizedSessionId");
+    const rawIds = localStorage.getItem("authorizedSessionIds");
+    const idSet = new Set(rawIds ? JSON.parse(rawIds) : []);
 
-    if (sessionId === authorizedId) {
+    if (idSet.has(sessionId)) {
       setIsAuthorized(true);
     } else {
       // TODO: Give the user a "Please Login" message
@@ -24,7 +25,7 @@ export default function SessionPage() {
   }, [sessionId, navigate]);
 
   const wsUrl = isAuthorized ? `/ws/view/${integration}/${sessionId}` : null;
-  const { transcripts, isDownloadable } = useTranscriptStream(wsUrl);
+  const { transcripts, isDownloadable } = useTranscriptStream(wsUrl, sessionId);
 
   const lastTopTextRef = useRef(null);
 

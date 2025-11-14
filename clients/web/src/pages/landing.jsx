@@ -43,8 +43,15 @@ export default function LandingPage() {
         throw new Error("Server did not return a session ID.");
       }
 
-      // TODO: This item will be deleted on session end
-      localStorage.setItem("authorizedSessionId", sessionId);
+      const rawIds = localStorage.getItem("authorizedSessionIds");
+      const idSet = new Set(rawIds ? JSON.parse(rawIds) : []);
+
+      idSet.add(sessionId);
+
+      localStorage.setItem(
+        "authorizedSessionIds",
+        JSON.stringify(Array.from(idSet)),
+      );
 
       handleJoin("zoom", sessionId);
     } catch (err) {

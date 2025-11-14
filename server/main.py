@@ -14,6 +14,7 @@ correction_status = (
 )
 logger.info(f"Configuration loaded. Correction: {correction_status}")
 
+from api.auth import create_auth_router
 from api.clients import create_clients_router
 from api.sessions import router as sessions_router
 from api.transcribe import create_transcribe_router
@@ -41,5 +42,8 @@ clients_router = create_clients_router(viewer_manager=viewer_manager)
 app.include_router(clients_router)
 
 app.include_router(sessions_router)
+
+auth_router = create_auth_router()
+app.include_router(auth_router)
 
 app.mount("/", StaticFiles(directory="web/dist", html=True), name="web")

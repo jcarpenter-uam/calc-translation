@@ -25,7 +25,7 @@ export function ZoomForm({ onSubmit }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(meetingId, password);
+    onSubmit({ meetingId, password });
   };
 
   return (

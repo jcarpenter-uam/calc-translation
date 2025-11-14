@@ -50,7 +50,7 @@ services:
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
-      - SECRET_TOKEN=${SECRET_TOKEN}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
       - translation-data:/app/logs
@@ -69,7 +69,7 @@ services:
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - ZM_WEBHOOK_SECRET=${ZM_WEBHOOK_SECRET}
       - BASE_SERVER_URL="ws://translation-server:8000/ws/transcribe"
-      - SECRET_TOKEN=${SECRET_TOKEN}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     volumes:
       - zoom_rtms-data:/app/logs
     depends_on:
@@ -111,7 +111,7 @@ SONIOX_API_KEY=
 #
 # A secret token to authenticate incoming WebSocket connections.
 # This should be a long, random string.
-SECRET_TOKEN=your_secure_random_token_here
+JWT_SECRET_KEY="a-very-long-and-random-secret-string-that-you-generate"
 
 ## General Settings
 #

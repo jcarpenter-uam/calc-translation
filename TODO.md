@@ -1,6 +1,7 @@
 ## Todo:
 
-- Frontend AUTH and inputting meeting ids to get redirected to session
+- Seperate server-server JWT and client-server JWT
+- EntraID
 - Auto scroll should allow downward scrolling
 - reimplement denoising with new solution
 

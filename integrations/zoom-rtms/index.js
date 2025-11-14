@@ -312,7 +312,6 @@ function handleRtmsStarted(payload, streamId) {
         meetingTransport.end(() => {
           logger.info(`Log file for stream ${streamId} closed.`);
         });
-        // ---------------------
         return;
       }
 

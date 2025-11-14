@@ -21,10 +21,11 @@ def generate_jwt_token(session_id: str) -> str:
     expires_delta = timedelta(hours=1)
 
     payload = {
-        "iss": "zoom-rtms-service",
+        "iss": "calc-translation-service",
         "iat": now,
         "exp": now + expires_delta,
-        "sub": session_id,
+        "sub": "anonymous",  # NOTE: Will get fixed after EntraID
+        "resource": session_id,
     }
 
     token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")

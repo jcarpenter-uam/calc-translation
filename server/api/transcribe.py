@@ -3,7 +3,7 @@
 # This name is slighty misleading as our app does translation and transcription, might change naming later for a better term
 
 from fastapi import APIRouter, Depends, Path, WebSocket
-from services.is_authicated import validate_token
+from services.is_authenticated import validate_token_http
 from services.receiver import handle_receiver_session
 
 
@@ -18,7 +18,7 @@ def create_transcribe_router(viewer_manager):
         websocket: WebSocket,
         integration: str = Path(),
         session_id: str = Path(),
-        is_authenticated: bool = Depends(validate_token),
+        payload: dict = Depends(validate_token_http),
     ):
         """
         Handles the WebSocket connection for per transcription session.

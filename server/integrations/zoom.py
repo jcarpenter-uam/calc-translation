@@ -13,6 +13,7 @@ class ZoomAuthResponse(BaseModel):
     """Matches the JSON response the frontend expects"""
 
     meetinguuid: str
+    token: str
 
 
 # TODO: REPLACE

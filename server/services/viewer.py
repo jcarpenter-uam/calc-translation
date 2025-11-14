@@ -1,7 +1,7 @@
 import logging
 
 from core.logging_setup import log_step, session_id_var
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect, status
 
 from .connection_manager import ConnectionManager
 
@@ -9,7 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 async def handle_viewer_session(
-    websocket: WebSocket, session_id: str, viewer_manager: ConnectionManager
+    websocket: WebSocket,
+    session_id: str,
+    viewer_manager: ConnectionManager,
+    payload: dict,
 ):
     """
     Handles the business logic for a single viewer's WebSocket session.

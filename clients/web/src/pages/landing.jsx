@@ -12,8 +12,8 @@ export default function LandingPage() {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const handleJoin = (type, sessionId) => {
-    navigate(`/sessions/${type}/${sessionId}`);
+  const handleJoin = (type, sessionId, token) => {
+    navigate(`/sessions/${type}/${sessionId}?token=${token}`);
   };
 
   const handleZoomSubmit = async ({ meetingId, password }) => {
@@ -37,23 +37,19 @@ export default function LandingPage() {
       }
 
       const data = await response.json();
+      console.log("Server response:", data);
       const sessionId = data.meetinguuid;
+      const token = data.token;
 
       if (!sessionId) {
         throw new Error("Server did not return a session ID.");
       }
 
-      const rawIds = localStorage.getItem("authorizedSessionIds");
-      const idSet = new Set(rawIds ? JSON.parse(rawIds) : []);
+      if (!token) {
+        throw new Error("Server did not return an auth token.");
+      }
 
-      idSet.add(sessionId);
-
-      localStorage.setItem(
-        "authorizedSessionIds",
-        JSON.stringify(Array.from(idSet)),
-      );
-
-      handleJoin("zoom", sessionId);
+      handleJoin("zoom", sessionId, token);
     } catch (err) {
       console.error("Authentication failed:", err);
       setError(err.message);

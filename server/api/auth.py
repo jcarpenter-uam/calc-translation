@@ -6,6 +6,7 @@
 
 from fastapi import APIRouter, HTTPException
 from integrations.zoom import ZoomAuthRequest, ZoomAuthResponse, verify_zoom_credentials
+from services.is_authenticated import generate_jwt_token
 
 
 def create_auth_router() -> APIRouter:
@@ -25,7 +26,9 @@ def create_auth_router() -> APIRouter:
         try:
             meeting_uuid = verify_zoom_credentials(request=request)
 
-            return ZoomAuthResponse(meetinguuid=meeting_uuid)
+            token = generate_jwt_token(session_id=meeting_uuid)
+
+            return ZoomAuthResponse(meetinguuid=meeting_uuid, token=token)
 
         except HTTPException as e:
             raise e

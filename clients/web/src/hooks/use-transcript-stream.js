@@ -49,7 +49,13 @@ export function useTranscriptStream(wsUrl, sessionId) {
         console.log(`WebSocket connected to ${wsUrl}`);
       };
 
-      ws.current.onclose = () => {
+      ws.current.onclose = (event) => {
+        if (event.code === 4001 || event.code === 4008) {
+          console.error(
+            `WebSocket connection closed: ${event.reason} (${event.code})`,
+          );
+          return;
+        }
         console.log(`WebSocket disconnected. Reconnecting in 3 seconds...`);
         reconnectTimeoutId = setTimeout(connect, 3000);
       };
@@ -71,21 +77,6 @@ export function useTranscriptStream(wsUrl, sessionId) {
                 setIsDownloadable(false);
                 hideTimerRef.current = null;
               }, DOWNLOAD_WINDOW_MS);
-            }
-
-            // TODO: Allow the user time to download the VTT before deleting the storage item
-
-            const rawIds = localStorage.getItem("authorizedSessionIds");
-            if (rawIds) {
-              const idSet = new Set(JSON.parse(rawIds));
-
-              if (idSet.has(sessionId)) {
-                idSet.delete(sessionId);
-                localStorage.setItem(
-                  "authorizedSessionIds",
-                  JSON.stringify(Array.from(idSet)),
-                );
-              }
             }
 
             return;

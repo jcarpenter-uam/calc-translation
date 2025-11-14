@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
 import Header from "../components/header";
 import Transcript from "../components/transcript.jsx";
@@ -8,19 +8,22 @@ import DownloadVttButton from "../components/vtt-download.jsx";
 import Unauthorized from "../components/unauthorized.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 
+function useQuery() {
+  return new URLSearchParams(useLocation().search);
+}
+
 export default function SessionPage() {
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [showUnauthorized, setShowUnauthorized] = useState(false);
   const { integration, sessionId } = useParams();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const rawIds = localStorage.getItem("authorizedSessionIds");
-    const idSet = new Set(rawIds ? JSON.parse(rawIds) : []);
+  const query = useQuery();
+  const token = query.get("token");
 
-    if (idSet.has(sessionId)) {
-      setIsAuthorized(true);
-    } else {
+  const [isAuthorized, setIsAuthorized] = useState(!!token);
+  const [showUnauthorized, setShowUnauthorized] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthorized) {
       setShowUnauthorized(true);
       const timer = setTimeout(() => {
         navigate("/");
@@ -28,9 +31,11 @@ export default function SessionPage() {
 
       return () => clearTimeout(timer);
     }
-  }, [sessionId, navigate]);
+  }, [isAuthorized, navigate]);
 
-  const wsUrl = isAuthorized ? `/ws/view/${integration}/${sessionId}` : null;
+  const wsUrl = isAuthorized
+    ? `/ws/view/${integration}/${sessionId}?token=${token}`
+    : null;
   const { transcripts, isDownloadable } = useTranscriptStream(wsUrl, sessionId);
 
   const lastTopTextRef = useRef(null);

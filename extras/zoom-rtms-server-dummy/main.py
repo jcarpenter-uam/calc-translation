@@ -3,8 +3,10 @@ import base64
 import json
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
+import jwt
 import numpy as np
 import resampy
 import sounddevice as sd
@@ -12,22 +14,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- Configuration ---
 WEBSOCKET_URL = os.getenv(
-    "WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe/test/test"
+    "WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe/zoom/test"
 )
 SPEAKER_NAME = "CALC IT"
 TARGET_SAMPLE_RATE = 16000
 
-WS_SECRET_TOKEN = os.getenv("WS_SECRET_TOKEN")
-if not WS_SECRET_TOKEN:
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
     print(
-        "FATAL: 'WS_SECRET_TOKEN' environment variable is not set. Please add it to your .env file.",
+        "FATAL: 'JWT_SECRET_KEY' environment variable is not set. Please add it to your .env file.",
         file=sys.stderr,
     )
     sys.exit(1)
 
-# A shared buffer to hold resampled audio data
 audio_buffer = bytearray()
 buffer_lock = asyncio.Lock()
 
@@ -47,7 +47,7 @@ def select_audio_device():
         )
     while True:
         try:
-            choice = int(input("\n➡️ Please select an input device by number: "))
+            choice = int(input("\nPlease select an input device by number: "))
             if 0 <= choice < len(input_devices):
                 selected_device = input_devices[choice]
                 device_name = selected_device["name"]
@@ -63,15 +63,28 @@ def select_audio_device():
             return None, None
 
 
+def generate_auth_token(secret_key: str) -> str:
+    """
+    Generates a short-lived JWT valid for 5 minutes
+    """
+    now = datetime.now(timezone.utc)
+
+    payload = {
+        "iss": "zoom-rtms-service",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+    }
+
+    token = jwt.encode(payload, secret_key, algorithm="HS256")
+    return token
+
+
 async def receive_transcriptions(ws):
     """Receives and prints transcription results from the server."""
-    print("--- Live Transcription Active (Press Ctrl+C to stop) 🎤 ---")
+    print("--- Live Transcription Active (Press Ctrl+C to stop) ---")
     try:
-        # aiohttp's iteration model is slightly different
         async for msg in ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
-                # The original script had 'pass'.
-                # You would process msg.data here (e.g., json.loads(msg.data))
                 pass
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 print(f"WebSocket Error: {ws.exception()}")
@@ -92,21 +105,15 @@ async def send_audio(ws, stop_event: asyncio.Event):
             data_chunk = None
             async with buffer_lock:
                 if audio_buffer:
-                    # Take all data currently in the buffer
                     data_chunk = bytes(audio_buffer)
                     audio_buffer.clear()
 
             if data_chunk:
-                # Log the size of the chunk being sent
-                print(f"Sending audio chunk of size: {len(data_chunk)} bytes")
-
                 encoded_audio = base64.b64encode(data_chunk).decode("utf-8")
                 payload = {"userName": SPEAKER_NAME, "audio": encoded_audio}
 
-                # Use ws.send_str for sending JSON text
                 await ws.send_str(json.dumps(payload))
 
-            # A small sleep to prevent a tight loop when there's no audio
             await asyncio.sleep(0.01)
 
     except (ConnectionResetError, asyncio.CancelledError):
@@ -125,13 +132,11 @@ async def main(device_name: str, native_rate: int):
         if status:
             print(status, file=sys.stderr)
 
-        # Resample to the target rate and convert to 16-bit PCM bytes
         resampled_data = resampy.resample(
             indata.flatten(), sr_orig=native_rate, sr_new=TARGET_SAMPLE_RATE
         )
         audio_bytes = (resampled_data * 32767).astype(np.int16).tobytes()
 
-        # Add the captured audio to the buffer in a thread-safe manner
         asyncio.run_coroutine_threadsafe(add_to_buffer(audio_bytes), loop)
 
     async def add_to_buffer(data):
@@ -140,10 +145,9 @@ async def main(device_name: str, native_rate: int):
             audio_buffer.extend(data)
 
     try:
-        # aiohttp uses a simple dictionary for headers
-        auth_header = {"Authorization": f"Bearer {WS_SECRET_TOKEN}"}
+        token = generate_auth_token(JWT_SECRET_KEY)
+        auth_header = {"Authorization": f"Bearer {token}"}
 
-        # aiohttp uses a ClientSession to manage connections and headers
         async with aiohttp.ClientSession(headers=auth_header) as session:
             async with session.ws_connect(WEBSOCKET_URL) as ws:
                 print(f"\nConnected to {WEBSOCKET_URL}")
@@ -161,17 +165,14 @@ async def main(device_name: str, native_rate: int):
                     dtype="float32",
                     callback=audio_callback,
                 ):
-                    # Wait for the receiver to finish (e.g., connection closes)
                     await receiver_task
 
-                # Cleanly stop the sender task
                 stop_event.set()
                 await sender_task
 
     except aiohttp.ClientConnectorError:
         print("\nCould not connect to the server. Is it running?")
     except aiohttp.WSServerHandshakeError as e:
-        # This error is useful for debugging auth issues
         print(
             f"\nHandshake failed. Check your auth token? Server said: {e.status} {e.message}"
         )

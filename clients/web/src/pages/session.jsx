@@ -5,10 +5,12 @@ import Transcript from "../components/transcript.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
 import DownloadVttButton from "../components/vtt-download.jsx";
+import Unauthorized from "../components/unauthorized.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 
 export default function SessionPage() {
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [showUnauthorized, setShowUnauthorized] = useState(false);
   const { integration, sessionId } = useParams();
   const navigate = useNavigate();
 
@@ -19,8 +21,12 @@ export default function SessionPage() {
     if (idSet.has(sessionId)) {
       setIsAuthorized(true);
     } else {
-      // TODO: Give the user a "Please Login" message
-      navigate("/");
+      setShowUnauthorized(true);
+      const timer = setTimeout(() => {
+        navigate("/");
+      }, 5000); // 5-second delay
+
+      return () => clearTimeout(timer);
     }
   }, [sessionId, navigate]);
 
@@ -28,6 +34,12 @@ export default function SessionPage() {
   const { transcripts, isDownloadable } = useTranscriptStream(wsUrl, sessionId);
 
   const lastTopTextRef = useRef(null);
+
+  if (showUnauthorized) {
+    return (
+      <Unauthorized message="You do not have permission to view this session. You will be redirected to the homepage." />
+    );
+  }
 
   if (!isAuthorized) {
     return null;

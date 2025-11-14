@@ -4,7 +4,7 @@ const DOWNLOAD_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * A custom hook to manage a WebSocket connection for live transcripts.
- * @param {string} url The WebSocket URL to connect to.
+ * @param {string} wsUrl The WebSocket URL to connect to.
  * @returns {{
  * transcripts: Array<{
  * id: string,
@@ -20,7 +20,7 @@ const DOWNLOAD_WINDOW_MS = 10 * 60 * 1000;
  * }>;
  * }}
  */
-export function useTranscriptStream(url) {
+export function useTranscriptStream(wsUrl) {
   const [transcripts, setTranscripts] = useState([]);
   const [isDownloadable, setIsDownloadable] = useState(false);
   const hideTimerRef = useRef(null);
@@ -28,10 +28,14 @@ export function useTranscriptStream(url) {
   const ws = useRef(null);
 
   useEffect(() => {
+    if (!wsUrl) {
+      return;
+    }
+
     let reconnectTimeoutId;
 
     function connect() {
-      if (typeof url !== "string") {
+      if (typeof wsUrl !== "string") {
         return;
       }
       if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
@@ -39,10 +43,10 @@ export function useTranscriptStream(url) {
       }
 
       setTranscripts([]);
-      ws.current = new WebSocket(url);
+      ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log(`WebSocket connected to ${url}`);
+        console.log(`WebSocket connected to ${wsUrl}`);
       };
 
       ws.current.onclose = () => {
@@ -51,7 +55,7 @@ export function useTranscriptStream(url) {
       };
 
       ws.current.onerror = (error) => {
-        console.error(`WebSocket error on ${url}:`, error);
+        console.error(`WebSocket error on ${wsUrl}:`, error);
         ws.current.close();
       };
 
@@ -154,7 +158,7 @@ export function useTranscriptStream(url) {
         ws.current.close();
       }
     };
-  }, [url]);
+  }, [wsUrl]);
 
   return { transcripts, isDownloadable };
 }

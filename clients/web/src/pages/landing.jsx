@@ -43,6 +43,9 @@ export default function LandingPage() {
         throw new Error("Server did not return a session ID.");
       }
 
+      // TODO: This item will be deleted on session end
+      localStorage.setItem("authorizedSessionId", sessionId);
+
       handleJoin("zoom", sessionId);
     } catch (err) {
       console.error("Authentication failed:", err);

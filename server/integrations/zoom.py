@@ -18,8 +18,8 @@ class ZoomAuthResponse(BaseModel):
 # TODO: REPLACE
 # --- Hardcoded Credentials ---
 VALID_MEETING_ID = "80012345678"
-VALID_PASSCODE = "a1B2c3"
-VALID_UUID = "a1b2c3d4-uuid-for-zoom-800"
+VALID_PASSCODE = ""
+VALID_UUID = "test"
 
 
 def verify_zoom_credentials(request: ZoomAuthRequest) -> str:

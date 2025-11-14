@@ -25,10 +25,11 @@ export function ZoomForm({ onSubmit }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(meetingId);
+    onSubmit(meetingId, password);
   };
 
   return (
+    // TODO: MeetingID field should auto format and limit input
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* ... form content ... */}
       <div>

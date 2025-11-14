@@ -1,8 +1,3 @@
-// This is the main landing page for the app
-// Explains the app and how to use
-// Prompts user first for integration, for now this is only zoom
-// When integration = zoom prompt for meeting id and meeting password
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/header";
@@ -14,17 +9,50 @@ import { BiLogoZoom } from "react-icons/bi";
 
 export default function LandingPage() {
   const [integration, setIntegration] = useState(null);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   const handleJoin = (type, sessionId) => {
     navigate(`/sessions/${type}/${sessionId}`);
   };
 
+  const handleZoomSubmit = async ({ meetingId, password }) => {
+    setError(null);
+
+    try {
+      const response = await fetch("/api/auth/zoom", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          meetingid: meetingId,
+          meetingpass: password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Invalid Meeting ID or Passcode");
+      }
+
+      const data = await response.json();
+      const sessionId = data.meetinguuid;
+
+      if (!sessionId) {
+        throw new Error("Server did not return a session ID.");
+      }
+
+      handleJoin("zoom", sessionId);
+    } catch (err) {
+      console.error("Authentication failed:", err);
+      setError(err.message);
+    }
+  };
+
   const renderForm = () => {
     if (integration === "zoom") {
-      return (
-        <ZoomForm onSubmit={(sessionId) => handleJoin("zoom", sessionId)} />
-      );
+      return <ZoomForm onSubmit={handleZoomSubmit} />;
     }
     return null;
   };
@@ -53,7 +81,14 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="transition-all">{renderForm()}</div>
+          <div className="transition-all">
+            {renderForm()}
+            {error && (
+              <p className="mt-4 text-center text-sm font-medium text-red-600">
+                {error}
+              </p>
+            )}
+          </div>
         </div>
       </main>
     </>

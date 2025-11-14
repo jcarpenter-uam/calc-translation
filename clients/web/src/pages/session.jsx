@@ -1,7 +1,3 @@
-// This is the new page that displays transcripts
-
-// This is the new page that displays transcripts
-
 import { useParams } from "react-router-dom";
 import { useRef } from "react";
 import Header from "../components/header";

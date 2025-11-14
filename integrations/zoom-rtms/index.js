@@ -4,6 +4,7 @@ import express from "express";
 import rtms from "@zoom/rtms";
 import { WebSocket } from "ws";
 import pino from "pino";
+import jwt from "jsonwebtoken";
 
 const logDir = "logs";
 
@@ -87,14 +88,14 @@ function createMeetingLogger(meeting_uuid) {
 
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
-const SECRET_TOKEN = process.env.SECRET_TOKEN;
+const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY;
 const ZM_WEBHOOK_SECRET = process.env.ZM_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 8080;
 
 const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 
-if (!SECRET_TOKEN) {
-  logger.fatal("FATAL: SECRET_TOKEN is not defined in .env file!");
+if (!JWT_SECRET_KEY) {
+  logger.fatal("FATAL: JWT_SECRET_KEY is not defined in .env file!");
   logger.fatal("Cannot connect to translation server without it.");
   process.exit(1);
 }
@@ -206,6 +207,21 @@ function handleUrlValidation(payload, res) {
 }
 
 /**
+ * Generates a short-lived JWT
+ * @returns {string} - A signed JWT valid for 5 minutes
+ */
+function generateAuthToken() {
+  const payload = {
+    iss: "zoom-rtms-service",
+    iat: Math.floor(Date.now() / 1000),
+  };
+
+  return jwt.sign(payload, JWT_SECRET_KEY, {
+    expiresIn: "5m", // 5 minutes
+  });
+}
+
+/**
  * Handles RTMS start event by creating SDK and WebSocket clients
  */
 function handleRtmsStarted(payload, streamId) {
@@ -229,10 +245,6 @@ function handleRtmsStarted(payload, streamId) {
   const rtmsClient = new rtms.Client({
     log: { enable: false },
   });
-
-  const authHeader = {
-    Authorization: `Bearer ${SECRET_TOKEN}`,
-  };
 
   const clientEntry = {
     rtmsClient,
@@ -259,6 +271,11 @@ function handleRtmsStarted(payload, streamId) {
         retries + 1
       })...`,
     );
+
+    const token = generateAuthToken();
+    const authHeader = {
+      Authorization: `Bearer ${token}`,
+    };
 
     const wsClient = new WebSocket(
       `${ZOOM_BASE_SERVER_URL}/${safe_meeting_uuid}`,

@@ -3,7 +3,7 @@
 # This name is slighty misleading as our app does translation and transcription, might change naming later for a better term
 
 from fastapi import APIRouter, Depends, Path, WebSocket
-from services.auth import validate_token
+from services.is_authicated import validate_token
 from services.receiver import handle_receiver_session
 
 

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     MAX_CACHE_MB: int = 10
 
-    SECRET_TOKEN: str
+    JWT_SECRET_KEY: str
 
     LOGGING_LEVEL: str = "INFO"
 

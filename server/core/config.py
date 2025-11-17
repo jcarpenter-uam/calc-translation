@@ -26,6 +26,10 @@ class Settings(BaseSettings):
 
     ZM_PUBLIC_KEY: str
 
+    ZM_CLIENT_ID: str
+
+    ZM_CLIENT_SECRET: str
+
     LOGGING_LEVEL: str = "INFO"
 
 

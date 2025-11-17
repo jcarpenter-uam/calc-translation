@@ -52,6 +52,8 @@ services:
       - MAX_CACHE_MB=${MAX_CACHE_MB}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - ZM_PUBLIC_KEY=${ZM_PUBLIC_KEY}
+      - ZM_CLIENT_ID=${ZM_CLIENT_ID}
+      - ZM_CLIENT_SECRET=${ZM_CLIENT_SECRET}
       - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
       - translation-data:/app/logs
@@ -66,8 +68,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
-      - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
+      - ZM_CLIENT_ID=${ZM_CLIENT_ID}
+      - ZM_CLIENT_SECRET=${ZM_CLIENT_SECRET}
       - ZM_WEBHOOK_SECRET=${ZM_WEBHOOK_SECRET}
       - ZM_PRIVATE_KEY=${ZM_PRIVATE_KEY}
       - BASE_SERVER_URL="ws://translation-server:8000/ws/transcribe"
@@ -94,8 +96,8 @@ networks:
 ## Core Configuration (Required)
 #
 # Get these for your app in the zoom dev interface
-ZM_RTMS_CLIENT=
-ZM_RTMS_SECRET=
+ZM_CLIENT_ID=
+ZM_CLIENT_SECRET=
 ZM_WEBHOOK_SECRET=
 #
 # Private key pair
@@ -121,6 +123,10 @@ JWT_SECRET_KEY="a-very-long-and-random-secret-string-that-you-generate"
 # Public key pair
 # openssl rsa -in private-key.pem -pubout -out public-key.pem
 ZM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n<KEY_BODY>\n-----END PUBLIC KEY-----"
+#
+# The same zoom app creds to fetch meeting info
+ZM_CLIENT_ID=
+ZM_CLIENT_SECRET=
 
 ## General Settings
 #

@@ -1,6 +1,6 @@
 # /ws/view/{integration}/{id} || Endpoint for the web/desktop to connect to per session
 
-from core.security import validate_token_ws
+from core.security import validate_client_token
 from fastapi import APIRouter, Depends, Path, WebSocket
 from services.connection_manager import ConnectionManager
 from services.viewer import handle_viewer_session
@@ -17,7 +17,7 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
         websocket: WebSocket,
         integration: str = Path(),
         session_id: str = Path(),
-        payload: dict = Depends(validate_token_ws),
+        payload: dict = Depends(validate_client_token),
     ):
         """
         WebSocket endpoint for clients to connect and view

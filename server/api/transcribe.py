@@ -2,7 +2,7 @@
 
 # This name is slighty misleading as our app does translation and transcription, might change naming later for a better term
 
-from core.security import validate_token_http
+from core.security import validate_server_token
 from fastapi import APIRouter, Depends, Path, WebSocket
 from services.receiver import handle_receiver_session
 
@@ -18,7 +18,7 @@ def create_transcribe_router(viewer_manager):
         websocket: WebSocket,
         integration: str = Path(),
         session_id: str = Path(),
-        payload: dict = Depends(validate_token_http),
+        payload: dict = Depends(validate_server_token),
     ):
         """
         Handles the WebSocket connection for per transcription session.

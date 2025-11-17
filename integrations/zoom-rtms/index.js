@@ -88,15 +88,14 @@ function createMeetingLogger(meeting_uuid) {
 
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
-const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY;
+const ZM_PRIVATE_KEY = process.env.ZM_PRIVATE_KEY;
 const ZM_WEBHOOK_SECRET = process.env.ZM_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 8080;
 
 const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 
-if (!JWT_SECRET_KEY) {
-  logger.fatal("FATAL: JWT_SECRET_KEY is not defined in .env file!");
-  logger.fatal("Cannot connect to translation server without it.");
+if (!ZM_PRIVATE_KEY) {
+  logger.fatal("FATAL: ZM_PRIVATE_KEY is not defined in .env file!");
   process.exit(1);
 }
 
@@ -214,10 +213,12 @@ function generateAuthToken() {
   const payload = {
     iss: "zoom-rtms-service",
     iat: Math.floor(Date.now() / 1000),
+    aud: "python-backend",
   };
 
-  return jwt.sign(payload, JWT_SECRET_KEY, {
+  return jwt.sign(payload, ZM_PRIVATE_KEY, {
     expiresIn: "5m", // 5 minutes
+    algorithm: "RS256",
   });
 }
 

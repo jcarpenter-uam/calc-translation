@@ -24,6 +24,8 @@ class Settings(BaseSettings):
 
     JWT_SECRET_KEY: str
 
+    ZM_PUBLIC_KEY: str
+
     LOGGING_LEVEL: str = "INFO"
 
 

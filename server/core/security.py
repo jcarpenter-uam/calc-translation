@@ -26,49 +26,11 @@ def generate_jwt_token(session_id: str) -> str:
         "exp": now + expires_delta,
         "sub": "anonymous",  # NOTE: Will get fixed after EntraID
         "resource": session_id,
+        "aud": "web-desktop-client",
     }
 
     token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
     return token
-
-
-def decode_jwt_payload(token: str) -> dict:
-    """
-    Decodes and validates a JWT token.
-    Returns the payload on success, raises WebSocketException on failure.
-    """
-    if not settings.JWT_SECRET_KEY:
-        logger.error("FATAL: JWT_SECRET_KEY is not configured on the server!")
-        raise WebSocketException(
-            code=status.WS_1011_INTERNAL_ERROR, reason="Server configuration error"
-        )
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=["HS256"],
-            issuer="zoom-rtms-service",
-        )
-        return payload
-
-    except jwt.ExpiredSignatureError:
-        with log_step("SESSION"):
-            logger.warning("Auth failed: Token has expired.")
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Token has expired"
-        )
-    except jwt.InvalidIssuerError:
-        with log_step("SESSION"):
-            logger.warning("Auth failed: Invalid token issuer.")
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token issuer"
-        )
-    except jwt.InvalidTokenError as e:
-        with log_step("SESSION"):
-            logger.warning(f"Auth failed: Invalid token. {e}")
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
-        )
 
 
 async def get_auth_token_from_header(
@@ -93,21 +55,98 @@ async def get_auth_token_from_header(
     return parts[1]
 
 
-async def validate_token_http(token: str = Depends(get_auth_token_from_header)) -> dict:
+def validate_server_token(
+    token: str = Depends(get_auth_token_from_header),
+) -> dict:
     """
-    Validates a token from an HTTP header.
-    Returns the decoded payload.
+    Validates a server-to-server token from the Express service.
+    Uses RS256 with the public key.
     """
-    return decode_jwt_payload(token)
+    if not settings.ZM_PUBLIC_KEY:
+        logger.error("FATAL: ZM_PUBLIC_KEY is not configured on the server!")
+        raise WebSocketException(
+            code=status.WS_1011_INTERNAL_ERROR, reason="Server configuration error"
+        )
+    try:
+        payload = jwt.decode(
+            token,
+            settings.ZM_PUBLIC_KEY,
+            algorithms=["RS256"],
+            issuer="zoom-rtms-service",
+            audience="python-backend",
+        )
+        return payload
+
+    except jwt.ExpiredSignatureError:
+        with log_step("SESSION"):
+            logger.warning("Auth failed: Token has expired.")
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Token has expired"
+        )
+    except jwt.InvalidIssuerError:
+        with log_step("SESSION"):
+            logger.warning("Auth failed: Invalid token issuer.")
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token issuer"
+        )
+    except jwt.InvalidAudienceError:
+        with log_step("SESSION"):
+            logger.warning("Auth failed: Invalid token audience.")
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token audience"
+        )
+    except jwt.InvalidTokenError as e:
+        with log_step("SESSION"):
+            logger.warning(f"Auth failed: Invalid token. {e}")
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
+        )
 
 
-async def validate_token_ws(token: str = Query()) -> dict:
+def validate_client_token(token: str = Query()) -> dict:
     """
-    Dependency to validate a token from a WebSocket query parameter.
-    Returns the decoded payload.
+    Validates a client-to-server token from the web browser.
+    Uses HS256 with the client secret.
     """
     if not token:
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason="Missing auth token"
         )
-    return decode_jwt_payload(token)
+    if not settings.JWT_SECRET_KEY:
+        logger.error("FATAL: JWT_SECRET_KEY is not configured on the server!")
+        raise WebSocketException(
+            code=status.WS_1011_INTERNAL_ERROR, reason="Server configuration error"
+        )
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=["HS256"],
+            issuer="calc-translation-service",
+            audience="web-desktop-client",
+        )
+        return payload
+    except jwt.ExpiredSignatureError:
+        with log_step("SESSION"):
+            logger.warning("Auth failed: Token has expired.")
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Token has expired"
+        )
+    except jwt.InvalidIssuerError:
+        with log_step("SESSION"):
+            logger.warning("Auth failed: Invalid token issuer.")
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token issuer"
+        )
+    except jwt.InvalidAudienceError:
+        with log_step("SESSION"):
+            logger.warning("Auth failed: Invalid token audience.")
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token audience"
+        )
+    except jwt.InvalidTokenError as e:
+        with log_step("SESSION"):
+            logger.warning(f"Auth failed: Invalid token. {e}")
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
+        )

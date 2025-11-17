@@ -2,8 +2,8 @@
 
 # This name is slighty misleading as our app does translation and transcription, might change naming later for a better term
 
+from core.security import validate_token_http
 from fastapi import APIRouter, Depends, Path, WebSocket
-from services.is_authenticated import validate_token_http
 from services.receiver import handle_receiver_session
 
 

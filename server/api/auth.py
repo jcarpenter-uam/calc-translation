@@ -4,9 +4,9 @@
 # /api/auth/{integration} || authentication per session
 
 
+from core.security import generate_jwt_token
 from fastapi import APIRouter, HTTPException
 from integrations.zoom import ZoomAuthRequest, ZoomAuthResponse, verify_zoom_credentials
-from services.is_authenticated import generate_jwt_token
 
 
 def create_auth_router() -> APIRouter:

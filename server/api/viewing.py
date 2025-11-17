@@ -1,8 +1,8 @@
 # /ws/view/{integration}/{id} || Endpoint for the web/desktop to connect to per session
 
+from core.security import validate_token_ws
 from fastapi import APIRouter, Depends, Path, WebSocket
 from services.connection_manager import ConnectionManager
-from services.is_authenticated import validate_token_ws
 from services.viewer import handle_viewer_session
 
 

@@ -33,8 +33,11 @@ def create_auth_router() -> APIRouter:
         Authenticates a Zoom session.
         Passes the request to the integration-specific logic.
         """
+        test_user_id = "TEST_USER_ID"  # NOTE: Temp until EntraID is integrated
         try:
-            meeting_uuid = await verify_zoom_credentials(request=request)
+            meeting_uuid = await verify_zoom_credentials(
+                request=request, user_id=test_user_id
+            )
 
             token = generate_jwt_token(session_id=meeting_uuid)
 
@@ -63,10 +66,12 @@ def create_auth_router() -> APIRouter:
                 status_code=400, detail="Missing authorization code from Zoom"
             )
 
+        test_user_id = "TEST_USER_ID"  # NOTE: Temp until EntraID is integrated
+
         try:
             redirect_uri = str(request.url).split("?")[0]
 
-            await exchange_code_for_token(code, redirect_uri)
+            await exchange_code_for_token(code, redirect_uri, test_user_id)
 
             return RedirectResponse(url="/")
 

@@ -26,8 +26,8 @@ class ZoomAuthResponse(BaseModel):
     token: str
 
 
-ZM_CLIENT_ID = settings.ZM_CLIENT_ID
-ZM_CLIENT_SECRET = settings.ZM_CLIENT_SECRET
+ZM_CLIENT_ID = settings.ZM_RTMS_CLIENT
+ZM_CLIENT_SECRET = settings.ZM_RTMS_SECRET
 
 TOKEN_STORE = {
     "access_token": None,

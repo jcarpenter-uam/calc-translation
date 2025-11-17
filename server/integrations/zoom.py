@@ -26,8 +26,8 @@ class ZoomAuthResponse(BaseModel):
     token: str
 
 
-ZM_CLIENT_ID = settings.ZM_RTMS_CLIENT
-ZM_CLIENT_SECRET = settings.ZM_RTMS_SECRET
+ZM_RTMS_CLIENT = settings.ZM_RTMS_CLIENT
+ZM_RTMS_SECRET = settings.ZM_RTMS_SECRET
 
 TOKEN_STORE = {
     "access_token": None,
@@ -41,7 +41,7 @@ async def exchange_code_for_token(code: str, redirect_uri: str):
     Exchanges an authorization code for an access token and refresh token.
     Stores them in the TOKEN_STORE.
     """
-    creds = f"{ZM_CLIENT_ID}:{ZM_CLIENT_SECRET}"
+    creds = f"{ZM_RTMS_CLIENT}:{ZM_RTMS_SECRET}"
     basic_auth_header = f"Basic {base64.b64encode(creds.encode()).decode()}"
 
     token_url = "https://zoom.us/oauth/token"
@@ -101,7 +101,7 @@ async def get_valid_access_token() -> str:
                 status_code=500, detail="Zoom app not configured. Please (re)install."
             )
 
-        creds = f"{ZM_CLIENT_ID}:{ZM_CLIENT_SECRET}"
+        creds = f"{ZM_RTMS_CLIENT}:{ZM_RTMS_SECRET}"
         basic_auth_header = f"Basic {base64.b64encode(creds.encode()).decode()}"
 
         token_url = "https://zoom.us/oauth/token"

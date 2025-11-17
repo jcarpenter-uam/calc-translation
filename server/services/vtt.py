@@ -5,6 +5,8 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
+import aiosqlite
+from core.database import DB_PATH, SQL_INSERT_TRANSCRIPT, db_lock
 from core.logging_setup import log_step, message_id_var, session_id_var
 
 logger = logging.getLogger(__name__)
@@ -103,7 +105,9 @@ class TimestampService:
             message_id_var.reset(token)
 
 
-def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, Any]]):
+async def create_vtt_file(
+    session_id: str, integration: str, history: List[Dict[str, Any]]
+):
     """
     Saves a session's transcript history to a .vtt file.
     """
@@ -146,10 +150,23 @@ def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, A
                 f"Transcript VTT saved to {vtt_filepath}. {len(history)} entries."
             )
 
+            async with db_lock:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute(
+                        SQL_INSERT_TRANSCRIPT, (session_id, "transcript.vtt")
+                    )
+                    await db.commit()
+            logger.info(f"Saved transcript record to DB for meeting {session_id}.")
+
         except Exception as e:
-            logger.error(
-                f"Failed to save VTT for integration '{integration}': {e}",
-                exc_info=True,
-            )
+            if "UNIQUE constraint failed" in str(e):
+                logger.warning(
+                    f"Transcript record already exists in DB for meeting {session_id}. Skipping insert."
+                )
+            else:
+                logger.error(
+                    f"Failed to save VTT for integration '{integration}': {e}",
+                    exc_info=True,
+                )
         finally:
             session_id_var.reset(session_token)

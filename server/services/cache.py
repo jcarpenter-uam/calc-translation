@@ -167,7 +167,7 @@ class TranscriptCache:
         finally:
             session_id_var.reset(session_token)
 
-    def save_history_and_clear(self, session_id: str, integration: str):
+    async def save_history_and_clear(self, session_id: str, integration: str):
         """
         Saves the history for a specific session (by calling the VTT service)
         and then clears that session from the manager.
@@ -178,7 +178,7 @@ class TranscriptCache:
                 session_cache = self.sessions[session_id]
                 history = session_cache.get_history()
 
-                create_vtt_file(session_id, integration, history)
+                await create_vtt_file(session_id, integration, history)
 
                 session_cache.clear()
                 del self.sessions[session_id]

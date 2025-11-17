@@ -247,7 +247,7 @@ async def handle_receiver_session(
             with log_step("SESSION"):
                 logger.debug("All correction tasks complete.")
 
-        viewer_manager.cache.save_history_and_clear(session_id, integration)
+        await viewer_manager.cache.save_history_and_clear(session_id, integration)
 
         with log_step("SESSION"):
             logger.info("Broadcasting session_end event to viewers.")

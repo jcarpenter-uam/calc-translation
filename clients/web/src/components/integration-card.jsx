@@ -22,16 +22,38 @@ export function IntegrationCard({ id, title, icon, selected, onSelect }) {
 export function ZoomForm({ onSubmit }) {
   const [meetingId, setMeetingId] = useState("");
   const [password, setPassword] = useState("");
+  const [joinUrl, setJoinUrl] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ meetingId, password });
+    onSubmit({ meetingId, password, joinUrl });
   };
 
   return (
     // TODO: MeetingID field should auto format and limit input
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* ... form content ... */}
+      <div>
+        <label htmlFor="joinUrl" className="block text-sm font-medium">
+          Join URL
+        </label>
+        <input
+          type="url"
+          id="joinUrl"
+          value={joinUrl}
+          onChange={(e) => setJoinUrl(e.target.value)}
+          placeholder="e.g., https://us02web.zoom.us/j/..."
+          className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+        />
+      </div>
+
+      <div className="flex items-center">
+        <div className="flex-grow border-t border-zinc-300 dark:border-zinc-700"></div>
+        <span className="flex-shrink mx-4 text-sm text-zinc-500 dark:text-zinc-400">
+          OR
+        </span>
+        <div className="flex-grow border-t border-zinc-300 dark:border-zinc-700"></div>
+      </div>
+
       <div>
         <label htmlFor="meetingId" className="block text-sm font-medium">
           Meeting ID
@@ -43,9 +65,9 @@ export function ZoomForm({ onSubmit }) {
           onChange={(e) => setMeetingId(e.target.value)}
           placeholder="e.g., 800 1234 5678"
           className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
-          required
         />
       </div>
+
       <div>
         <label htmlFor="password" className="block text-sm font-medium">
           Passcode

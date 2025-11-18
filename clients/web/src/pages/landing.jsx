@@ -22,8 +22,13 @@ export default function LandingPage() {
     navigate(`/sessions/${type}/${safeSessionId}?token=${token}`);
   };
 
-  const handleZoomSubmit = async ({ meetingId, password }) => {
+  const handleZoomSubmit = async ({ meetingId, password, joinUrl }) => {
     setError(null);
+
+    if (!joinUrl && !meetingId) {
+      setError("Please provide either a Join URL or a Meeting ID.");
+      return;
+    }
 
     try {
       const response = await fetch("/api/auth/zoom", {
@@ -32,14 +37,18 @@ export default function LandingPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          meetingid: meetingId,
-          meetingpass: password,
+          meetingid: meetingId || null,
+          meetingpass: password || null,
+          join_url: joinUrl || null,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Invalid Meeting ID or Passcode");
+        throw new Error(
+          errorData.detail ||
+            "Authentication failed. Please check your inputs.",
+        );
       }
 
       const data = await response.json();

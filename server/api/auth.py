@@ -13,6 +13,7 @@ from integrations.zoom import (
     ZoomAuthRequest,
     ZoomAuthResponse,
     exchange_code_for_token,
+    get_meeting_by_join_url,
     verify_zoom_credentials,
 )
 
@@ -35,12 +36,30 @@ def create_auth_router() -> APIRouter:
         """
         test_user_id = "TEST_USER_ID"  # NOTE: Temp until EntraID is integrated
         try:
-            meeting_uuid = await verify_zoom_credentials(
-                request=request, user_id=test_user_id
-            )
+            meeting_uuid = None
+
+            if request.join_url:
+                logger.info(f"Attempting auth with join_url: {request.join_url}")
+                meeting_uuid = await get_meeting_by_join_url(request.join_url)
+                if not meeting_uuid:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Meeting not found for the provided join_url.",
+                    )
+
+            elif request.meetingid:
+                logger.info(f"Attempting auth with meetingid: {request.meetingid}")
+                meeting_uuid = await verify_zoom_credentials(
+                    request=request, user_id=test_user_id
+                )
+
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Either 'join_url' or 'meetingid' must be provided.",
+                )
 
             token = generate_jwt_token(session_id=meeting_uuid)
-
             return ZoomAuthResponse(meetinguuid=meeting_uuid, token=token)
 
         except HTTPException as e:

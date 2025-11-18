@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 class ZoomAuthRequest(BaseModel):
     """Matches the JSON body from the frontend"""
 
-    meetingid: str
+    meetingid: str | None = None
     meetingpass: str | None = None
+    join_url: str | None = None
 
 
 class ZoomAuthResponse(BaseModel):
@@ -194,6 +195,36 @@ async def get_valid_access_token(user_id: str) -> tuple[str, int]:
             )
 
 
+async def get_meeting_by_join_url(join_url: str) -> str | None:
+    """
+    Retrieves a meeting's UUID from the database using its join_url.
+
+    Returns:
+        str | None: The meeting UUID if found, else None.
+    """
+    SQL_GET_MEETING_BY_JOIN_URL = "SELECT session_uuid FROM MEETINGS WHERE join_url = ?"
+    try:
+        async with db_lock:
+            async with aiosqlite.connect(DB_PATH) as db:
+                async with db.execute(
+                    SQL_GET_MEETING_BY_JOIN_URL, (join_url,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+
+        if row:
+            logger.info(f"Found meeting UUID for join_url {join_url}")
+            return row[0]
+        else:
+            logger.warning(f"No meeting found in DB for join_url: {join_url}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error querying DB for join_url: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Database error while searching for meeting."
+        )
+
+
 async def verify_zoom_credentials(request: ZoomAuthRequest, user_id: str) -> str:
     """
     Checks the meeting ID and passcode against the Zoom API
@@ -203,6 +234,12 @@ async def verify_zoom_credentials(request: ZoomAuthRequest, user_id: str) -> str
     Returns:
         str: The meeting UUID.
     """
+    if not request.meetingid:
+        logger.error("verify_zoom_credentials called without a meetingid")
+        raise HTTPException(
+            status_code=400, detail="Meeting ID is required for verification."
+        )
+
     normalized_id = request.meetingid.replace(" ", "")
     request_passcode = request.meetingpass or ""
 

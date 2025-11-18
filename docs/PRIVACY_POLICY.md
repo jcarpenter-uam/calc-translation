@@ -62,6 +62,14 @@ Access to data is strictly controlled:
 
 ---
 
+## **User Rights and Data Management**
+
+In accordance with our internal data governance policies, employees may have the right to access, review, or request the deletion of a meeting transcript they participated in.
+
+All requests will be handled in line with company policy and data retention requirements. To make such a request, please contact the developer or your IT administrator via the contact information below.
+
+---
+
 ## **Changes to this Policy**
 
 This policy may be updated periodically to reflect changes in our operations, technology, or compliance obligations. All internal users will be notified of material updates through official company communication channels.
@@ -69,6 +77,4 @@ This policy may be updated periodically to reflect changes in our operations, te
 ---
 
 ## **Contact Information**
-For any questions, concerns, or data requests related to this Privacy Policy or the App, please contact:
-
-**Jonah Carpenter**
+For any questions, concerns, or data requests related to this Privacy Policy or the App, please contact the application developer, Jonah Carpenter, via the internal company directory.

@@ -14,7 +14,6 @@ router = APIRouter(
 OUTPUT_DIR = os.path.join("output")
 
 
-# TODO: Test and connect dynamiclly to frontend
 @router.get(
     "/{integration}/{session_id}/download/vtt",
     summary="Download Session VTT Transcript",

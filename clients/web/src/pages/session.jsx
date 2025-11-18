@@ -55,7 +55,11 @@ export default function SessionPage() {
       <Header>
         <ThemeToggle />
         <LanguageToggle />
-        <DownloadVttButton isDownloadable={isDownloadable} />
+        <DownloadVttButton
+          isDownloadable={isDownloadable}
+          integration={integration}
+          sessionId={sessionId}
+        />
       </Header>
 
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">

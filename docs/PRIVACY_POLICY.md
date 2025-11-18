@@ -4,65 +4,71 @@
 
 **Effective Date: November 2025**
 
-This Privacy Policy applies to the internal use of the Zoom Translator app, developed and maintained by Jonah Carpenter. 
-
-This App is intended solely for internal operational purposes and is not distributed publicly.
-
 ---
 
 ## **Purpose**
 
-The App enables real-time translation during Zoom meetings for internal staff. 
+This Privacy Policy applies to the CALC Translation Zoom application. This App is developed and maintained by Jonah Carpenter and is intended solely for internal use by authorized members of the CALC or UAM organization.
 
-It is designed to improve communication within the organizational meetings where language barriers are found
+The purpose of the App is to provide real-time translation and transcription services during internal Zoom meetings to improve communication and accessibility for our staff.
 
 ---
 
 ## **Information We Process**
 
-Audio Data: Temporary audio streams from Zoom meetings are processed in real time to generate translations and transcriptions. 
+To provide its services, the App processes the following data:
 
-Translation Text: Generated transcriptions and translations are displayed for the user to follow along with the meeting in real time 
+- **Real-Time Audio Data:** The App captures the audio stream from your Zoom meeting in real-time. This audio is immediately processed to generate translations and transcriptions.
 
-User Identifiers: Basic user identifiers (e.g., meeting participant name or ID) are used to identify the speaker at any given moment within the meeting 
+- **User Identifiers:** We use basic Zoom participant information (e.g., display name) to accurately attribute speech to the correct speaker in the live transcription and the final stored transcript.
 
----
-
-## **Data Retention**
-
-The App stores personal data in the form of final meeting transcripts which comes with timestamps and speaker names per sentence 
+- **Transcription and Translation Data:** This is the text generated from the audio stream. This text is displayed live during the meeting and within the downloadable transcript file on meeting end.
 
 ---
 
-## **Access Control**
+## **Data Sharing and Third-Party Services**
 
-Access to the App is restricted to authorized Zoom accounts within the organization that have been granted access via the application installation link. 
+We do not sell, rent, or trade any personal data with third parties for marketing or advertising purposes.
 
-Anyone with a shared meeting link or the meeting credentials may also view the live translation feed for transparency during meetings. 
+To provide the core translation functionality, we must share a live audio stream with a third-party services.
 
----
+- **Service Provider:** We use [Soniox](https://soniox.com) as a sub-processor to convert speech to text and perform translation.
 
-## **Data Sharing**
+- **Data Shared:** Only the real-time meeting audio is sent to this provider.
 
-No personal or meeting data is shared with third parties. 
-
-Any integrations (e.g., translation APIs) are used under internal enterprise agreements or with approved service providers. 
+- **Purpose:** This sharing is strictly for the purpose of generating the translation and transcription.
 
 ---
 
-## **Security**
+## **Data Storage, Retention, and Security**
 
-Reasonable administrative, technical, and physical safeguards are in place to protect user data and prevent unauthorized access or disclosure. 
+- **Data Storage:** The App stores the final meeting transcript. This transcript includes the full text of the transcription, speaker names, and timestamps.
+
+- **Data Retention:** Stored transcripts are retained on our secure cloud database
+
+- **Security:** We implement reasonable administrative, technical, and physical safeguards to protect the data we process and store. This includes per meeting authentication, and JWT tokens between client and server to prevent unauthorized access, use, or disclosure.
+
+---
+
+## **Access to Information**
+
+Access to data is strictly controlled:
+
+- **App Installation:** Only authorized Zoom accounts within CALC/UAM can install and use the App using the private URL.
+
+- **Live Data:** The real-time transcription and translation feed is visible to all participants in the Zoom meeting for transparency given they have the proper meeting credentials.
+
+- **Stored Transcripts:** Access to stored transcripts is restricted to users attending or attended a given meeting.
 
 ---
 
 ## **Changes to this Policy**
 
-This policy may be updated periodically to reflect operational or compliance changes. 
+This policy may be updated periodically to reflect changes in our operations, technology, or compliance obligations. All internal users will be notified of material updates through official company communication channels.
 
-All internal users will be notified of updates through official communication channels. 
+---
 
- 
-## **Contact**
+## **Contact Information**
+For any questions, concerns, or data requests related to this Privacy Policy or the App, please contact:
 
-For questions or concerns regarding this policy or the App, please contact the developer. 
+**Jonah Carpenter**

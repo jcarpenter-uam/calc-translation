@@ -1,4 +1,6 @@
-# TODO: Cache should be built per session, and saved per session
+# TODO: Cache should be built per session, using some form of identifer.
+# Then per utterance we check the sessionID before adding to cache
+# This ensures that even with overlapping sessions the cache only contains relevent information when saved to logs or VTT
 
 import logging
 import os

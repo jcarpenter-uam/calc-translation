@@ -1,3 +1,6 @@
+# BUG: This functionality is not in heavy use due to focus on other aspects of the app
+# Once the app is more functional, I can spend more time perfecting the model for correction accuracy
+
 import asyncio
 import json
 import logging

@@ -1,5 +1,3 @@
-# /api/session/{integration}/{id}/download/vtt || downloads the .vtt file per session
-
 import os
 
 import aiosqlite

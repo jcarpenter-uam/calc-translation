@@ -8,7 +8,7 @@
 
 ## **Purpose**
 
-This Privacy Policy applies to the CALC Translation Zoom application. This App is developed and maintained by Jonah Carpenter and is intended solely for internal use by authorized members of the CALC or UAM organization.
+This Privacy Policy applies to the CALC Translation Zoom application. This App is developed and maintained by Jonah Carpenter and is intended solely for internal use by authorized members of the CALC organization or its subsidiaries.
 
 The purpose of the App is to provide real-time translation and transcription services during internal Zoom meetings to improve communication and accessibility for our staff.
 
@@ -54,7 +54,7 @@ To provide the core translation functionality, we must share a live audio stream
 
 Access to data is strictly controlled:
 
-- **App Installation:** Only authorized Zoom accounts within CALC/UAM can install and use the App using the private URL.
+- **App Installation:** Only authorized Zoom accounts within the organization can install and use the App using the private URL.
 
 - **Live Data:** The real-time transcription and translation feed is visible to all participants in the Zoom meeting for transparency given they have the proper meeting credentials.
 

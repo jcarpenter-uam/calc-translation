@@ -1,3 +1,6 @@
+# NOTE: Test that after authenticating with a given zoom meeting,
+# The user cannot access other zoom meetings with the same JWT
+
 import logging
 from datetime import datetime, timedelta, timezone
 

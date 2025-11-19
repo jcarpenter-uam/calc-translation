@@ -204,8 +204,7 @@ async def get_meeting_data(meeting_uuid: str, user_id: str) -> str:
     """
     Queries the Zoom API for meeting data using the meeting UUID
     """
-    unaltered_uuid = meeting_uuid.replace("_", "/")
-    first_pass = urllib.parse.quote(unaltered_uuid, safe="")
+    first_pass = urllib.parse.quote(meeting_uuid, safe="")
     encoded_uuid = urllib.parse.quote(first_pass, safe="")
 
     try:

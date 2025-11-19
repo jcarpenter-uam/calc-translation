@@ -2,6 +2,7 @@
 
 import logging
 import os
+import urllib.parse
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -120,7 +121,8 @@ async def create_vtt_file(
                 )
                 return
 
-            output_dir = os.path.join("output", integration, session_id)
+            safe_session_id = urllib.parse.quote(session_id, safe="")
+            output_dir = os.path.join("output", integration, safe_session_id)
             os.makedirs(output_dir, exist_ok=True)
 
             vtt_filepath = os.path.join(output_dir, "transcript.vtt")

@@ -13,7 +13,9 @@ function useQuery() {
 }
 
 export default function SessionPage() {
-  const { integration, sessionId } = useParams();
+  const params = useParams();
+  const integration = params.integration;
+  const sessionId = params["*"];
   const navigate = useNavigate();
 
   const query = useQuery();
@@ -33,9 +35,12 @@ export default function SessionPage() {
     }
   }, [isAuthorized, navigate]);
 
+  const encodedSessionId = isAuthorized ? encodeURIComponent(sessionId) : null;
+
   const wsUrl = isAuthorized
-    ? `/ws/view/${integration}/${sessionId}?token=${token}`
+    ? `/ws/view/${integration}/${encodedSessionId}?token=${token}`
     : null;
+
   const { transcripts, isDownloadable } = useTranscriptStream(wsUrl, sessionId);
 
   const lastTopTextRef = useRef(null);

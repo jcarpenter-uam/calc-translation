@@ -18,7 +18,8 @@ function DownloadVttButton({ isDownloadable, integration, sessionId }) {
 
     setIsLoading(true);
 
-    const downloadUrl = `/api/session/${integration}/${sessionId}/download/vtt`;
+    const encodedSessionId = encodeURIComponent(sessionId);
+    const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt`;
 
     try {
       const response = await fetch(downloadUrl, {

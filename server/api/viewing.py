@@ -10,7 +10,7 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
     """
     router = APIRouter()
 
-    @router.websocket("/ws/view/{integration}/{session_id}")
+    @router.websocket("/ws/view/{integration}/{session_id:path}")
     async def websocket_viewer_endpoint(
         websocket: WebSocket,
         integration: str = Path(),

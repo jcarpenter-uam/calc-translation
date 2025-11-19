@@ -1,8 +1,9 @@
 import os
+import urllib.parse
 
 import aiosqlite
 from core.database import DB_PATH, SQL_GET_TRANSCRIPT_BY_MEETING_ID
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Path, status
 from fastapi.responses import FileResponse
 
 router = APIRouter(
@@ -13,7 +14,7 @@ OUTPUT_DIR = os.path.join("output")
 
 
 @router.get(
-    "/{integration}/{session_id}/download/vtt",
+    "/{integration}/{session_id:path}/download/vtt",
     summary="Download Session VTT Transcript",
 )
 async def download_session_vtt(integration: str, session_id: str):
@@ -40,6 +41,7 @@ async def download_session_vtt(integration: str, session_id: str):
                 detail="Transcript record not found in database. The session may be invalid or has not been processed.",
             )
 
+        safe_session_id = urllib.parse.quote(session_id, safe="")
         file_path = os.path.join(OUTPUT_DIR, integration, session_id, file_name)
 
         if not os.path.isfile(file_path):
@@ -50,7 +52,7 @@ async def download_session_vtt(integration: str, session_id: str):
 
         return FileResponse(
             path=file_path,
-            filename=f"{integration}_{session_id}_transcript.vtt",
+            filename=f"{integration}_{safe_session_id}_transcript.vtt",
             media_type="text/vtt",
         )
 

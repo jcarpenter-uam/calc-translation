@@ -15,7 +15,9 @@ def create_transcribe_router(viewer_manager):
     """
     router = APIRouter()
 
-    @router.websocket("/ws/transcribe/{integration}/{session_id}")
+    @router.websocket(
+        "/ws/transcribe/{integration}/{session_id:path}"
+    )  # Dont know if im a fan of this method
     async def websocket_transcribe_endpoint(
         websocket: WebSocket,
         integration: str = Path(),

@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import sys
+import urllib.parse
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
@@ -203,7 +204,8 @@ def add_session_log_handler(
         os.makedirs(logs_dir, exist_ok=True)
 
         date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        log_file = os.path.join(logs_dir, f"{session_id}_{date_str}.log")
+        safe_session_id = urllib.parse.quote(session_id, safe="")
+        log_file = os.path.join(logs_dir, f"{safe_session_id}_{date_str}.log")
 
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)

@@ -237,7 +237,7 @@ function handleRtmsStarted(payload, streamId) {
     return;
   }
 
-  const safe_meeting_uuid = meeting_uuid.replace(/\//g, "_");
+  const encoded_meeting_uuid = encodeURIComponent(meeting_uuid);
 
   const { logger: meetingLogger, transport: meetingTransport } =
     createMeetingLogger(meeting_uuid);
@@ -279,7 +279,7 @@ function handleRtmsStarted(payload, streamId) {
     };
 
     const wsClient = new WebSocket(
-      `${ZOOM_BASE_SERVER_URL}/${safe_meeting_uuid}`,
+      `${ZOOM_BASE_SERVER_URL}/${encoded_meeting_uuid}`,
       {
         headers: authHeader,
       },

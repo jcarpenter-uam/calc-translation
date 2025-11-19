@@ -13,13 +13,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
 
   const handleJoin = (type, sessionId, token) => {
-    let safeSessionId = sessionId;
-
-    if (type === "zoom") {
-      safeSessionId = sessionId.replace(/\//g, "_"); // Replaces any "/" with "_"
-    }
-
-    navigate(`/sessions/${type}/${safeSessionId}?token=${token}`);
+    navigate(`/sessions/${type}/${sessionId}?token=${token}`);
   };
 
   const handleZoomSubmit = async ({ meetingId, password, joinUrl }) => {

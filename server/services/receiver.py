@@ -1,6 +1,3 @@
-# TODO: Need a way to allow N:N sessions so that multiple meetings can use the app at a time
-# This will come with additions to security using zoom meeting ID and pass
-
 import asyncio
 import base64
 import json
@@ -42,10 +39,27 @@ async def handle_receiver_session(
     final_message_processed = asyncio.Event()
     loop = asyncio.get_running_loop()
     session_log_handler = None
+    registration_success = False
 
     try:
+        registration_success = viewer_manager.register_transcription_session(
+            session_id, integration
+        )
+
+        if not registration_success:
+            with log_step("SESSION"):
+                logger.warning(
+                    f"Duplicate session attempt for {session_id}. Rejecting connection."
+                )
+            await websocket.accept()
+            await websocket.close(
+                code=1008,
+                reason="A transcription session is already active for this meeting.",
+            )
+            return
+
         await websocket.accept()
-        viewer_manager.register_transcription_session(session_id, integration)
+
         session_log_handler = add_session_log_handler(session_id, integration)
         with log_step("SESSION"):
             logger.info(f"Client connected for integration: {integration}")
@@ -215,6 +229,10 @@ async def handle_receiver_session(
                 )
 
     finally:
+        if not registration_success:
+            session_id_var.reset(session_token)
+            return
+
         if transcription_service:
             with log_step("SESSION"):
                 logger.debug("Client disconnected. Finalizing Soniox stream...")
@@ -256,11 +274,14 @@ async def handle_receiver_session(
             "message": "The transcription session has concluded.",
         }
         await viewer_manager.broadcast_to_session(session_id, end_payload)
+
         viewer_manager.deregister_transcription_session(session_id)
+
         if session_log_handler:
             with log_step("SESSION"):
                 logger.info(
                     f"Stopping session file logging: {session_log_handler.baseFilename}"
                 )
             remove_session_log_handler(session_log_handler)
+
         session_id_var.reset(session_token)

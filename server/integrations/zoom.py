@@ -1,6 +1,7 @@
 import base64
 import logging
 import time
+import urllib.parse
 
 import aiosqlite
 import httpx
@@ -8,6 +9,8 @@ from core.config import settings
 from core.database import (
     DB_PATH,
     SQL_GET_INTEGRATION,
+    SQL_GET_MEETING_AUTH_BY_READABLE_ID,
+    SQL_GET_MEETING_BY_JOIN_URL,
     SQL_INSERT_MEETING,
     SQL_UPSERT_INTEGRATION,
     db_lock,
@@ -117,7 +120,8 @@ async def get_valid_access_token(user_id: str) -> tuple[str, int]:
                     integration_row = await cursor.fetchone()
 
             if not integration_row:
-                logger.error(f"No Zoom integration found for user {user_id}.")
+                with log_step("ZOOM"):
+                    logger.error(f"No Zoom integration found for user {user_id}.")
                 raise HTTPException(
                     status_code=404,
                     detail="Zoom integration not found. Please (re)install the app.",
@@ -185,96 +189,61 @@ async def get_valid_access_token(user_id: str) -> tuple[str, int]:
             return access_token, integration_id
 
         except Exception as e:
-            logger.error(
-                f"Failed to get/refresh Zoom token for user {user_id}: {e}",
-                exc_info=True,
-            )
+            with log_step("ZOOM"):
+                logger.error(
+                    f"Failed to get/refresh Zoom token for user {user_id}: {e}",
+                    exc_info=True,
+                )
             raise HTTPException(
                 status_code=500,
                 detail="Failed to get valid Zoom token. Please reinstall app if problem persists.",
             )
 
 
-async def get_meeting_by_join_url(join_url: str) -> str | None:
+async def get_meeting_data(meeting_uuid: str, user_id: str) -> str:
     """
-    Retrieves a meeting's UUID from the database using its join_url.
-
-    Returns:
-        str | None: The meeting UUID if found, else None.
+    Queries the Zoom API for meeting data using the meeting UUID
     """
-    SQL_GET_MEETING_BY_JOIN_URL = "SELECT session_uuid FROM MEETINGS WHERE join_url = ?"
-    try:
-        async with db_lock:
-            async with aiosqlite.connect(DB_PATH) as db:
-                async with db.execute(
-                    SQL_GET_MEETING_BY_JOIN_URL, (join_url,)
-                ) as cursor:
-                    row = await cursor.fetchone()
-
-        if row:
-            logger.info(f"Found meeting UUID for join_url {join_url}")
-            return row[0]
-        else:
-            logger.warning(f"No meeting found in DB for join_url: {join_url}")
-            return None
-
-    except Exception as e:
-        logger.error(f"Error querying DB for join_url: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail="Database error while searching for meeting."
-        )
-
-
-async def verify_zoom_credentials(request: ZoomAuthRequest, user_id: str) -> str:
-    """
-    Checks the meeting ID and passcode against the Zoom API
-    using the user's specific OAuth token.
-    Saves the meeting to the MEETINGS table if valid.
-
-    Returns:
-        str: The meeting UUID.
-    """
-    if not request.meetingid:
-        logger.error("verify_zoom_credentials called without a meetingid")
-        raise HTTPException(
-            status_code=400, detail="Meeting ID is required for verification."
-        )
-
-    normalized_id = request.meetingid.replace(" ", "")
-    request_passcode = request.meetingpass or ""
+    unaltered_uuid = meeting_uuid.replace("_", "/")
+    first_pass = urllib.parse.quote(unaltered_uuid, safe="")
+    encoded_uuid = urllib.parse.quote(first_pass, safe="")
 
     try:
         access_token, integration_id = await get_valid_access_token(user_id)
 
-        meeting_url = f"https://api.zoom.us/v2/meetings/{normalized_id}"
+        meeting_url = f"https://api.zoom.us/v2/meetings/{encoded_uuid}"
         headers = {"Authorization": f"Bearer {access_token}"}
+
+        with log_step("ZOOM"):
+            logger.info(f"Calling Zoom API: GET {meeting_url} for user {user_id}")
 
         async with httpx.AsyncClient() as client:
             response = await client.get(meeting_url, headers=headers)
 
         if response.status_code == 404:
-            raise HTTPException(status_code=404, detail="Meeting ID not found")
+            with log_step("ZOOM"):
+                logger.error(
+                    f"Meeting UUID {encoded_uuid} not found via Zoom API (URL: {meeting_url})."
+                )
+            raise HTTPException(status_code=404, detail="Meeting (UUID) not found")
 
         response.raise_for_status()
         meeting_data = response.json()
 
-        logger.info(f"Full Zoom API response for {normalized_id}: {meeting_data}")
-
-        real_passcode = meeting_data.get("password", "")
         real_uuid = meeting_data.get("uuid")
-        start_time = meeting_data.get(
-            "created_at"
-        )  # TODO: Ensure this is robut for one time and reoccuring meetings
+        meeting_id = meeting_data.get("id")
+        start_time = meeting_data.get("created_at")
         join_url = meeting_data.get("join_url")
+        passcode = meeting_data.get("pstn_password", "")
 
         if not real_uuid:
-            logger.error(f"Zoom API did not return a UUID for meeting {normalized_id}")
+            with log_step("ZOOM"):
+                logger.error(
+                    f"Zoom API did not return a UUID for meeting {encoded_uuid}"
+                )
             raise HTTPException(
                 500, "Could not retrieve meeting's unique ID from Zoom."
             )
-
-        if request_passcode != real_passcode:
-            raise HTTPException(status_code=401, detail="Invalid Passcode")
 
         async with db_lock:
             async with aiosqlite.connect(DB_PATH) as db:
@@ -283,16 +252,18 @@ async def verify_zoom_credentials(request: ZoomAuthRequest, user_id: str) -> str
                     (
                         real_uuid,
                         integration_id,
+                        passcode,
                         "zoom",
-                        normalized_id,
+                        str(meeting_id),
                         start_time,
                         join_url,
                     ),
                 )
                 await db.commit()
-                logger.info(
-                    f"Successfully verified and saved/updated meeting {real_uuid}."
-                )
+                with log_step("ZOOM"):
+                    logger.info(
+                        f"Successfully fetched and saved/updated meeting {encoded_uuid}"
+                    )
 
         return real_uuid
 
@@ -300,7 +271,82 @@ async def verify_zoom_credentials(request: ZoomAuthRequest, user_id: str) -> str
         raise e
     except Exception as e:
         with log_step("ZOOM"):
-            logger.error(f"Failed to verify Zoom credentials: {e}", exc_info=True)
+            logger.error(
+                f"Failed to get_meeting_data for UUID {encoded_uuid}: {e}",
+                exc_info=True,
+            )
         raise HTTPException(
-            status_code=500, detail="An internal error occurred while verifying meeting"
+            status_code=500,
+            detail="An internal error occurred while fetching meeting data",
         )
+
+
+async def authenticate_zoom_session(request: ZoomAuthRequest) -> str:
+    """
+    Authenticates a session against the database using either
+    Join URL or Meeting ID/Passcode. This is NOT scoped to a user.
+
+    Returns:
+        str: The meeting UUID if authentication is successful.
+    Raises:
+        HTTPException: If authentication fails (e.g., not found, wrong passcode).
+    """
+    async with db_lock:
+        async with aiosqlite.connect(DB_PATH) as db:
+            if request.join_url:
+                with log_step("ZOOM"):
+                    logger.info(f"Authenticating via join_url...")
+                async with db.execute(
+                    SQL_GET_MEETING_BY_JOIN_URL, (request.join_url,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+
+                if not row:
+                    with log_step("ZOOM"):
+                        logger.warning(
+                            f"Auth failed: Meeting not found for join_url: {request.join_url}"
+                        )
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Meeting not found for the provided Join URL.",
+                    )
+
+                meeting_uuid = row[0]
+                logger.info(f"Auth successful for join_url. UUID: {meeting_uuid}")
+                return meeting_uuid
+
+            elif request.meetingid:
+                with log_step("ZOOM"):
+                    logger.info(f"Authenticating via meetingid: {request.meetingid}")
+                async with db.execute(
+                    SQL_GET_MEETING_AUTH_BY_READABLE_ID,
+                    ("zoom", request.meetingid),
+                ) as cursor:
+                    row = await cursor.fetchone()
+
+                if not row:
+                    with log_step("ZOOM"):
+                        logger.warning(
+                            f"Auth failed: Meeting ID not found: {request.meetingid}"
+                        )
+                    raise HTTPException(status_code=404, detail="Meeting ID not found.")
+
+                meeting_uuid, stored_passcode = row
+
+                if stored_passcode != (request.meetingpass or ""):
+                    with log_step("ZOOM"):
+                        logger.warning(
+                            f"Auth failed: Incorrect passcode for meeting {meeting_uuid}"
+                        )
+                    raise HTTPException(
+                        status_code=401, detail="Incorrect passcode for the meeting."
+                    )
+
+                logger.info(f"Auth successful for meetingid. UUID: {meeting_uuid}")
+                return meeting_uuid
+
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Either 'join_url' or 'meetingid' must be provided.",
+                )

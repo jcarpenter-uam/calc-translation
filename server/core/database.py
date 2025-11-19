@@ -52,6 +52,7 @@ async def init_db():
                     CREATE TABLE IF NOT EXISTS MEETINGS (
                         id TEXT PRIMARY KEY,
                         integration_id INTEGER,
+                        passcode TEXT,
                         platform TEXT,
                         readable_id TEXT, -- e.g., Zoom meeting ID
                         meeting_time TIMESTAMP,
@@ -120,8 +121,8 @@ SQL_DELETE_INTEGRATION = "DELETE FROM INTEGRATIONS WHERE user_id = ? AND platfor
 
 # Insert a new meeting. If it already exists (based on UUID), do nothing.
 SQL_INSERT_MEETING = """
-INSERT INTO MEETINGS (id, integration_id, platform, readable_id, meeting_time, join_url)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO MEETINGS (id, integration_id, passcode, platform, readable_id, meeting_time, join_url)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO NOTHING;
 """
 
@@ -131,6 +132,20 @@ SQL_GET_MEETING_BY_ID = "SELECT * FROM MEETINGS WHERE id = ?;"
 # Find a meeting by its platform-specific readable ID
 SQL_GET_MEETING_BY_READABLE_ID = """
 SELECT id FROM MEETINGS WHERE platform = ? AND readable_id = ?;
+"""
+# Get a meeting by Join URL
+# NOTE: Use LIKE to match partial URLs
+SQL_GET_MEETING_BY_JOIN_URL = """
+SELECT m.id
+FROM MEETINGS m
+WHERE m.join_url LIKE '%' || ?;
+"""
+
+# Get meeting UUID and passcode by readable ID
+SQL_GET_MEETING_AUTH_BY_READABLE_ID = """
+SELECT m.id, m.passcode
+FROM MEETINGS m
+WHERE m.platform = ? AND m.readable_id = ?;
 """
 
 # Get all meetings for a specific user (by joining through integrations)

@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LandingPage from "./pages/landing";
 import SessionPage from "./pages/session";
-import HowItWorks from "./pages/how-it-works";
+import Support from "./pages/support";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
 
@@ -14,7 +14,7 @@ export default function App() {
 
           <Route path="/sessions/:integration/*" element={<SessionPage />} />
 
-          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/support" element={<Support />} />
 
           <Route path="/privacy" element={<Privacy />} />
 

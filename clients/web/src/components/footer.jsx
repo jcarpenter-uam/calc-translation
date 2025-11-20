@@ -12,10 +12,16 @@ export default function Footer() {
 
           <nav className="flex gap-6 order-1 sm:order-2">
             <Link
-              to="/how-it-works"
+              to="/"
               className="text-sm hover:underline text-gray-600 dark:text-gray-300"
             >
-              How It Works
+              Home
+            </Link>
+            <Link
+              to="/support"
+              className="text-sm hover:underline text-gray-600 dark:text-gray-300"
+            >
+              Support
             </Link>
             <Link
               to="/privacy"
@@ -43,6 +49,8 @@ export default function Footer() {
               href="https://github.com/jcarpenter-uam/calc-translation"
               aria-label="GitHub"
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               <FaGithub className="h-5 w-5" />
             </a>

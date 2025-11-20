@@ -24,3 +24,4 @@ logs/node*
 # Secrets
 .env
 ngrok-conf.yaml
+*.m4a

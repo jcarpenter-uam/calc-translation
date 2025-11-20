@@ -1,3 +1,4 @@
+import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
 import Header from "../components/header";
@@ -6,7 +7,9 @@ import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
 import DownloadVttButton from "../components/vtt-download.jsx";
 import Unauthorized from "../components/unauthorized.jsx";
+import Notification from "../components/notification.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
+import { useSmartScroll } from "../hooks/use-smart-scroll.js";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -43,7 +46,8 @@ export default function SessionPage() {
 
   const { transcripts, isDownloadable } = useTranscriptStream(wsUrl, sessionId);
 
-  const lastTopTextRef = useRef(null);
+  const lastTopTextRef = React.useRef(null);
+  const notification = useSmartScroll(transcripts, lastTopTextRef);
 
   if (showUnauthorized) {
     return (
@@ -80,6 +84,10 @@ export default function SessionPage() {
           ))}
         </div>
       </main>
+      <Notification
+        message={notification.message}
+        visible={notification.visible}
+      />
     </>
   );
 }

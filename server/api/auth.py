@@ -4,6 +4,7 @@ from core.logging_setup import log_step
 from core.security import generate_jwt_token
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from integrations.test import TestAuthRequest, authenticate_test_session
 from integrations.zoom import (
     ZoomAuthRequest,
     ZoomAuthResponse,
@@ -21,6 +22,30 @@ def create_auth_router() -> APIRouter:
     router = APIRouter(
         prefix="/api/auth",
     )
+
+    @router.post("/test", response_model=ZoomAuthResponse)
+    async def handle_test_auth(request: TestAuthRequest):
+        """
+        Generates a token for a dynamic test session ID provided
+        in the request body.
+        """
+        try:
+            session_id = await authenticate_test_session(request)
+
+            logger.info(f"Generating test token for session: {session_id}")
+            token = generate_jwt_token(session_id=session_id)
+            return ZoomAuthResponse(meetinguuid=session_id, token=token)
+
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            with log_step("AUTH"):
+                logger.error(
+                    f"Unhandled error in POST /api/auth/test: {e}", exc_info=True
+                )
+            raise HTTPException(
+                status_code=500, detail="An internal server error occurred."
+            )
 
     @router.post("/zoom", response_model=ZoomAuthResponse)
     async def handle_zoom_auth(request: ZoomAuthRequest):

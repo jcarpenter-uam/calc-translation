@@ -5,6 +5,7 @@ import logging
 import os
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from core.config import settings
 from core.logging_setup import (
@@ -19,7 +20,13 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from .audio_processing import AudioProcessingService
 from .correction import CorrectionService
-from .soniox import SonioxResult, SonioxService
+from .soniox import (
+    SonioxConnectionError,
+    SonioxError,
+    SonioxFatalError,
+    SonioxResult,
+    SonioxService,
+)
 from .vtt import TimestampService
 
 logger = logging.getLogger(__name__)
@@ -33,7 +40,7 @@ async def handle_receiver_session(
     transcription/interpretation WebSocket session.
     """
     session_token = session_id_var.set(session_id)
-    transcription_service = None
+    transcription_service: Optional[SonioxService] = None
     correction_service = None
     active_correction_tasks = set()
     final_message_processed = asyncio.Event()
@@ -78,12 +85,32 @@ async def handle_receiver_session(
         is_new_utterance = True
         current_speaker = "Unknown"
 
-        async def on_service_error(error_message: str):
-            with log_step("SONIOX"):
-                logger.error(f"Transcription Error: {error_message}")
-            await websocket.close(
-                code=1011, reason=f"Transcription Error: {error_message}"
-            )
+        async def on_service_error(error: SonioxError):
+            """
+            Handles errors reported by the SonioxService.
+            This is the "brain" for the fail-fast/restart logic.
+            """
+            if isinstance(error, SonioxFatalError):
+                with log_step("SONIOX"):
+                    logger.error(
+                        f"Fatal Transcription Error: {error}. Closing client session."
+                    )
+                await websocket.close(
+                    code=1011, reason=f"Fatal Transcription Error: {error}"
+                )
+            elif isinstance(error, SonioxConnectionError):
+                with log_step("SONIOX"):
+                    logger.warning(
+                        f"Restartable Connection Error: {error}. Will attempt to reconnect."
+                    )
+            else:
+                with log_step("SONIOX"):
+                    logger.error(
+                        f"Unknown Soniox Error: {error}. Closing client session."
+                    )
+                await websocket.close(
+                    code=1011, reason=f"Unknown Transcription Error: {error}"
+                )
 
         async def on_transcription_message_local(
             result: SonioxResult,
@@ -187,18 +214,67 @@ async def handle_receiver_session(
                 )
             final_message_processed.set()
 
-        try:
-            transcription_service = SonioxService(
+        async def _create_and_connect_soniox() -> SonioxService:
+            """
+            Creates a new SonioxService, connects it (blocking),
+            and returns the instance.
+            """
+            service = SonioxService(
                 on_message_callback=on_transcription_message_local,
                 on_error_callback=on_service_error,
                 on_close_callback=on_service_close_local,
                 loop=loop,
             )
-            await loop.run_in_executor(None, transcription_service.connect)
             with log_step("SESSION"):
-                logger.debug("Transcription service connected.")
+                logger.info("Connecting to transcription service...")
+
+            await loop.run_in_executor(None, service.connect)
+
+            with log_step("SESSION"):
+                logger.info("Transcription service connected.")
+            return service
+
+        current_retry_delay = 0
+        try:
+            transcription_service = await _create_and_connect_soniox()
 
             while True:
+                if not transcription_service or not transcription_service._is_connected:
+                    if current_retry_delay > 0:
+                        with log_step("SESSION"):
+                            logger.warning(
+                                f"Reconnection attempt failed. Retrying in {current_retry_delay}s..."
+                            )
+                        await asyncio.sleep(current_retry_delay)
+                    else:
+                        with log_step("SESSION"):
+                            logger.warning(
+                                "Transcription service disconnected. Attempting immediate reconnect..."
+                            )
+
+                    if transcription_service:
+                        await loop.run_in_executor(
+                            None, transcription_service.finalize_stream
+                        )
+
+                    try:
+                        transcription_service = await _create_and_connect_soniox()
+                        with log_step("SESSION"):
+                            logger.info("Reconnection successful.")
+                        current_retry_delay = 0
+
+                    except Exception as e:
+                        with log_step("SESSION"):
+                            logger.error(f"Failed to reconnect to Soniox: {e}.")
+
+                        if current_retry_delay == 0:
+                            current_retry_delay = 3
+                        else:
+                            current_retry_delay = 5
+
+                        logger.warning(f"Will retry in {current_retry_delay}s...")
+                        continue
+
                 raw_message = await websocket.receive_text()
                 message = json.loads(raw_message)
                 current_speaker = message.get("userName", "Unknown")

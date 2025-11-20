@@ -6,10 +6,34 @@ from typing import Awaitable, Callable, Optional
 
 from core.config import settings
 from core.logging_setup import log_step
-from websockets import ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 from websockets.sync.client import connect
 
 logger = logging.getLogger(__name__)
+
+
+class SonioxError(Exception):
+    """Base exception for Soniox errors."""
+
+    pass
+
+
+class SonioxConnectionError(SonioxError):
+    """
+    Indicates a transient connection error that can be retried.
+    e.g., "Connection reset by peer" or Soniox "503" error.
+    """
+
+    pass
+
+
+class SonioxFatalError(SonioxError):
+    """
+    Indicates an unrecoverable error.
+    e.g., Bad API key, invalid configuration.
+    """
+
+    pass
 
 
 @dataclass
@@ -34,7 +58,7 @@ class SonioxService:
     def __init__(
         self,
         on_message_callback: Callable[[SonioxResult], Awaitable[None]],
-        on_error_callback: Callable[[str], Awaitable[None]],
+        on_error_callback: Callable[[SonioxError], Awaitable[None]],
         on_close_callback: Callable[[int, str], Awaitable[None]],
         loop: asyncio.AbstractEventLoop,
     ):
@@ -110,7 +134,11 @@ class SonioxService:
                     error_msg = f"{res['error_code']} - {res['error_message']}"
                     with log_step("TRANSCRIPTION"):
                         logger.error(error_msg)
-                    await self.on_error_callback(error_msg)
+
+                    if "Cannot continue request" in error_msg:
+                        await self.on_error_callback(SonioxConnectionError(error_msg))
+                    else:
+                        await self.on_error_callback(SonioxFatalError(error_msg))
                     break
 
                 non_final_transcription_tokens = []
@@ -234,10 +262,24 @@ class SonioxService:
                 )
             )
             await self.on_close_callback(1000, "Normal closure")
-        except Exception as e:
+
+        except ConnectionClosedError as e:
+            error_msg = str(e)
             with log_step("SONIOX"):
-                logger.error(f"Receive loop error: {e}", exc_info=True)
-            await self.on_error_callback(str(e))
+                logger.error(
+                    f"Receive loop error (ConnectionClosedError): {e}", exc_info=True
+                )
+            await self.on_error_callback(SonioxConnectionError(error_msg))
+
+        except Exception as e:
+            error_msg = str(e)
+            with log_step("SONIOX"):
+                logger.error(f"Receive loop error (Exception): {e}", exc_info=True)
+
+            if "Connection reset by peer" in error_msg:
+                await self.on_error_callback(SonioxConnectionError(error_msg))
+            else:
+                await self.on_error_callback(SonioxFatalError(error_msg))
         finally:
             self._is_connected = False
             if self.ws:
@@ -250,7 +292,11 @@ class SonioxService:
         """
         try:
             config = self._get_config()
-            self.ws = connect(self.SONIOX_WEBSOCKET_URL)
+            self.ws = connect(
+                self.SONIOX_WEBSOCKET_URL,
+                ping_interval=20,
+                ping_timeout=10,
+            )
             self.ws.send(json.dumps(config))
             self._is_connected = True
             self.receive_task = self.loop.create_task(self._receive_loop())

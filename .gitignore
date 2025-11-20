@@ -25,3 +25,4 @@ logs/node*
 .env
 ngrok-conf.yaml
 *.m4a
+*.mp4

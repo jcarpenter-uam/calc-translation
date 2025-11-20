@@ -17,7 +17,7 @@ WEBSOCKET_URL = os.getenv(
 SPEAKER_NAME = "CALC IT"
 TARGET_SAMPLE_RATE = 16000
 EXPECTED_CHANNELS = 1
-EXPECTED_SAMPLE_WIDTH = 2  # 16-bit PCM
+EXPECTED_SAMPLE_WIDTH = 2
 
 PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 if not PRIVATE_KEY:
@@ -50,11 +50,9 @@ async def receive_transcriptions(ws, stop_event: asyncio.Event):
     try:
         while not stop_event.is_set():
             try:
-                # Wait for a message with a short timeout
                 msg = await ws.receive(timeout=0.5)
 
                 if msg.type == aiohttp.WSMsgType.TEXT:
-                    # Actually print the transcription
                     print(f"[Transcription]: {msg.data}")
                 elif msg.type == aiohttp.WSMsgType.ERROR:
                     print(f"WebSocket Error: {ws.exception()}")
@@ -63,7 +61,6 @@ async def receive_transcriptions(ws, stop_event: asyncio.Event):
                     print("WebSocket closed by server")
                     break
             except asyncio.TimeoutError:
-                # No message received, check stop_event and continue
                 continue
     except Exception as e:
         if not isinstance(e, asyncio.CancelledError):
@@ -77,15 +74,8 @@ async def send_audio_from_media_file(ws, file_path: str, stop_event: asyncio.Eve
     Uses FFmpeg to convert a media file (like .mp4) to raw PCM audio
     and streams it over the WebSocket.
     """
-    chunk_size_bytes = 4096  # Send 4KB chunks
+    chunk_size_bytes = 4096
 
-    # --- FFmpeg Command ---
-    # -i {file_path}: Input file
-    # -f s16le: Output format (signed 16-bit little-endian PCM)
-    # -ar {TARGET_SAMPLE_RATE}: Audio sample rate
-    # -ac {EXPECTED_CHANNELS}: Audio channels (1 = mono)
-    # -loglevel warning: Suppress verbose FFmpeg logs
-    # -: Output to stdout
     ffmpeg_command = [
         "ffmpeg",
         "-i",
@@ -101,29 +91,26 @@ async def send_audio_from_media_file(ws, file_path: str, stop_event: asyncio.Eve
         "-",
     ]
 
-    # Calculate sleep time to simulate real-time streaming
     bytes_per_second = TARGET_SAMPLE_RATE * EXPECTED_CHANNELS * EXPECTED_SAMPLE_WIDTH
     sleep_duration = chunk_size_bytes / bytes_per_second
 
     proc = None
     try:
-        # Start the FFmpeg subprocess
         print(f"\nStarting FFmpeg to process '{file_path}'...")
         proc = await asyncio.create_subprocess_exec(
             *ffmpeg_command,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,  # Capture errors
+            stderr=asyncio.subprocess.PIPE,
         )
 
         print(f"Sending audio from '{file_path}' (simulating real-time)...")
 
         while not stop_event.is_set():
-            # Read a chunk of raw audio data from FFmpeg's stdout
             data_chunk = await proc.stdout.read(chunk_size_bytes)
 
             if not data_chunk:
                 print("--- End of audio stream from FFmpeg ---")
-                break  # End of stream
+                break
 
             encoded_audio = base64.b64encode(data_chunk).decode("utf-8")
             payload = {"userName": SPEAKER_NAME, "audio": encoded_audio}
@@ -131,12 +118,10 @@ async def send_audio_from_media_file(ws, file_path: str, stop_event: asyncio.Eve
             await ws.send_str(json.dumps(payload))
 
             try:
-                # Sleep to simulate real-time stream
                 await asyncio.wait_for(stop_event.wait(), timeout=sleep_duration)
                 print("Sender stopping due to stop event.")
                 break
             except asyncio.TimeoutError:
-                # This is the normal, expected case: sleep finished
                 pass
 
     except FileNotFoundError:
@@ -152,16 +137,14 @@ async def send_audio_from_media_file(ws, file_path: str, stop_event: asyncio.Eve
         print(f"\nSender task encountered an error: {e}")
     finally:
         if proc:
-            # Clean up the FFmpeg process
             if proc.returncode is None:
                 try:
                     proc.terminate()
                     await proc.wait()
                     print("FFmpeg process terminated.")
                 except ProcessLookupError:
-                    pass  # Process already finished
+                    pass
 
-            # Print any errors from FFmpeg
             stderr_data = await proc.stderr.read()
             if stderr_data:
                 print(
@@ -189,18 +172,16 @@ async def main(file_path: str):
                 receiver_task = asyncio.create_task(
                     receive_transcriptions(ws, stop_event)
                 )
-                # Call the new function
                 sender_task = asyncio.create_task(
                     send_audio_from_media_file(ws, file_path, stop_event)
                 )
 
-                # Wait for the sender to finish (either file end or interrupt)
                 await sender_task
 
                 print(
                     "Sender has finished. Waiting a few seconds for final transcriptions..."
                 )
-                await asyncio.sleep(3.0)  # Give server time to send final results
+                await asyncio.sleep(3.0)
 
     except aiohttp.ClientConnectorError:
         print("\nCould not connect to the server. Is it running?")
@@ -212,9 +193,8 @@ async def main(file_path: str):
         print(f"\nAn unexpected error occurred in main: {e}")
     finally:
         print("--- Cleaning up tasks ---")
-        stop_event.set()  # Signal all tasks to stop
+        stop_event.set()
 
-        # Wait for receiver to finish
         if receiver_task:
             await receiver_task
 
@@ -223,17 +203,12 @@ async def main(file_path: str):
 
 if __name__ == "__main__":
     try:
-        # --- MODIFIED: Hardcode your .mp4 file path here ---
-        # Make sure to use forward slashes (/) or double backslashes (\\) for paths on Windows.
-        file_path = "test_1.m4a"
-
-        # -----------------------------------------------
+        file_path = "./one/test_1.m4a"
 
         if not os.path.exists(file_path):
             print(f"Error: File not found at '{file_path}'", file=sys.stderr)
             sys.exit(1)
 
-        # Updated check for .mp4, but FFmpeg can handle many formats
         if not file_path.lower().endswith(
             (".mp4", ".m4a", ".mov", ".avi", ".mkv", ".wav", ".mp3")
         ):

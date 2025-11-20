@@ -211,6 +211,8 @@ def add_session_log_handler(
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(PlainFormatter())
 
+        file_handler.addFilter(SessionFilter(session_id))
+
         logging.getLogger().addHandler(file_handler)
 
         return file_handler
@@ -231,3 +233,23 @@ def remove_session_log_handler(handler: logging.FileHandler):
             logging.getLogger().removeHandler(handler)
         except Exception as e:
             logging.error(f"[SYSTEM] Failed to remove log file handler: {e}")
+
+
+class SessionFilter(logging.Filter):
+    """
+    A logging filter that only allows records where the
+    session_id_var context variable matches the session_id
+    this filter was initialized with.
+    """
+
+    def __init__(self, session_id: str):
+        super().__init__()
+        self.session_id = session_id
+
+    def filter(self, record):
+        record_session_id = session_id_var.get()
+
+        if record_session_id is None:
+            return True
+
+        return record_session_id == self.session_id

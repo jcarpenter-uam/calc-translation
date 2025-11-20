@@ -8,11 +8,12 @@ import {
   ZoomForm,
   TestForm,
 } from "../components/integration-card.jsx";
+import Footer from "../components/footer.jsx";
 
 import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
 
 export default function LandingPage() {
-  const [integration, setIntegration] = useState(null);
+  const [integration, setIntegration] = useState("zoom");
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
@@ -127,14 +128,14 @@ export default function LandingPage() {
   };
 
   return (
-    <>
+    <div className="flex flex-col min-h-screen">
       <Header>
         <ThemeToggle />
         <LanguageToggle />
       </Header>
 
-      <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="max-w-md mx-auto space-y-8">
+      <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="max-w-md w-full space-y-8">
           <div>
             <h2 className="text-xl font-semibold mb-4 text-center">
               Choose your integration
@@ -167,6 +168,8 @@ export default function LandingPage() {
           </div>
         </div>
       </main>
-    </>
+
+      <Footer />
+    </div>
   );
 }

@@ -1,6 +1,3 @@
-# NOTE: Need to test that only one session is opened per meetingID, this ensures that
-# 2 users with the zoom app running do not start duplicate sessions
-
 import asyncio
 import logging
 import threading

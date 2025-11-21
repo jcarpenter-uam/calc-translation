@@ -2,18 +2,17 @@ import base64
 import logging
 import time
 import urllib.parse
+from datetime import datetime
 
-import aiosqlite
 import httpx
+from core import database
 from core.config import settings
 from core.database import (
-    DB_PATH,
     SQL_GET_INTEGRATION,
     SQL_GET_MEETING_AUTH_BY_READABLE_ID,
     SQL_GET_MEETING_BY_JOIN_URL,
     SQL_INSERT_MEETING,
     SQL_UPSERT_INTEGRATION,
-    db_lock,
 )
 from core.logging_setup import log_step
 from fastapi import HTTPException
@@ -69,19 +68,16 @@ async def exchange_code_for_token(code: str, redirect_uri: str, user_id: str):
 
         expires_at = int(time.time()) + token_data["expires_in"]
 
-        async with db_lock:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
+        async with database.DB_POOL.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
                     SQL_UPSERT_INTEGRATION,
-                    (
-                        user_id,
-                        "zoom",
-                        token_data["access_token"],
-                        token_data["refresh_token"],
-                        expires_at,
-                    ),
+                    user_id,
+                    "zoom",
+                    token_data["access_token"],
+                    token_data["refresh_token"],
+                    expires_at,
                 )
-                await db.commit()
 
         with log_step("ZOOM"):
             logger.warning(
@@ -113,91 +109,88 @@ async def get_valid_access_token(user_id: str) -> tuple[str, int]:
     Returns:
         tuple[str, int]: (access_token, integration_id)
     """
-    async with db_lock:
-        try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                async with db.execute(SQL_GET_INTEGRATION, (user_id, "zoom")) as cursor:
-                    integration_row = await cursor.fetchone()
+    try:
+        integration_row = None
+        async with database.DB_POOL.acquire() as conn:
+            integration_row = await conn.fetchrow(SQL_GET_INTEGRATION, user_id, "zoom")
 
-            if not integration_row:
-                with log_step("ZOOM"):
-                    logger.error(f"No Zoom integration found for user {user_id}.")
-                raise HTTPException(
-                    status_code=404,
-                    detail="Zoom integration not found. Please (re)install the app.",
-                )
-
-            integration_id, access_token, refresh_token, expires_at = integration_row
-            expires_at = expires_at or 0
-
-            if time.time() > (expires_at - 60):
-                with log_step("ZOOM"):
-                    logger.info(f"Zoom token for user {user_id} expired. Refreshing...")
-
-                if not refresh_token:
-                    with log_step("ZOOM"):
-                        logger.error(
-                            f"No refresh token found for user {user_id}. App needs to be re-installed."
-                        )
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Zoom app not configured. Please (re)install.",
-                    )
-
-                creds = f"{ZM_RTMS_CLIENT}:{ZM_RTMS_SECRET}"
-                basic_auth_header = f"Basic {base64.b64encode(creds.encode()).decode()}"
-                token_url = "https://zoom.us/oauth/token"
-                headers = {
-                    "Authorization": basic_auth_header,
-                    "Content-Type": "application/x-www-form-urlencoded",
-                }
-                data = {
-                    "grant_type": "refresh_token",
-                    "refresh_token": refresh_token,
-                }
-
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(token_url, headers=headers, data=data)
-
-                response.raise_for_status()
-                new_token_data = response.json()
-
-                new_access_token = new_token_data["access_token"]
-                new_refresh_token = new_token_data["refresh_token"]
-                new_expires_at = int(time.time()) + new_token_data["expires_in"]
-
-                async with aiosqlite.connect(DB_PATH) as db:
-                    await db.execute(
-                        SQL_UPSERT_INTEGRATION,
-                        (
-                            user_id,
-                            "zoom",
-                            new_access_token,
-                            new_refresh_token,
-                            new_expires_at,
-                        ),
-                    )
-                    await db.commit()
-
-                with log_step("ZOOM"):
-                    logger.info(
-                        f"Successfully refreshed and stored new Zoom tokens for user {user_id}."
-                    )
-
-                return new_access_token, integration_id
-
-            return access_token, integration_id
-
-        except Exception as e:
+        if not integration_row:
             with log_step("ZOOM"):
-                logger.error(
-                    f"Failed to get/refresh Zoom token for user {user_id}: {e}",
-                    exc_info=True,
-                )
+                logger.error(f"No Zoom integration found for user {user_id}.")
             raise HTTPException(
-                status_code=500,
-                detail="Failed to get valid Zoom token. Please reinstall app if problem persists.",
+                status_code=404,
+                detail="Zoom integration not found. Please (re)install the app.",
             )
+
+        integration_id, access_token, refresh_token, expires_at = integration_row
+        expires_at = expires_at or 0
+
+        if time.time() > (expires_at - 60):
+            with log_step("ZOOM"):
+                logger.info(f"Zoom token for user {user_id} expired. Refreshing...")
+
+            if not refresh_token:
+                with log_step("ZOOM"):
+                    logger.error(
+                        f"No refresh token found for user {user_id}. App needs to be re-installed."
+                    )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Zoom app not configured. Please (re)install.",
+                )
+
+            creds = f"{ZM_RTMS_CLIENT}:{ZM_RTMS_SECRET}"
+            basic_auth_header = f"Basic {base64.b64encode(creds.encode()).decode()}"
+            token_url = "https://zoom.us/oauth/token"
+            headers = {
+                "Authorization": basic_auth_header,
+                "Content-Type": "application/x-www-form-urlencoded",
+            }
+            data = {
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(token_url, headers=headers, data=data)
+
+            response.raise_for_status()
+            new_token_data = response.json()
+
+            new_access_token = new_token_data["access_token"]
+            new_refresh_token = new_token_data["refresh_token"]
+            new_expires_at = int(time.time()) + new_token_data["expires_in"]
+
+            async with database.DB_POOL.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        SQL_UPSERT_INTEGRATION,
+                        user_id,
+                        "zoom",
+                        new_access_token,
+                        new_refresh_token,
+                        new_expires_at,
+                    )
+
+            with log_step("ZOOM"):
+                logger.info(
+                    f"Successfully refreshed and stored new Zoom tokens for user {user_id}."
+                )
+
+            return new_access_token, integration_id
+
+        return access_token, integration_id
+
+    except Exception as e:
+        with log_step("ZOOM"):
+            logger.error(
+                f"Failed to get/refresh Zoom token for user {user_id}: {e}",
+                exc_info=True,
+            )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get valid Zoom token. Please reinstall app if problem persists.",
+        )
 
 
 async def get_meeting_data(meeting_uuid: str, user_id: str) -> str:
@@ -231,9 +224,14 @@ async def get_meeting_data(meeting_uuid: str, user_id: str) -> str:
 
         real_uuid = meeting_data.get("uuid")
         meeting_id = meeting_data.get("id")
-        start_time = meeting_data.get("created_at")
+        start_time_str = meeting_data.get("created_at")
         join_url = meeting_data.get("join_url")
         passcode = meeting_data.get("pstn_password", "")
+
+        parsed_start_time = None
+        if start_time_str:
+            parsed_start_time = datetime.fromisoformat(start_time_str)
+        # --- END FIX ---
 
         if not real_uuid:
             with log_step("ZOOM"):
@@ -244,25 +242,23 @@ async def get_meeting_data(meeting_uuid: str, user_id: str) -> str:
                 500, "Could not retrieve meeting's unique ID from Zoom."
             )
 
-        async with db_lock:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
+        async with database.DB_POOL.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
                     SQL_INSERT_MEETING,
-                    (
-                        real_uuid,
-                        integration_id,
-                        passcode,
-                        "zoom",
-                        str(meeting_id),
-                        start_time,
-                        join_url,
-                    ),
+                    real_uuid,
+                    integration_id,
+                    passcode,
+                    "zoom",
+                    str(meeting_id),
+                    parsed_start_time,
+                    join_url,
                 )
-                await db.commit()
-                with log_step("ZOOM"):
-                    logger.info(
-                        f"Successfully fetched and saved/updated meeting {encoded_uuid}"
-                    )
+
+        with log_step("ZOOM"):
+            logger.info(
+                f"Successfully fetched and saved/updated meeting {encoded_uuid}"
+            )
 
         return real_uuid
 
@@ -290,62 +286,60 @@ async def authenticate_zoom_session(request: ZoomAuthRequest) -> str:
     Raises:
         HTTPException: If authentication fails (e.g., not found, wrong passcode).
     """
-    async with db_lock:
-        async with aiosqlite.connect(DB_PATH) as db:
-            if request.join_url:
+    async with database.DB_POOL.acquire() as conn:
+        if request.join_url:
+            with log_step("ZOOM"):
+                logger.info(f"Authenticating via join_url...")
+
+            row = await conn.fetchrow(SQL_GET_MEETING_BY_JOIN_URL, request.join_url)
+
+            if not row:
                 with log_step("ZOOM"):
-                    logger.info(f"Authenticating via join_url...")
-                async with db.execute(
-                    SQL_GET_MEETING_BY_JOIN_URL, (request.join_url,)
-                ) as cursor:
-                    row = await cursor.fetchone()
-
-                if not row:
-                    with log_step("ZOOM"):
-                        logger.warning(
-                            f"Auth failed: Meeting not found for join_url: {request.join_url}"
-                        )
-                    raise HTTPException(
-                        status_code=404,
-                        detail="Meeting not found for the provided Join URL.",
+                    logger.warning(
+                        f"Auth failed: Meeting not found for join_url: {request.join_url}"
                     )
-
-                meeting_uuid = row[0]
-                logger.info(f"Auth successful for join_url. UUID: {meeting_uuid}")
-                return meeting_uuid
-
-            elif request.meetingid:
-                with log_step("ZOOM"):
-                    logger.info(f"Authenticating via meetingid: {request.meetingid}")
-                async with db.execute(
-                    SQL_GET_MEETING_AUTH_BY_READABLE_ID,
-                    ("zoom", request.meetingid),
-                ) as cursor:
-                    row = await cursor.fetchone()
-
-                if not row:
-                    with log_step("ZOOM"):
-                        logger.warning(
-                            f"Auth failed: Meeting ID not found: {request.meetingid}"
-                        )
-                    raise HTTPException(status_code=404, detail="Meeting ID not found.")
-
-                meeting_uuid, stored_passcode = row
-
-                if stored_passcode != (request.meetingpass or ""):
-                    with log_step("ZOOM"):
-                        logger.warning(
-                            f"Auth failed: Incorrect passcode for meeting {meeting_uuid}"
-                        )
-                    raise HTTPException(
-                        status_code=401, detail="Incorrect passcode for the meeting."
-                    )
-
-                logger.info(f"Auth successful for meetingid. UUID: {meeting_uuid}")
-                return meeting_uuid
-
-            else:
                 raise HTTPException(
-                    status_code=400,
-                    detail="Either 'join_url' or 'meetingid' must be provided.",
+                    status_code=4404,
+                    detail="Meeting not found for the provided Join URL.",
                 )
+
+            meeting_uuid = row[0]
+            logger.info(f"Auth successful for join_url. UUID: {meeting_uuid}")
+            return meeting_uuid
+
+        elif request.meetingid:
+            with log_step("ZOOM"):
+                logger.info(f"Authenticating via meetingid: {request.meetingid}")
+
+            row = await conn.fetchrow(
+                SQL_GET_MEETING_AUTH_BY_READABLE_ID,
+                "zoom",
+                request.meetingid,
+            )
+
+            if not row:
+                with log_step("ZOOM"):
+                    logger.warning(
+                        f"Auth failed: Meeting ID not found: {request.meetingid}"
+                    )
+                raise HTTPException(status_code=404, detail="Meeting ID not found.")
+
+            meeting_uuid, stored_passcode = row[0], row[1]
+
+            if stored_passcode != (request.meetingpass or ""):
+                with log_step("ZOOM"):
+                    logger.warning(
+                        f"Auth failed: Incorrect passcode for meeting {meeting_uuid}"
+                    )
+                raise HTTPException(
+                    status_code=401, detail="Incorrect passcode for the meeting."
+                )
+
+            logger.info(f"Auth successful for meetingid. UUID: {meeting_uuid}")
+            return meeting_uuid
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either 'join_url' or 'meetingid' must be provided.",
+            )

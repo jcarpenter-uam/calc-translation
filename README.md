@@ -50,6 +50,7 @@ services:
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - ZM_PUBLIC_KEY=${ZM_PUBLIC_KEY}
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
@@ -72,7 +73,7 @@ services:
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - ZM_WEBHOOK_SECRET=${ZM_WEBHOOK_SECRET}
       - ZM_PRIVATE_KEY=${ZM_PRIVATE_KEY}
-      - BASE_SERVER_URL="ws://translation-server:8000/ws/transcribe"
+      - BASE_SERVER_URL=ws://translation-server:8000/ws/transcribe
     volumes:
       - zoom_rtms-data:/app/logs
     depends_on:
@@ -124,6 +125,9 @@ JWT_SECRET_KEY="a-very-long-and-random-secret-string-that-you-generate"
 # Public key pair
 # openssl rsa -in private-key.pem -pubout -out public-key.pem
 ZM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n<KEY_BODY>\n-----END PUBLIC KEY-----"
+#
+# Database URL
+DATABASE_URL="postgresql://user:password@localhost:5432/calc-translation"
 
 ## General Settings
 #

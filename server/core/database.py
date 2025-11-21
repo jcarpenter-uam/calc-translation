@@ -1,86 +1,94 @@
 import asyncio
 import logging
+import os
 
-import aiosqlite
+import asyncpg
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = "data.db"
+POSTGRES_DSN = settings.DATABASE_URL
+
+DB_POOL = None
 
 db_lock = asyncio.Lock()
 
 
 async def init_db():
     """
-    Initializes the database and creates tables if they don't exist.
+    Initializes the database connection pool and creates tables if they don't exist.
     """
+    global DB_POOL
     async with db_lock:
+        if DB_POOL:
+            logger.info("Database pool already initialized.")
+            return
+
+        if not POSTGRES_DSN:
+            logger.error("DATABASE_URL is not set. Cannot initialize database.")
+            raise ValueError("DATABASE_URL environment variable is not set.")
+
         try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("PRAGMA foreign_keys = ON")
-
-                # Create USERS table
-                await db.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS USERS (
-                        id TEXT PRIMARY KEY, -- EntraID User ID
-                        name TEXT,
-                        email TEXT
+            DB_POOL = await asyncpg.create_pool(dsn=POSTGRES_DSN)
+            async with DB_POOL.acquire() as conn:
+                async with conn.transaction():
+                    # Create USERS table
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS USERS (
+                            id TEXT PRIMARY KEY, -- EntraID User ID
+                            name TEXT,
+                            email TEXT
+                        )
+                        """
                     )
-                    """
-                )
 
-                # Create INTEGRATIONS table
-                await db.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS INTEGRATIONS (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT, -- integration_id
-                        user_id TEXT,
-                        platform TEXT,
-                        access_token TEXT,
-                        refresh_token TEXT,
-                        expires_at INTEGER,
-                        FOREIGN KEY (user_id) REFERENCES USERS(id) ON DELETE CASCADE,
-                        UNIQUE(user_id, platform)
+                    # Create INTEGRATIONS table
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS INTEGRATIONS (
+                            id SERIAL PRIMARY KEY, -- integration_id
+                            user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
+                            platform TEXT,
+                            access_token TEXT,
+                            refresh_token TEXT,
+                            expires_at BIGINT, -- Use BIGINT for 64-bit timestamps
+                            UNIQUE(user_id, platform)
+                        )
+                        """
                     )
-                    """
-                )
 
-                # Create MEETINGS table
-                await db.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS MEETINGS (
-                        id TEXT PRIMARY KEY,
-                        integration_id INTEGER,
-                        passcode TEXT,
-                        platform TEXT,
-                        readable_id TEXT, -- e.g., Zoom meeting ID
-                        meeting_time TIMESTAMP,
-                        join_url TEXT,
-                        FOREIGN KEY (integration_id) REFERENCES INTEGRATIONS(id) ON DELETE SET NULL,
-                        UNIQUE(platform, readable_id)
+                    # Create MEETINGS table
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS MEETINGS (
+                            id TEXT PRIMARY KEY,
+                            integration_id INTEGER REFERENCES INTEGRATIONS(id) ON DELETE SET NULL,
+                            passcode TEXT,
+                            platform TEXT,
+                            readable_id TEXT, -- e.g., Zoom meeting ID
+                            meeting_time TIMESTAMPTZ, -- Use TIMESTAMP WITH TIME ZONE
+                            join_url TEXT,
+                            UNIQUE(platform, readable_id)
+                        )
+                        """
                     )
-                    """
-                )
 
-                # Create TRANSCRIPTS table
-                await db.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS TRANSCRIPTS (
-                        meeting_id TEXT PRIMARY KEY, -- FK to MEETINGS.id
-                        file_name TEXT,
-                        creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (meeting_id) REFERENCES MEETINGS(id) ON DELETE CASCADE
+                    # Create TRANSCRIPTS table
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS TRANSCRIPTS (
+                            meeting_id TEXT PRIMARY KEY REFERENCES MEETINGS(id) ON DELETE CASCADE,
+                            file_name TEXT,
+                            creation_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                        )
+                        """
                     )
-                    """
-                )
 
-                await db.commit()
-            logger.info(
-                f"Database initialized successfully with new schema at {DB_PATH}"
-            )
+            logger.info("Database pool initialized successfully and schema verified.")
         except Exception as e:
-            logger.error(f"Failed to initialize database: {e}", exc_info=True)
+            logger.error(f"Failed to initialize database pool: {e}", exc_info=True)
+            DB_POOL = None
             raise
 
 
@@ -91,18 +99,18 @@ async def init_db():
 # --- USERS ---
 SQL_UPSERT_USER = """
 INSERT INTO USERS (id, name, email)
-VALUES (?, ?, ?)
+VALUES ($1, $2, $3)
 ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     email = excluded.email;
 """
-SQL_GET_USER_BY_ID = "SELECT * FROM USERS WHERE id = ?;"
+SQL_GET_USER_BY_ID = "SELECT * FROM USERS WHERE id = $1;"
 
 
 # --- INTEGRATIONS ---
 SQL_UPSERT_INTEGRATION = """
 INSERT INTO INTEGRATIONS (user_id, platform, access_token, refresh_token, expires_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT(user_id, platform) DO UPDATE SET
     access_token = excluded.access_token,
     refresh_token = excluded.refresh_token,
@@ -111,10 +119,12 @@ ON CONFLICT(user_id, platform) DO UPDATE SET
 SQL_GET_INTEGRATION = """
 SELECT id, access_token, refresh_token, expires_at
 FROM INTEGRATIONS
-WHERE user_id = ? AND platform = ?;
+WHERE user_id = $1 AND platform = $2;
 """
-SQL_GET_INTEGRATIONS_BY_USER = "SELECT * FROM INTEGRATIONS WHERE user_id = ?;"
-SQL_DELETE_INTEGRATION = "DELETE FROM INTEGRATIONS WHERE user_id = ? AND platform = ?;"
+SQL_GET_INTEGRATIONS_BY_USER = "SELECT * FROM INTEGRATIONS WHERE user_id = $1;"
+SQL_DELETE_INTEGRATION = (
+    "DELETE FROM INTEGRATIONS WHERE user_id = $1 AND platform = $2;"
+)
 
 
 # --- MEETINGS ---
@@ -122,30 +132,30 @@ SQL_DELETE_INTEGRATION = "DELETE FROM INTEGRATIONS WHERE user_id = ? AND platfor
 # Insert a new meeting. If it already exists (based on UUID), do nothing.
 SQL_INSERT_MEETING = """
 INSERT INTO MEETINGS (id, integration_id, passcode, platform, readable_id, meeting_time, join_url)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT(id) DO NOTHING;
 """
 
 # Get a meeting by its UUID
-SQL_GET_MEETING_BY_ID = "SELECT * FROM MEETINGS WHERE id = ?;"
+SQL_GET_MEETING_BY_ID = "SELECT * FROM MEETINGS WHERE id = $1;"
 
 # Find a meeting by its platform-specific readable ID
 SQL_GET_MEETING_BY_READABLE_ID = """
-SELECT id FROM MEETINGS WHERE platform = ? AND readable_id = ?;
+SELECT id FROM MEETINGS WHERE platform = $1 AND readable_id = $2;
 """
 # Get a meeting by Join URL
 # NOTE: Use LIKE to match partial URLs
 SQL_GET_MEETING_BY_JOIN_URL = """
 SELECT m.id
 FROM MEETINGS m
-WHERE m.join_url LIKE '%' || ?;
+WHERE m.join_url LIKE '%' || $1;
 """
 
 # Get meeting UUID and passcode by readable ID
 SQL_GET_MEETING_AUTH_BY_READABLE_ID = """
 SELECT m.id, m.passcode
 FROM MEETINGS m
-WHERE m.platform = ? AND m.readable_id = ?;
+WHERE m.platform = $1 AND m.readable_id = $2;
 """
 
 # Get all meetings for a specific user (by joining through integrations)
@@ -153,15 +163,15 @@ SQL_GET_MEETINGS_BY_USER_ID = """
 SELECT m.*
 FROM MEETINGS m
 JOIN INTEGRATIONS i ON m.integration_id = i.id
-WHERE i.user_id = ?;
+WHERE i.user_id = $1;
 """
 
 
 # --- TRANSCRIPTS ---
 SQL_INSERT_TRANSCRIPT = """
 INSERT INTO TRANSCRIPTS (meeting_id, file_name)
-VALUES (?, ?);
+VALUES ($1, $2);
 """
 SQL_GET_TRANSCRIPT_BY_MEETING_ID = """
-SELECT file_name, creation_date FROM TRANSCRIPTS WHERE meeting_id = ?;
+SELECT file_name, creation_date FROM TRANSCRIPTS WHERE meeting_id = $1;
 """

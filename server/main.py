@@ -19,7 +19,7 @@ from api.clients import create_clients_router
 from api.sessions import router as sessions_router
 from api.transcribe import create_transcribe_router
 from api.viewing import create_viewer_router
-from core.database import init_db
+from core import database
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from services.cache import TranscriptCache
@@ -38,7 +38,7 @@ async def startup_event():
     This ensures the DB file and tables are ready before handling requests.
     """
     logger.info("Running startup tasks...")
-    await init_db()
+    await database.init_db()
     logger.info("Startup tasks completed.")
 
 

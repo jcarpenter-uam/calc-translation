@@ -1,8 +1,8 @@
 import os
 import urllib.parse
 
-import aiosqlite
-from core.database import DB_PATH, SQL_GET_TRANSCRIPT_BY_MEETING_ID
+from core import database
+from core.database import SQL_GET_TRANSCRIPT_BY_MEETING_ID
 from fastapi import APIRouter, HTTPException, Path, status
 from fastapi.responses import FileResponse
 
@@ -27,13 +27,11 @@ async def download_session_vtt(integration: str, session_id: str):
     """
     try:
         file_name = None
-        async with aiosqlite.connect(DB_PATH) as db:
-            async with db.execute(
-                SQL_GET_TRANSCRIPT_BY_MEETING_ID, (session_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    file_name = row[0]
+
+        async with database.DB_POOL.acquire() as conn:
+            row = await conn.fetchrow(SQL_GET_TRANSCRIPT_BY_MEETING_ID, session_id)
+            if row:
+                file_name = row[0]
 
         if not file_name:
             raise HTTPException(
@@ -42,7 +40,7 @@ async def download_session_vtt(integration: str, session_id: str):
             )
 
         safe_session_id = urllib.parse.quote(session_id, safe="")
-        file_path = os.path.join(OUTPUT_DIR, integration, session_id, file_name)
+        file_path = os.path.join(OUTPUT_DIR, integration, safe_session_id, file_name)
 
         if not os.path.isfile(file_path):
             raise HTTPException(

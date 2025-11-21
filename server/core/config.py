@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     MAX_CACHE_MB: int = 10
 
+    DATABASE_URL: str
+
     JWT_SECRET_KEY: str
 
     ZM_PUBLIC_KEY: str

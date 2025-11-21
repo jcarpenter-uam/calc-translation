@@ -21,6 +21,9 @@ dist/
 out/
 logs/node*
 
+# TEMP
+docker-compose.yaml
+
 # Secrets
 .env
 ngrok-conf.yaml

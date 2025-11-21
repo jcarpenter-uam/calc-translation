@@ -6,24 +6,14 @@ import urllib.parse
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-import aiosqlite
-from core.database import DB_PATH, SQL_INSERT_TRANSCRIPT, db_lock
+from core import database
+from core.database import SQL_INSERT_TRANSCRIPT
 from core.logging_setup import log_step, message_id_var, session_id_var
 
 logger = logging.getLogger(__name__)
 
 
 class TimestampService:
-    """
-    Manages all timestamp-related logic for a transcription session.
-
-    This service is responsible for:
-    1. Setting a "zero point" (session start time) when instantiated.
-    2. Recording the start time of a new utterance (message_id).
-    3. Calculating and formatting a WebVTT-compliant timestamp string
-       (e.g., "00:01:10.500 --> 00:01:12.123") when an utterance is finalized.
-    """
-
     def __init__(self):
         """
         Initializes the timestamp service, setting the session's "zero point"
@@ -152,16 +142,15 @@ async def create_vtt_file(
                 f"Transcript VTT saved to {vtt_filepath}. {len(history)} entries."
             )
 
-            async with db_lock:
-                async with aiosqlite.connect(DB_PATH) as db:
-                    await db.execute(
-                        SQL_INSERT_TRANSCRIPT, (session_id, "transcript.vtt")
+            async with database.DB_POOL.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        SQL_INSERT_TRANSCRIPT, session_id, "transcript.vtt"
                     )
-                    await db.commit()
             logger.info(f"Saved transcript record to DB for meeting {session_id}.")
 
         except Exception as e:
-            if "UNIQUE constraint failed" in str(e):
+            if "UNIQUE constraint failed" in str(e) or "unique_violation" in str(e):
                 logger.warning(
                     f"Transcript record already exists in DB for meeting {session_id}. Skipping insert."
                 )

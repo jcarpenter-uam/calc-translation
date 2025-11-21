@@ -1,10 +1,12 @@
-# /ws/transcribe/{integration}/{id} || Receives audio from clients and sends through pipeline
+# NOTE: This name is slighty misleading as our app does translation and transcription, might change naming later for a better term
+import logging
 
-# This name is slighty misleading as our app does translation and transcription, might change naming later for a better term
-
-from fastapi import APIRouter, Depends, Path, WebSocket
-from services.auth import validate_token
+from core.security import validate_server_token
+from fastapi import APIRouter, Depends, HTTPException, Path, WebSocket
+from integrations.zoom import get_meeting_data
 from services.receiver import handle_receiver_session
+
+logger = logging.getLogger(__name__)
 
 
 def create_transcribe_router(viewer_manager):
@@ -13,16 +15,42 @@ def create_transcribe_router(viewer_manager):
     """
     router = APIRouter()
 
-    @router.websocket("/ws/transcribe/{integration}/{session_id}")
+    @router.websocket(
+        "/ws/transcribe/{integration}/{session_id:path}"
+    )  # Dont know if im a fan of this method
     async def websocket_transcribe_endpoint(
         websocket: WebSocket,
         integration: str = Path(),
         session_id: str = Path(),
-        is_authenticated: bool = Depends(validate_token),
+        payload: dict = Depends(validate_server_token),
     ):
         """
         Handles the WebSocket connection for per transcription session.
         """
+        if integration == "zoom":
+            test_user_id = "TEST_USER_ID"  # NOTE: Temp until EntraID is integrated
+
+            try:
+                await get_meeting_data(meeting_uuid=session_id, user_id=test_user_id)
+
+            except HTTPException as e:
+                logger.error(
+                    f"Failed to get Zoom meeting data for {session_id}: {e.detail}",
+                    exc_info=True,
+                )
+                await websocket.accept()
+                await websocket.close(code=1011, reason=f"Zoom Error: {e.detail}")
+                return
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error fetching Zoom data for {session_id}: {e}",
+                    exc_info=True,
+                )
+                await websocket.accept()
+                await websocket.close(
+                    code=1011, reason="Server error: Could not prepare Zoom session."
+                )
+                return
         await handle_receiver_session(
             websocket=websocket,
             integration=integration,

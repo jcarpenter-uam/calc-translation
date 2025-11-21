@@ -1,3 +1,6 @@
+# BUG: This functionality is not in heavy use due to focus on other aspects of the app
+# Once the app is more functional, I can spend more time perfecting the model for correction accuracy
+
 import asyncio
 import json
 import logging
@@ -7,7 +10,7 @@ from typing import AsyncGenerator
 
 import ollama
 from core.config import settings
-from core.logging_setup import log_step, message_id_var, speaker_var
+from core.logging_setup import log_step, message_id_var, session_id_var, speaker_var
 from openai import APIError, AsyncOpenAI
 
 logger = logging.getLogger(__name__)
@@ -28,59 +31,63 @@ class RetranslationService:
             logger.debug("Initialized Qwen retranslation client.")
 
     async def translate_stream(
-        self, text_to_translate: str, session_id: str = "unknown"
+        self, text_to_translate: str, session_id: str
     ) -> AsyncGenerator[str, None]:
         """
         Retranslates a block of text using the Qwen model and streams the results.
         """
-        user_prompt = (
-            "You are a Chinese-to-English translator. Your task is to translate the text in the [TEXT TO TRANSLATE] section. "
-            "Your response must contain ONLY the English translation of the [TEXT TO TRANSLATE] and nothing else. Do not include any other text in your response."
-        )
-
-        user_prompt += f"\n\n[TEXT TO TRANSLATE]\n{text_to_translate}"
-
-        with log_step("RETRANSLATION"):
-            logger.info(
-                f"Submitting text for retranslation. Characters: {len(text_to_translate)}"
-            )
-
+        session_token = session_id_var.set(session_id)
         try:
-            stream = await self.client.chat.completions.create(
-                model="qwen-mt-turbo",
-                messages=[
-                    {"role": "user", "content": user_prompt},
-                ],
-                stream=True,
-                extra_body={
-                    "translation_options": {
-                        "source_lang": "zh",
-                        "target_lang": "en",
-                    }
-                },
+            user_prompt = (
+                "You are a Chinese-to-English translator. Your task is to translate the text in the [TEXT TO TRANSLATE] section. "
+                "Your response must contain ONLY the English translation of the [TEXT TO TRANSLATE] and nothing else. Do not include any other text in your response."
             )
-            async for chunk in stream:
-                content = chunk.choices[0].delta.content or ""
-                if content:
-                    with log_step("RETRANSLATION"):
-                        logger.debug(
-                            f"Received retranslation delta. Length: {len(content)}"
-                        )
-                    yield content
+
+            user_prompt += f"\n\n[TEXT TO TRANSLATE]\n{text_to_translate}"
+
             with log_step("RETRANSLATION"):
-                logger.info("Retranslation stream completed successfully.")
-        except APIError as e:
-            error_message = f"[Translation Error: {e.message}]"
-            with log_step("RETRANSLATION"):
-                logger.error(f"Alibaba Qwen API error: {e}", exc_info=True)
-            yield error_message
-        except Exception as e:
-            with log_step("RETRANSLATION"):
-                logger.error(
-                    f"An unexpected error occurred during retranslation: {e}",
-                    exc_info=True,
+                logger.info(
+                    f"Submitting text for retranslation. Characters: {len(text_to_translate)}"
                 )
-            yield "[Translation Error]"
+
+            try:
+                stream = await self.client.chat.completions.create(
+                    model="qwen-mt-turbo",
+                    messages=[
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    stream=True,
+                    extra_body={
+                        "translation_options": {
+                            "source_lang": "zh",
+                            "target_lang": "en",
+                        }
+                    },
+                )
+                async for chunk in stream:
+                    content = chunk.choices[0].delta.content or ""
+                    if content:
+                        with log_step("RETRANSLATION"):
+                            logger.debug(
+                                f"Received retranslation delta. Length: {len(content)}"
+                            )
+                        yield content
+                with log_step("RETRANSLATION"):
+                    logger.info("Retranslation stream completed successfully.")
+            except APIError as e:
+                error_message = f"[Translation Error: {e.message}]"
+                with log_step("RETRANSLATION"):
+                    logger.error(f"Alibaba Qwen API error: {e}", exc_info=True)
+                yield error_message
+            except Exception as e:
+                with log_step("RETRANSLATION"):
+                    logger.error(
+                        f"An unexpected error occurred during retranslation: {e}",
+                        exc_info=True,
+                    )
+                yield "[Translation Error]"
+        finally:
+            session_id_var.reset(session_token)
 
 
 class CorrectionService:
@@ -250,7 +257,8 @@ class CorrectionService:
 
                 full_corrected_translation = ""
                 async for chunk in self.retranslation_service.translate_stream(
-                    text_to_translate=corrected_transcription
+                    text_to_translate=corrected_transcription,
+                    session_id=self.session_id,
                 ):
                     full_corrected_translation = chunk
 
@@ -291,6 +299,7 @@ class CorrectionService:
         Public method to receive a new final utterance, store it,
         and trigger the correction pipeline.
         """
+        session_token = session_id_var.set(self.session_id)
         msg_id_token = message_id_var.set(utterance.get("message_id"))
         speaker_token = speaker_var.set(utterance.get("speaker"))
         try:
@@ -302,6 +311,7 @@ class CorrectionService:
         finally:
             message_id_var.reset(msg_id_token)
             speaker_var.reset(speaker_token)
+            session_id_var.reset(session_token)
 
         self.utterance_history.append(utterance)
         asyncio.create_task(self._run_contextual_correction())
@@ -311,25 +321,29 @@ class CorrectionService:
         Public method to be called on session end.
         Processes the last few utterances that didn't get a chance to be corrected.
         """
-        num_final_to_check = self.CORRECTION_CONTEXT_THRESHOLD - 1
+        session_token = session_id_var.set(self.session_id)
+        try:
+            num_final_to_check = self.CORRECTION_CONTEXT_THRESHOLD - 1
 
-        if len(self.utterance_history) >= self.CORRECTION_CONTEXT_THRESHOLD:
-            final_targets = list(self.utterance_history)[-num_final_to_check:]
-            with log_step("SESSION"):
-                logger.info(
-                    f"Performing final correction check on last {len(final_targets)} utterance(s)."
-                )
-            for utterance in final_targets:
-                await self._perform_correction(utterance)
-        elif len(self.utterance_history) > 0:
-            with log_step("SESSION"):
-                logger.info(
-                    f"Performing final correction check on all {len(self.utterance_history)} utterance(s)."
-                )
-            for utterance in list(self.utterance_history):
-                await self._perform_correction(utterance)
-        else:
-            with log_step("SESSION"):
-                logger.info(
-                    f"Not enough history ({len(self.utterance_history)}) for final corrections check."
-                )
+            if len(self.utterance_history) >= self.CORRECTION_CONTEXT_THRESHOLD:
+                final_targets = list(self.utterance_history)[-num_final_to_check:]
+                with log_step("SESSION"):
+                    logger.info(
+                        f"Performing final correction check on last {len(final_targets)} utterance(s)."
+                    )
+                for utterance in final_targets:
+                    await self._perform_correction(utterance)
+            elif len(self.utterance_history) > 0:
+                with log_step("SESSION"):
+                    logger.info(
+                        f"Performing final correction check on all {len(self.utterance_history)} utterance(s)."
+                    )
+                for utterance in list(self.utterance_history):
+                    await self._perform_correction(utterance)
+            else:
+                with log_step("SESSION"):
+                    logger.info(
+                        f"Not enough history ({len(self.utterance_history)}) for final corrections check."
+                    )
+        finally:
+            session_id_var.reset(session_token)

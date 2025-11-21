@@ -22,7 +22,15 @@ class Settings(BaseSettings):
 
     MAX_CACHE_MB: int = 10
 
-    SECRET_TOKEN: str
+    DATABASE_URL: str
+
+    JWT_SECRET_KEY: str
+
+    ZM_PUBLIC_KEY: str
+
+    ZM_RTMS_CLIENT: str
+
+    ZM_RTMS_SECRET: str
 
     LOGGING_LEVEL: str = "INFO"
 

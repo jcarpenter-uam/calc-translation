@@ -50,7 +50,11 @@ services:
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
-      - SECRET_TOKEN=${SECRET_TOKEN}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ZM_PUBLIC_KEY=${ZM_PUBLIC_KEY}
+      - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
+      - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
       - translation-data:/app/logs
@@ -68,8 +72,8 @@ services:
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - ZM_WEBHOOK_SECRET=${ZM_WEBHOOK_SECRET}
-      - BASE_SERVER_URL="ws://translation-server:8000/ws/transcribe"
-      - SECRET_TOKEN=${SECRET_TOKEN}
+      - ZM_PRIVATE_KEY=${ZM_PRIVATE_KEY}
+      - BASE_SERVER_URL=ws://translation-server:8000/ws/transcribe
     volumes:
       - zoom_rtms-data:/app/logs
     depends_on:
@@ -93,9 +97,14 @@ networks:
 ## Core Configuration (Required)
 #
 # Get these for your app in the zoom dev interface
+# These are used for both containers
 ZM_RTMS_CLIENT=
 ZM_RTMS_SECRET=
 ZM_WEBHOOK_SECRET=
+#
+# Private key pair
+# openssl genrsa -out private-key.pem 2048
+ZM_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n<KEY_BODY>\n-----END PRIVATE KEY-----"
 #
 # The URL for the integration to reach the server
 BASE_SERVER_URL="ws://localhost:8000/ws/transcribe" # Default if not set
@@ -111,7 +120,14 @@ SONIOX_API_KEY=
 #
 # A secret token to authenticate incoming WebSocket connections.
 # This should be a long, random string.
-SECRET_TOKEN=your_secure_random_token_here
+JWT_SECRET_KEY="a-very-long-and-random-secret-string-that-you-generate"
+#
+# Public key pair
+# openssl rsa -in private-key.pem -pubout -out public-key.pem
+ZM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n<KEY_BODY>\n-----END PUBLIC KEY-----"
+#
+# Database URL
+DATABASE_URL="postgresql://user:password@localhost:5432/calc-translation"
 
 ## General Settings
 #

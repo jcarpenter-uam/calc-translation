@@ -4,9 +4,8 @@ const DOWNLOAD_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * A custom hook to manage a WebSocket connection for live transcripts.
- * @param {string} url The WebSocket URL to connect to.
+ * @param {string} wsUrl The WebSocket URL to connect to.
  * @returns {{
- * status: 'connecting' | 'connected' | 'disconnected';
  * transcripts: Array<{
  * id: string,
  * speaker: string,
@@ -21,21 +20,22 @@ const DOWNLOAD_WINDOW_MS = 10 * 60 * 1000;
  * }>;
  * }}
  */
-export function useTranscriptStream(url) {
-  const [status, setStatus] = useState("connecting");
+export function useTranscriptStream(wsUrl, sessionId) {
   const [transcripts, setTranscripts] = useState([]);
-
   const [isDownloadable, setIsDownloadable] = useState(false);
   const hideTimerRef = useRef(null);
 
   const ws = useRef(null);
 
   useEffect(() => {
+    if (!wsUrl) {
+      return;
+    }
+
     let reconnectTimeoutId;
 
     function connect() {
-      if (typeof url !== "string") {
-        setStatus("disconnected");
+      if (typeof wsUrl !== "string") {
         return;
       }
       if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
@@ -43,22 +43,25 @@ export function useTranscriptStream(url) {
       }
 
       setTranscripts([]);
-      ws.current = new WebSocket(url);
-      setStatus("connecting");
+      ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log(`WebSocket connected to ${url}`);
-        setStatus("connected");
+        console.log(`WebSocket connected to ${wsUrl}`);
       };
 
-      ws.current.onclose = () => {
+      ws.current.onclose = (event) => {
+        if (event.code === 4001 || event.code === 4008) {
+          console.error(
+            `WebSocket connection closed: ${event.reason} (${event.code})`,
+          );
+          return;
+        }
         console.log(`WebSocket disconnected. Reconnecting in 3 seconds...`);
-        setStatus("disconnected");
         reconnectTimeoutId = setTimeout(connect, 3000);
       };
 
       ws.current.onerror = (error) => {
-        console.error(`WebSocket error on ${url}:`, error);
+        console.error(`WebSocket error on ${wsUrl}:`, error);
         ws.current.close();
       };
 
@@ -161,7 +164,7 @@ export function useTranscriptStream(url) {
         ws.current.close();
       }
     };
-  }, [url]);
+  }, [wsUrl, sessionId]);
 
-  return { status, transcripts, isDownloadable };
+  return { transcripts, isDownloadable };
 }

@@ -2,9 +2,6 @@ import React, { useState } from "react";
 import { FileArrowDown } from "@phosphor-icons/react/dist/csr/FileArrowDown";
 import { SpinnerBall } from "@phosphor-icons/react/dist/csr/SpinnerBall";
 
-// TODO: Will become dynamic
-const DOWNLOAD_API_URL = "/api/session/test/test/download/vtt";
-
 const DownloadIcon = () => <FileArrowDown size={23} />;
 
 const LoadingIcon = () => <SpinnerBall size={23} />;
@@ -13,15 +10,16 @@ const LoadingIcon = () => <SpinnerBall size={23} />;
  * An icon-button component to download a .vtt transcript file.
  * Becomes green and enabled when isDownloadable is true.
  */
-function DownloadVttButton({ isDownloadable }) {
+function DownloadVttButton({ isDownloadable, integration, sessionId }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleDownload = async () => {
-    if (isLoading || !isDownloadable) return;
+    if (isLoading || !isDownloadable || !integration || !sessionId) return;
 
     setIsLoading(true);
 
-    const downloadUrl = DOWNLOAD_API_URL;
+    const encodedSessionId = encodeURIComponent(sessionId);
+    const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt`;
 
     try {
       const response = await fetch(downloadUrl, {

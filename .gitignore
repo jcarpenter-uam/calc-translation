@@ -1,6 +1,7 @@
 # ----- server -----
 __pycache__/
 venv/
+*.db
 server/logs/*
 !server/logs/README.md
 server/output/*
@@ -20,5 +21,11 @@ dist/
 out/
 logs/node*
 
+# TEMP
+docker-compose.yaml
+
 # Secrets
 .env
+ngrok-conf.yaml
+*.m4a
+*.mp4

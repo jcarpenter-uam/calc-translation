@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 from datetime import datetime
 from typing import Any, Dict, List, Set
 
@@ -19,6 +20,8 @@ class ConnectionManager:
         self.sessions: Dict[str, List[WebSocket]] = {}
         self.active_transcription_sessions: Dict[str, Dict[str, Any]] = {}
         self.cache = cache
+
+        self._session_lock = threading.Lock()
 
         with log_step("MANAGER"):
             logger.debug("ConnectionManager initialized.")
@@ -105,38 +108,49 @@ class ConnectionManager:
             tasks = [conn.send_json(payload) for conn in self.sessions[session_id]]
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    def register_transcription_session(self, session_id: str, integration: str):
-        """Marks a transcription session as active."""
-
+    def register_transcription_session(self, session_id: str, integration: str) -> bool:
+        """
+        Atomically marks a transcription session as active.
+        Returns:
+            bool: True if registration was successful, False if session already exists.
+        """
         session_token = session_id_var.set(session_id)
-
         try:
-            session_data = {
-                "integration": integration,
-                "start_time": datetime.utcnow().isoformat(),
-            }
-            self.active_transcription_sessions[session_id] = session_data
+            with self._session_lock:
+                if session_id in self.active_transcription_sessions:
+                    with log_step("MANAGER"):
+                        logger.warning(
+                            f"Duplicate transcription session registration attempt for {session_id}."
+                        )
+                    return False
 
-            with log_step("MANAGER"):
-                logger.info(
-                    f"Transcription session registered as active for integration '{integration}'."
-                )
+                session_data = {
+                    "integration": integration,
+                    "start_time": datetime.utcnow().isoformat(),
+                }
+                self.active_transcription_sessions[session_id] = session_data
+
+                with log_step("MANAGER"):
+                    logger.info(
+                        f"Transcription session registered as active for integration '{integration}'."
+                    )
+                return True
         finally:
             session_id_var.reset(session_token)
 
     def deregister_transcription_session(self, session_id: str):
-        """Marks a transcription session as inactive."""
+        """Atomically marks a transcription session as inactive."""
 
         session_token = session_id_var.set(session_id)
-
         try:
-            if session_id in self.active_transcription_sessions:
-                session_data = self.active_transcription_sessions.pop(session_id)
-                integration = session_data.get("integration", "unknown")
+            with self._session_lock:
+                if session_id in self.active_transcription_sessions:
+                    session_data = self.active_transcription_sessions.pop(session_id)
+                    integration = session_data.get("integration", "unknown")
 
-                with log_step("MANAGER"):
-                    logger.info(
-                        f"Transcription session deregistered for integration '{integration}'."
-                    )
+                    with log_step("MANAGER"):
+                        logger.info(
+                            f"Transcription session deregistered for integration '{integration}'."
+                        )
         finally:
             session_id_var.reset(session_token)

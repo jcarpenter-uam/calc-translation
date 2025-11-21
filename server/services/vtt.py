@@ -2,25 +2,18 @@
 
 import logging
 import os
+import urllib.parse
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
+from core import database
+from core.database import SQL_INSERT_TRANSCRIPT
 from core.logging_setup import log_step, message_id_var, session_id_var
 
 logger = logging.getLogger(__name__)
 
 
 class TimestampService:
-    """
-    Manages all timestamp-related logic for a transcription session.
-
-    This service is responsible for:
-    1. Setting a "zero point" (session start time) when instantiated.
-    2. Recording the start time of a new utterance (message_id).
-    3. Calculating and formatting a WebVTT-compliant timestamp string
-       (e.g., "00:01:10.500 --> 00:01:12.123") when an utterance is finalized.
-    """
-
     def __init__(self):
         """
         Initializes the timestamp service, setting the session's "zero point"
@@ -103,7 +96,9 @@ class TimestampService:
             message_id_var.reset(token)
 
 
-def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, Any]]):
+async def create_vtt_file(
+    session_id: str, integration: str, history: List[Dict[str, Any]]
+):
     """
     Saves a session's transcript history to a .vtt file.
     """
@@ -116,7 +111,8 @@ def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, A
                 )
                 return
 
-            output_dir = os.path.join("output", integration, session_id)
+            safe_session_id = urllib.parse.quote(session_id, safe="")
+            output_dir = os.path.join("output", integration, safe_session_id)
             os.makedirs(output_dir, exist_ok=True)
 
             vtt_filepath = os.path.join(output_dir, "transcript.vtt")
@@ -146,10 +142,22 @@ def create_vtt_file(session_id: str, integration: str, history: List[Dict[str, A
                 f"Transcript VTT saved to {vtt_filepath}. {len(history)} entries."
             )
 
+            async with database.DB_POOL.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        SQL_INSERT_TRANSCRIPT, session_id, "transcript.vtt"
+                    )
+            logger.info(f"Saved transcript record to DB for meeting {session_id}.")
+
         except Exception as e:
-            logger.error(
-                f"Failed to save VTT for integration '{integration}': {e}",
-                exc_info=True,
-            )
+            if "UNIQUE constraint failed" in str(e) or "unique_violation" in str(e):
+                logger.warning(
+                    f"Transcript record already exists in DB for meeting {session_id}. Skipping insert."
+                )
+            else:
+                logger.error(
+                    f"Failed to save VTT for integration '{integration}': {e}",
+                    exc_info=True,
+                )
         finally:
             session_id_var.reset(session_token)

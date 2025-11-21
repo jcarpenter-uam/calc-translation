@@ -4,6 +4,7 @@ import express from "express";
 import rtms from "@zoom/rtms";
 import { WebSocket } from "ws";
 import pino from "pino";
+import jwt from "jsonwebtoken";
 
 const logDir = "logs";
 
@@ -87,15 +88,14 @@ function createMeetingLogger(meeting_uuid) {
 
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
-const SECRET_TOKEN = process.env.SECRET_TOKEN;
+const ZM_PRIVATE_KEY = process.env.ZM_PRIVATE_KEY;
 const ZM_WEBHOOK_SECRET = process.env.ZM_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 8080;
 
 const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 
-if (!SECRET_TOKEN) {
-  logger.fatal("FATAL: SECRET_TOKEN is not defined in .env file!");
-  logger.fatal("Cannot connect to translation server without it.");
+if (!ZM_PRIVATE_KEY) {
+  logger.fatal("FATAL: ZM_PRIVATE_KEY is not defined in .env file!");
   process.exit(1);
 }
 
@@ -206,6 +206,23 @@ function handleUrlValidation(payload, res) {
 }
 
 /**
+ * Generates a short-lived JWT
+ * @returns {string} - A signed JWT valid for 5 minutes
+ */
+function generateAuthToken() {
+  const payload = {
+    iss: "zoom-rtms-service",
+    iat: Math.floor(Date.now() / 1000),
+    aud: "python-backend",
+  };
+
+  return jwt.sign(payload, ZM_PRIVATE_KEY, {
+    expiresIn: "5m", // 5 minutes
+    algorithm: "RS256",
+  });
+}
+
+/**
  * Handles RTMS start event by creating SDK and WebSocket clients
  */
 function handleRtmsStarted(payload, streamId) {
@@ -220,7 +237,7 @@ function handleRtmsStarted(payload, streamId) {
     return;
   }
 
-  const safe_meeting_uuid = meeting_uuid.replace(/\//g, "_");
+  const encoded_meeting_uuid = encodeURIComponent(meeting_uuid);
 
   const { logger: meetingLogger, transport: meetingTransport } =
     createMeetingLogger(meeting_uuid);
@@ -229,10 +246,6 @@ function handleRtmsStarted(payload, streamId) {
   const rtmsClient = new rtms.Client({
     log: { enable: false },
   });
-
-  const authHeader = {
-    Authorization: `Bearer ${SECRET_TOKEN}`,
-  };
 
   const clientEntry = {
     rtmsClient,
@@ -260,8 +273,13 @@ function handleRtmsStarted(payload, streamId) {
       })...`,
     );
 
+    const token = generateAuthToken();
+    const authHeader = {
+      Authorization: `Bearer ${token}`,
+    };
+
     const wsClient = new WebSocket(
-      `${ZOOM_BASE_SERVER_URL}/${safe_meeting_uuid}`,
+      `${ZOOM_BASE_SERVER_URL}/${encoded_meeting_uuid}`,
       {
         headers: authHeader,
       },
@@ -295,7 +313,6 @@ function handleRtmsStarted(payload, streamId) {
         meetingTransport.end(() => {
           logger.info(`Log file for stream ${streamId} closed.`);
         });
-        // ---------------------
         return;
       }
 

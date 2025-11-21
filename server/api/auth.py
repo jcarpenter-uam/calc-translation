@@ -92,7 +92,9 @@ def create_auth_router() -> APIRouter:
         test_user_id = "TEST_USER_ID"  # NOTE: Temp until EntraID is integrated
 
         try:
-            redirect_uri = str(request.url).split("?")[0]
+            # redirect_uri = str(request.url).split("?")[0]
+
+            redirect_uri = "https://translator-test.my-uam.com/api/auth/zoom/callback"
 
             await exchange_code_for_token(code, redirect_uri, test_user_id)
 

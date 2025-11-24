@@ -400,6 +400,11 @@ function handleRtmsStopped(streamId) {
 
 const app = express();
 
+app.use((req, res, next) => {
+  logger.info({ method: req.method, path: req.path }, "Incoming request");
+  next();
+});
+
 app.use(
   "/",
   express.raw({

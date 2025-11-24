@@ -8,9 +8,11 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
     """
     Creates the router for the WebSocket viewer endpoint.
     """
-    router = APIRouter()
+    router = APIRouter(
+        prefix="/ws/view",
+    )
 
-    @router.websocket("/ws/view/{integration}/{session_id:path}")
+    @router.websocket("/{integration}/{session_id:path}")
     async def websocket_viewer_endpoint(
         websocket: WebSocket,
         integration: str = Path(),

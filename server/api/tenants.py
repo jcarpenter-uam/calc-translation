@@ -191,7 +191,6 @@ def create_tenant_router() -> APIRouter:
     """
     router = APIRouter(
         prefix="/api/tenant",
-        tags=["Tenants"],
     )
 
     @router.post(

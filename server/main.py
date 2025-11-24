@@ -19,6 +19,7 @@ from api.clients import create_clients_router
 from api.sessions import router as sessions_router
 from api.tenants import create_tenant_router
 from api.transcribe import create_transcribe_router
+from api.users import create_user_router
 from api.viewing import create_viewer_router
 from core import database
 from fastapi import FastAPI
@@ -59,6 +60,9 @@ app.include_router(sessions_router)
 
 tenant_router = create_tenant_router()
 app.include_router(tenant_router)
+
+user_router = create_user_router()
+app.include_router(user_router)
 
 auth_router = create_auth_router()
 app.include_router(auth_router)

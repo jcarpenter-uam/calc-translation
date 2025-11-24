@@ -13,8 +13,15 @@ from integrations.zoom import (
     authenticate_zoom_session,
     exchange_code_for_token,
 )
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+
+class UserResponse(BaseModel):
+    id: str
+    name: str | None
+    email: str | None
 
 
 def create_auth_router() -> APIRouter:
@@ -34,12 +41,12 @@ def create_auth_router() -> APIRouter:
         return await entra.handle_login(request, response)
 
     @router.get("/entra/callback")
-    async def entra_callback(request: Request, response: Response):
+    async def entra_callback(request: Request):
         """
         Handles the OAuth redirect from Microsoft Entra ID.
         Exchanges code for token and sets an auth cookie.
         """
-        return await entra.handle_callback(request, response)
+        return await entra.handle_callback(request)
 
     @router.post("/logout")
     async def entra_logout(response: Response):

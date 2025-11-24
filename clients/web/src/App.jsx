@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import ProtectedRoute from "./components/protected-route";
 import Login from "./pages/login";
 import LandingPage from "./pages/landing";
 import SessionPage from "./pages/session";
@@ -15,15 +16,15 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
 
-          <Route path="/" element={<LandingPage />} />
-
-          <Route path="/sessions/:integration/*" element={<SessionPage />} />
-
+          {/* Docs need to be visable by zoom */}
           <Route path="/support" element={<Support />} />
-
           <Route path="/privacy" element={<Privacy />} />
-
           <Route path="/terms" element={<Terms />} />
+
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/sessions/:integration/*" element={<SessionPage />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </div>

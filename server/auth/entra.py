@@ -28,9 +28,6 @@ SCOPE = ["User.Read"]
 
 
 async def get_config_for_domain(domain: str) -> dict | None:
-    """
-    Fetches tenant config from the DB based on email domain.
-    """
     logger.info(f"Checking DB for config for domain: {domain}")
     if not database.DB_POOL:
         raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -53,9 +50,6 @@ async def get_config_for_domain(domain: str) -> dict | None:
 
 
 async def get_config_for_tenant(tenant_id: str) -> dict | None:
-    """
-    Fetches tenant config from the DB based on tenant_id.
-    """
     logger.info(f"Checking DB for config for tenant_id: {tenant_id}")
     if not database.DB_POOL:
         raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -78,7 +72,6 @@ async def get_config_for_tenant(tenant_id: str) -> dict | None:
 
 
 def _build_msal_app(tenant_config: dict) -> msal.ConfidentialClientApplication:
-    """Initializes a TENANT-SPECIFIC MSAL app."""
     authority = f"https://login.microsoftonline.com/{tenant_config['tenant_id']}"
     return msal.ConfidentialClientApplication(
         tenant_config["client_id"],
@@ -88,7 +81,6 @@ def _build_msal_app(tenant_config: dict) -> msal.ConfidentialClientApplication:
 
 
 def _build_auth_url(tenant_config: dict, state: str) -> str:
-    """Generates the Microsoft login URL for a specific tenant."""
     app = _build_msal_app(tenant_config)
     redirect_uri = f"{settings.APP_BASE_URL}{REDIRECT_PATH}"
 
@@ -98,7 +90,6 @@ def _build_auth_url(tenant_config: dict, state: str) -> str:
 
 
 def _get_token_from_code(tenant_config: dict, code: str) -> dict:
-    """Exchanges the authorization code for a token."""
     app = _build_msal_app(tenant_config)
     redirect_uri = f"{settings.APP_BASE_URL}{REDIRECT_PATH}"
 
@@ -110,11 +101,6 @@ def _get_token_from_code(tenant_config: dict, code: str) -> dict:
 async def handle_login(
     request: EntraLoginRequest, response: Response
 ) -> RedirectResponse:
-    """
-    Implements the /login logic.
-    Finds the tenant config, generates a state, sets a temporary cookie,
-    and returns a RedirectResponse to the Microsoft login page.
-    """
     try:
         domain = request.email.split("@")[1]
     except IndexError:
@@ -140,23 +126,18 @@ async def handle_login(
         value=json.dumps(auth_data),
         max_age=600,
         httponly=True,
-        secure=True,
+        secure=settings.APP_BASE_URL.startswith("https"),
         samesite="lax",
     )
     auth_url = _build_auth_url(tenant_config, state)
     return {"login_url": auth_url}
 
 
-async def handle_callback(request: Request, response: Response) -> RedirectResponse:
-    """
-    Implements the /entra/callback logic.
-    Validates the state, exchanges the code for a token,
-    generates our app's internal JWT, and sets it in a secure cookie.
-    """
+async def handle_callback(request: Request) -> RedirectResponse:
     url_state = request.query_params.get("state")
     code = request.query_params.get("code")
     cookie_data_str = request.cookies.get("entra_auth_state")
-    response.delete_cookie("entra_auth_state")
+
     if not url_state or not code or not cookie_data_str:
         raise HTTPException(status_code=400, detail="Missing auth data.")
     try:
@@ -201,22 +182,26 @@ async def handle_callback(request: Request, response: Response) -> RedirectRespo
         logger.info(f"Upserted user: {user_email} (OID: {session_id})")
     except Exception as e:
         logger.error(f"Failed to upsert user {session_id}: {e}", exc_info=True)
+
     app_token = generate_jwt_token(session_id=session_id)
-    response.set_cookie(
+
+    redirect_response = RedirectResponse(url="/")
+
+    redirect_response.set_cookie(
         key="app_auth_token",
         value=app_token,
         max_age=60 * 60,
         httponly=True,
-        secure=True,
-        samesite="strict",
+        secure=False,
+        samesite="lax",
     )
-    return RedirectResponse(url="/")
+
+    redirect_response.delete_cookie("entra_auth_state")
+
+    return redirect_response
 
 
 async def handle_logout(response: Response) -> dict:
-    """
-    Implements the /logout logic.
-    """
     logger.info("Handling user logout.")
     response.delete_cookie("app_auth_token")
     post_logout_url = f"{settings.APP_BASE_URL}/"

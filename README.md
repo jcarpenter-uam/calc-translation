@@ -46,6 +46,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - APP_BASE_URL=${APP_BASE_URL}
       - SONIOX_API_KEY=${SONIOX_API_KEY}
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - OLLAMA_URL=${OLLAMA_URL}
@@ -114,6 +115,9 @@ PORT=8080 # Default if not set
 
 ### ------ SERVER ------
 ## Core Configuration (Required)
+#
+# The base URL for your application
+APP_BASE_URL="http://localhost:8000" # Default if not set
 #
 # Get this from your Soniox account dashboard.
 SONIOX_API_KEY=

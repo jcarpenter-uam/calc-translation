@@ -413,7 +413,7 @@ app.use(
   }),
 );
 
-app.post("/", rtmsWebhookHandler);
+app.post("/zoom", rtmsWebhookHandler);
 
 // Start the server
 app.listen(PORT, () => {

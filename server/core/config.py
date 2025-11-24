@@ -14,6 +14,8 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
+    APP_BASE_URL: str = "http://localhost:8000"
+
     SONIOX_API_KEY: str
 
     ALIBABA_API_KEY: str = ""

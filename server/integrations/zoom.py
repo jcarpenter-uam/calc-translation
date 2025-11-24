@@ -231,7 +231,6 @@ async def get_meeting_data(meeting_uuid: str, user_id: str) -> str:
         parsed_start_time = None
         if start_time_str:
             parsed_start_time = datetime.fromisoformat(start_time_str)
-        # --- END FIX ---
 
         if not real_uuid:
             with log_step("ZOOM"):

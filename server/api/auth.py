@@ -1,9 +1,10 @@
 import logging
 
+from auth import entra
 from core.config import settings
 from core.logging_setup import log_step
 from core.security import generate_jwt_token
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from integrations.test import TestAuthRequest, authenticate_test_session
 from integrations.zoom import (
@@ -23,6 +24,30 @@ def create_auth_router() -> APIRouter:
     router = APIRouter(
         prefix="/api/auth",
     )
+
+    @router.post("/login")
+    async def entra_login(request: entra.EntraLoginRequest, response: Response):
+        """
+        Handles the first step of Entra ID login.
+        Expects an email and returns a redirect to Microsoft.
+        """
+        return await entra.handle_login(request, response)
+
+    @router.get("/entra/callback")
+    async def entra_callback(request: Request, response: Response):
+        """
+        Handles the OAuth redirect from Microsoft Entra ID.
+        Exchanges code for token and sets an auth cookie.
+        """
+        return await entra.handle_callback(request, response)
+
+    @router.post("/logout")
+    async def entra_logout(response: Response):
+        """
+        Logs the user out by clearing the auth cookie and
+        providing a Microsoft logout URL.
+        """
+        return await entra.handle_logout(response)
 
     @router.post("/test", response_model=ZoomAuthResponse)
     async def handle_test_auth(request: TestAuthRequest):

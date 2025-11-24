@@ -17,6 +17,7 @@ logger.info(f"Configuration loaded. Correction: {correction_status}")
 from api.auth import create_auth_router
 from api.clients import create_clients_router
 from api.sessions import router as sessions_router
+from api.tenants import create_tenant_router
 from api.transcribe import create_transcribe_router
 from api.viewing import create_viewer_router
 from core import database
@@ -55,6 +56,9 @@ clients_router = create_clients_router(viewer_manager=viewer_manager)
 app.include_router(clients_router)
 
 app.include_router(sessions_router)
+
+tenant_router = create_tenant_router()
+app.include_router(tenant_router)
 
 auth_router = create_auth_router()
 app.include_router(auth_router)

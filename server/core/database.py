@@ -42,7 +42,25 @@ async def init_db():
                         )
                         """
                     )
-
+                    # Create TENANTS table for Entra ID
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS TENANTS (
+                            tenant_id TEXT PRIMARY KEY,
+                            domain TEXT NOT NULL UNIQUE,
+                            client_id TEXT NOT NULL,
+                            client_secret_encrypted TEXT NOT NULL,
+                            organization_name TEXT
+                        )
+                        """
+                    )
+                    # Add an index for faster domain lookups
+                    await conn.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_tenants_domain
+                        ON TENANTS(domain);
+                        """
+                    )
                     # Create INTEGRATIONS table
                     await conn.execute(
                         """
@@ -57,7 +75,6 @@ async def init_db():
                         )
                         """
                     )
-
                     # Create MEETINGS table
                     await conn.execute(
                         """
@@ -73,7 +90,6 @@ async def init_db():
                         )
                         """
                     )
-
                     # Create TRANSCRIPTS table
                     await conn.execute(
                         """
@@ -106,6 +122,53 @@ ON CONFLICT(id) DO UPDATE SET
 """
 SQL_GET_USER_BY_ID = "SELECT * FROM USERS WHERE id = $1;"
 
+# TENANTS
+SQL_GET_TENANT_AUTH_BY_ID = """
+SELECT tenant_id, client_id, client_secret_encrypted
+FROM TENANTS
+WHERE tenant_id = $1;
+"""
+
+SQL_INSERT_TENANT = """
+INSERT INTO TENANTS (tenant_id, domain, client_id, client_secret_encrypted, organization_name)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT(tenant_id) DO UPDATE SET
+    domain = excluded.domain,
+    client_id = excluded.client_id,
+    client_secret_encrypted = excluded.client_secret_encrypted,
+    organization_name = excluded.organization_name;
+"""
+
+SQL_GET_TENANT_BY_DOMAIN = """
+SELECT tenant_id, client_id, client_secret_encrypted
+FROM TENANTS
+WHERE domain = $1;
+"""
+
+SQL_GET_TENANT_BY_ID = """
+SELECT 
+    tenant_id, 
+    domain, 
+    client_id, 
+    organization_name, 
+    (client_secret_encrypted IS NOT NULL AND client_secret_encrypted != '') as has_secret
+FROM TENANTS
+WHERE tenant_id = $1;
+"""
+
+SQL_GET_ALL_TENANTS = """
+SELECT 
+    tenant_id, 
+    domain, 
+    client_id, 
+    organization_name, 
+    (client_secret_encrypted IS NOT NULL AND client_secret_encrypted != '') as has_secret
+FROM TENANTS;
+"""
+
+SQL_DELETE_TENANT_BY_ID = """
+DELETE FROM TENANTS WHERE tenant_id = $1;
+"""
 
 # --- INTEGRATIONS ---
 SQL_UPSERT_INTEGRATION = """

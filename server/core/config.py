@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str
 
+    ENCRYPTION_KEY: str
+
     JWT_SECRET_KEY: str
 
     ZM_PUBLIC_KEY: str

@@ -144,9 +144,7 @@ async def handle_login(
         samesite="lax",
     )
     auth_url = _build_auth_url(tenant_config, state)
-    response.status_code = status.HTTP_307_TEMPORARY_REDIRECT
-    response.headers["Location"] = auth_url
-    return response
+    return {"login_url": auth_url}
 
 
 async def handle_callback(request: Request, response: Response) -> RedirectResponse:
@@ -207,7 +205,7 @@ async def handle_callback(request: Request, response: Response) -> RedirectRespo
     response.set_cookie(
         key="app_auth_token",
         value=app_token,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        max_age=60 * 60,
         httponly=True,
         secure=True,
         samesite="strict",

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Login from "./pages/login";
 import LandingPage from "./pages/landing";
 import SessionPage from "./pages/session";
 import Support from "./pages/support";
@@ -12,6 +13,8 @@ export default function App() {
       <BrowserRouter>
         <ScrollToTop />
         <Routes>
+          <Route path="/login" element={<Login />} />
+
           <Route path="/" element={<LandingPage />} />
 
           <Route path="/sessions/:integration/*" element={<SessionPage />} />

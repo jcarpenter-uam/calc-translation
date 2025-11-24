@@ -9,6 +9,7 @@
 - Leave the door open for SSO URLs in a future update
 - Test integration option on frontend should only show up and work for admins
 - Redo UX
+- Reduce ENV vars when possible
 
 # Once finished
 

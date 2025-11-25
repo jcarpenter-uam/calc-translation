@@ -2,7 +2,6 @@ import logging
 
 import core.database as database
 from core.authentication import get_current_user_payload
-from core.config import settings
 from core.database import SQL_GET_USER_BY_ID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -30,9 +29,9 @@ def create_user_router() -> APIRouter:
         Get the profile for the currently authenticated user
         based on their 'app_auth_token' cookie.
         """
-        user_id = payload.get("resource")
+        user_id = payload.get("sub")
         if not user_id:
-            logger.warning("Auth token missing 'resource' (user_id) claim.")
+            logger.warning("Auth token missing 'sub' (user_id) claim.")
             raise HTTPException(status_code=401, detail="Invalid auth token payload")
 
         if not database.DB_POOL:

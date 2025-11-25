@@ -163,11 +163,11 @@ async def handle_callback(request: Request) -> RedirectResponse:
 
     claims = token_response.get("id_token_claims", {})
 
-    session_id = claims.get("oid")
+    user_id = claims.get("oid")
     user_email = claims.get("preferred_username")
     user_name = claims.get("name")
 
-    if not session_id:
+    if not user_id:
         logger.error("Could not find 'oid' (Object ID) in token claims.")
         raise HTTPException(status_code=400, detail="Could not identify user.")
 
@@ -177,12 +177,12 @@ async def handle_callback(request: Request) -> RedirectResponse:
 
     try:
         async with database.DB_POOL.acquire() as conn:
-            await conn.execute(SQL_UPSERT_USER, session_id, user_name, user_email)
-        logger.info(f"Upserted user: {user_email} (OID: {session_id})")
+            await conn.execute(SQL_UPSERT_USER, user_id, user_name, user_email)
+        logger.info(f"Upserted user: {user_email} (OID: {user_id})")
     except Exception as e:
-        logger.error(f"Failed to upsert user {session_id}: {e}", exc_info=True)
+        logger.error(f"Failed to upsert user {user_id}: {e}", exc_info=True)
 
-    app_token = generate_jwt_token(session_id=session_id)
+    app_token = generate_jwt_token(user_id=user_id, session_id=None)
 
     redirect_response = RedirectResponse(url="/")
 
@@ -191,7 +191,7 @@ async def handle_callback(request: Request) -> RedirectResponse:
         value=app_token,
         max_age=60 * 60,
         httponly=True,
-        secure=False,
+        secure=False,  # TODO: Make dynamic for DEV/PROD enviornments
         samesite="lax",
     )
 

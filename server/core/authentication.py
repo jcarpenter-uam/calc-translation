@@ -22,14 +22,12 @@ class TokenPayload(BaseModel):
     aud: str
 
 
-def generate_jwt_token(session_id: str) -> str:
+def generate_jwt_token(user_id: str, session_id: str | None = None) -> str:
     """
     Generates a short-lived JWT for a viewing session. (HS256)
+    - If session_id is None, it's a main user auth token.
+    - If session_id is provided, it's a session auth token.
     """
-    if not settings.JWT_SECRET_KEY:
-        logger.error("FATAL: JWT_SECRET_KEY is not configured on the server!")
-        raise HTTPException(status_code=500, detail="Server configuration error")
-
     now = datetime.now(timezone.utc)
     expires_delta = timedelta(hours=1)
 
@@ -37,7 +35,7 @@ def generate_jwt_token(session_id: str) -> str:
         "iss": "calc-translation-service",
         "iat": now,
         "exp": now + expires_delta,
-        "sub": "anonymous",  # TODO: Change per user with Entra
+        "sub": user_id,
         "resource": session_id,
         "aud": "web-desktop-client",
     }
@@ -66,12 +64,6 @@ def get_current_user_payload(
     Validates a client-to-server token from the web browser cookie.
     Uses HS256 with the client secret.
     """
-    if not settings.JWT_SECRET_KEY:
-        logger.error("FATAL: JWT_SECRET_KEY is not configured on the server!")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server configuration error",
-        )
     try:
         payload = jwt.decode(
             token,
@@ -110,11 +102,6 @@ def validate_client_token(token: str = Query()) -> dict:
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason="Missing auth token"
         )
-    if not settings.JWT_SECRET_KEY:
-        logger.error("FATAL: JWT_SECRET_KEY is not configured on the server!")
-        raise WebSocketException(
-            code=status.WS_1011_INTERNAL_ERROR, reason="Server configuration error"
-        )
     try:
         payload = jwt.decode(
             token,
@@ -123,6 +110,12 @@ def validate_client_token(token: str = Query()) -> dict:
             issuer="calc-translation-service",
             audience="web-desktop-client",
         )
+        if not payload.get("resource"):
+            logger.warning("Auth failed: WebSocket token is missing 'resource' claim.")
+            raise WebSocketException(
+                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid session token"
+            )
+
         return payload
     except jwt.ExpiredSignatureError:
         with log_step("SESSION"):

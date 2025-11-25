@@ -209,11 +209,12 @@ function handleUrlValidation(payload, res) {
  * Generates a short-lived JWT
  * @returns {string} - A signed JWT valid for 5 minutes
  */
-function generateAuthToken() {
+function generateAuthToken(host_id) {
   const payload = {
     iss: "zoom-rtms-service",
     iat: Math.floor(Date.now() / 1000),
     aud: "python-backend",
+    zoom_host_id: host_id,
   };
 
   return jwt.sign(payload, ZM_PRIVATE_KEY, {
@@ -227,6 +228,7 @@ function generateAuthToken() {
  */
 function handleRtmsStarted(payload, streamId) {
   const meeting_uuid = payload?.meeting_uuid;
+  const host_id = payload?.operator_id;
 
   if (!streamId) {
     logger.error("Cannot start RTMS: streamId is missing from payload.");
@@ -234,6 +236,10 @@ function handleRtmsStarted(payload, streamId) {
   }
   if (!meeting_uuid) {
     logger.error("Cannot start RTMS: meeting_uuid is missing from payload.");
+    return;
+  }
+  if (!host_id) {
+    logger.error("Cannot start RTMS: host_id is missing from payload.");
     return;
   }
 
@@ -273,7 +279,7 @@ function handleRtmsStarted(payload, streamId) {
       })...`,
     );
 
-    const token = generateAuthToken();
+    const token = generateAuthToken(host_id);
     const authHeader = {
       Authorization: `Bearer ${token}`,
     };
@@ -400,10 +406,11 @@ function handleRtmsStopped(streamId) {
 
 const app = express();
 
-app.use((req, res, next) => {
-  logger.info({ method: req.method, path: req.path }, "Incoming request");
-  next();
-});
+// NOTE: This is for logging request when needed
+// app.use((req, res, next) => {
+//   logger.info({ method: req.method, path: req.path }, "Incoming request");
+//   next();
+// });
 
 app.use(
   "/",

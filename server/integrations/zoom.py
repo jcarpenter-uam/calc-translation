@@ -8,7 +8,6 @@ import httpx
 from core import database
 from core.config import settings
 from core.database import (
-    SQL_GET_INTEGRATION,
     SQL_GET_MEETING_AUTH_BY_READABLE_ID,
     SQL_GET_MEETING_BY_JOIN_URL,
     SQL_INSERT_MEETING,
@@ -66,6 +65,14 @@ async def exchange_code_for_token(code: str, redirect_uri: str, user_id: str):
         response.raise_for_status()
         token_data = response.json()
 
+        async with httpx.AsyncClient() as client:
+            user_resp = await client.get(
+                "https://api.zoom.us/v2/users/me",
+                headers={"Authorization": f"Bearer {token_data['access_token']}"},
+            )
+            user_resp.raise_for_status()
+            zoom_user_id = user_resp.json().get("id")
+
         expires_at = int(time.time()) + token_data["expires_in"]
 
         async with database.DB_POOL.acquire() as conn:
@@ -74,6 +81,7 @@ async def exchange_code_for_token(code: str, redirect_uri: str, user_id: str):
                     SQL_UPSERT_INTEGRATION,
                     user_id,
                     "zoom",
+                    zoom_user_id,
                     token_data["access_token"],
                     token_data["refresh_token"],
                     expires_at,
@@ -101,90 +109,79 @@ async def exchange_code_for_token(code: str, redirect_uri: str, user_id: str):
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
-async def get_valid_access_token(user_id: str) -> tuple[str, int]:
+async def _ensure_active_token(integration_row) -> tuple[str, int]:
     """
-    Gets a valid access token from the DB for a specific user,
-    refreshing it if necessary.
-
-    Returns:
-        tuple[str, int]: (access_token, integration_id)
+    Takes a DB row (id, access_token, refresh_token, expires_at, user_id),
+    checks expiry, refreshes if needed, and returns valid (access_token, integration_id).
     """
-    try:
-        integration_row = None
-        async with database.DB_POOL.acquire() as conn:
-            integration_row = await conn.fetchrow(SQL_GET_INTEGRATION, user_id, "zoom")
+    integration_id, access_token, refresh_token, expires_at, user_id = integration_row
+    expires_at = expires_at or 0
 
-        if not integration_row:
-            with log_step("ZOOM"):
-                logger.error(f"No Zoom integration found for user {user_id}.")
-            raise HTTPException(
-                status_code=404,
-                detail="Zoom integration not found. Please (re)install the app.",
-            )
-
-        integration_id, access_token, refresh_token, expires_at = integration_row
-        expires_at = expires_at or 0
-
-        if time.time() > (expires_at - 60):
-            with log_step("ZOOM"):
-                logger.info(f"Zoom token for user {user_id} expired. Refreshing...")
-
-            if not refresh_token:
-                with log_step("ZOOM"):
-                    logger.error(
-                        f"No refresh token found for user {user_id}. App needs to be re-installed."
-                    )
-                raise HTTPException(
-                    status_code=500,
-                    detail="Zoom app not configured. Please (re)install.",
-                )
-
-            creds = f"{ZM_RTMS_CLIENT}:{ZM_RTMS_SECRET}"
-            basic_auth_header = f"Basic {base64.b64encode(creds.encode()).decode()}"
-            token_url = "https://zoom.us/oauth/token"
-            headers = {
-                "Authorization": basic_auth_header,
-                "Content-Type": "application/x-www-form-urlencoded",
-            }
-            data = {
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
-            }
-
-            async with httpx.AsyncClient() as client:
-                response = await client.post(token_url, headers=headers, data=data)
-
-            response.raise_for_status()
-            new_token_data = response.json()
-
-            new_access_token = new_token_data["access_token"]
-            new_refresh_token = new_token_data["refresh_token"]
-            new_expires_at = int(time.time()) + new_token_data["expires_in"]
-
-            async with database.DB_POOL.acquire() as conn:
-                async with conn.transaction():
-                    await conn.execute(
-                        SQL_UPSERT_INTEGRATION,
-                        user_id,
-                        "zoom",
-                        new_access_token,
-                        new_refresh_token,
-                        new_expires_at,
-                    )
-
-            with log_step("ZOOM"):
-                logger.info(
-                    f"Successfully refreshed and stored new Zoom tokens for user {user_id}."
-                )
-
-            return new_access_token, integration_id
-
+    if time.time() < (expires_at - 60):
         return access_token, integration_id
 
+    with log_step("ZOOM"):
+        logger.info(
+            f"Zoom token for integration {integration_id} (User {user_id}) expired. Refreshing..."
+        )
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=500, detail="Zoom refresh token missing. Please reinstall app."
+        )
+
+    creds = f"{ZM_RTMS_CLIENT}:{ZM_RTMS_SECRET}"
+    basic_auth_header = f"Basic {base64.b64encode(creds.encode()).decode()}"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://zoom.us/oauth/token",
+                headers={
+                    "Authorization": basic_auth_header,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            )
+
+        response.raise_for_status()
+        new_data = response.json()
+
+        new_access_token = new_data["access_token"]
+        new_refresh_token = new_data.get("refresh_token", refresh_token)
+        new_expires_at = int(time.time()) + new_data["expires_in"]
+
+        async with database.DB_POOL.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE INTEGRATIONS 
+                SET access_token = $1, refresh_token = $2, expires_at = $3
+                WHERE id = $4
+                """,
+                new_access_token,
+                new_refresh_token,
+                new_expires_at,
+                integration_id,
+            )
+
+        with log_step("ZOOM"):
+            logger.info(
+                f"Successfully refreshed and stored new Zoom tokens for integration {integration_id}."
+            )
+
+        return new_access_token, integration_id
+
+    except httpx.HTTPStatusError as e:
+        with log_step("ZOOM"):
+            logger.error(
+                f"HTTP error refreshing Zoom token for integration {integration_id}: {e.response.text}",
+                exc_info=True,
+            )
+        raise HTTPException(status_code=500, detail="Failed to refresh Zoom token.")
     except Exception as e:
         with log_step("ZOOM"):
             logger.error(
-                f"Failed to get/refresh Zoom token for user {user_id}: {e}",
+                f"Unexpected error refreshing Zoom token for integration {integration_id}: {e}",
                 exc_info=True,
             )
         raise HTTPException(
@@ -193,7 +190,58 @@ async def get_valid_access_token(user_id: str) -> tuple[str, int]:
         )
 
 
-async def get_meeting_data(meeting_uuid: str, user_id: str) -> str:
+async def get_access_token_by_zoom_id(zoom_user_id: str) -> tuple[str, int]:
+    """
+    Finds an integration record using the Zoom User ID (host_id)
+    and returns a valid access token, refreshing if needed.
+    """
+    SQL_GET_BY_PLATFORM_ID = """
+        SELECT id, access_token, refresh_token, expires_at, user_id
+        FROM INTEGRATIONS
+        WHERE platform = 'zoom' AND platform_user_id = $1
+    """
+    async with database.DB_POOL.acquire() as conn:
+        row = await conn.fetchrow(SQL_GET_BY_PLATFORM_ID, zoom_user_id)
+
+    if not row:
+        with log_step("ZOOM"):
+            logger.error(f"No integration found for Zoom User ID {zoom_user_id}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No integration found for Zoom User ID {zoom_user_id}",
+        )
+
+    return await _ensure_active_token(row)
+
+
+async def get_valid_access_token(user_id: str) -> tuple[str, int]:
+    """
+    Gets a valid access token from the DB for a specific internal user_id,
+    refreshing it if necessary.
+
+    Returns:
+        tuple[str, int]: (access_token, integration_id)
+    """
+    async with database.DB_POOL.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, access_token, refresh_token, expires_at, user_id FROM INTEGRATIONS WHERE user_id = $1 AND platform = 'zoom'",
+            user_id,
+        )
+
+    if not row:
+        with log_step("ZOOM"):
+            logger.error(f"No Zoom integration found for user {user_id}.")
+        raise HTTPException(
+            status_code=404,
+            detail="Zoom integration not found for this user. Please (re)install the app.",
+        )
+
+    return await _ensure_active_token(row)
+
+
+async def get_meeting_data(
+    meeting_uuid: str, user_id: str = None, zoom_host_id: str = None
+) -> str:
     """
     Queries the Zoom API for meeting data using the meeting UUID
     """
@@ -201,13 +249,23 @@ async def get_meeting_data(meeting_uuid: str, user_id: str) -> str:
     encoded_uuid = urllib.parse.quote(first_pass, safe="")
 
     try:
-        access_token, integration_id = await get_valid_access_token(user_id)
+        if zoom_host_id:
+            (
+                access_token,
+                integration_id,
+            ) = await get_access_token_by_zoom_id(zoom_host_id)
+        elif user_id:
+            access_token, integration_id = await get_valid_access_token(user_id)
+        else:
+            raise Exception("Must provide user_id or zoom_host_id")
 
         meeting_url = f"https://api.zoom.us/v2/meetings/{encoded_uuid}"
         headers = {"Authorization": f"Bearer {access_token}"}
 
         with log_step("ZOOM"):
-            logger.info(f"Calling Zoom API: GET {meeting_url} for user {user_id}")
+            logger.info(
+                f"Calling Zoom API: GET {meeting_url} for integration {integration_id}"
+            )
 
         async with httpx.AsyncClient() as client:
             response = await client.get(meeting_url, headers=headers)
@@ -298,7 +356,7 @@ async def authenticate_zoom_session(request: ZoomAuthRequest) -> str:
                         f"Auth failed: Meeting not found for join_url: {request.join_url}"
                     )
                 raise HTTPException(
-                    status_code=4404,
+                    status_code=404,
                     detail="Meeting not found for the provided Join URL.",
                 )
 

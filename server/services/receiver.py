@@ -58,14 +58,11 @@ async def handle_receiver_session(
                 logger.warning(
                     f"Duplicate session attempt for {session_id}. Rejecting connection."
                 )
-            await websocket.accept()
             await websocket.close(
                 code=1008,
                 reason="A transcription session is already active for this meeting.",
             )
             return
-
-        await websocket.accept()
 
         session_log_handler = add_session_log_handler(session_id, integration)
         with log_step("SESSION"):

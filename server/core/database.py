@@ -68,12 +68,17 @@ async def init_db():
                             id SERIAL PRIMARY KEY, -- integration_id
                             user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
                             platform TEXT,
+                            platform_user_id TEXT,
                             access_token TEXT,
                             refresh_token TEXT,
                             expires_at BIGINT, -- Use BIGINT for 64-bit timestamps
                             UNIQUE(user_id, platform)
                         )
                         """
+                    )
+                    # Index for fast lookups by Zoom ID
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_integrations_platform_id ON INTEGRATIONS(platform, platform_user_id);"
                     )
                     # Create MEETINGS table
                     await conn.execute(
@@ -172,9 +177,10 @@ DELETE FROM TENANTS WHERE tenant_id = $1;
 
 # --- INTEGRATIONS ---
 SQL_UPSERT_INTEGRATION = """
-INSERT INTO INTEGRATIONS (user_id, platform, access_token, refresh_token, expires_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO INTEGRATIONS (user_id, platform, platform_user_id, access_token, refresh_token, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT(user_id, platform) DO UPDATE SET
+    platform_user_id = excluded.platform_user_id,
     access_token = excluded.access_token,
     refresh_token = excluded.refresh_token,
     expires_at = excluded.expires_at;

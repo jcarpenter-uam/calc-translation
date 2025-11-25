@@ -1,6 +1,7 @@
 # NOTE: This name is slighty misleading as our app does translation and transcription, might change naming later for a better term
 import logging
 
+from core.logging_setup import log_step
 from core.security import validate_server_token
 from fastapi import APIRouter, Depends, HTTPException, Path, WebSocket
 from integrations.zoom import get_meeting_data
@@ -17,11 +18,7 @@ def create_transcribe_router(viewer_manager):
         prefix="/ws/transcribe",
     )
 
-    # BUG: Chicken and egg problem
-    # This is attempting to fetch data from zoom and save to DB, but how can I link it back to a given user?
-    @router.websocket(
-        "/{integration}/{session_id:path}"
-    )  # Dont know if im a fan of this method
+    @router.websocket("/{integration}/{session_id:path}")
     async def websocket_transcribe_endpoint(
         websocket: WebSocket,
         integration: str = Path(),
@@ -29,43 +26,62 @@ def create_transcribe_router(viewer_manager):
         payload: dict = Depends(validate_server_token),
     ):
         """
-        Handles the WebSocket connection for per transcription session.
+        Handles the WebSocket connection for a transcription session.
         """
-        if integration == "zoom":
-            user_id = payload.get("sub")
+        await websocket.accept()
 
-            if not user_id:
-                logger.error("WebSocket auth token missing 'sub' (user_id) claim.")
-                await websocket.accept()
-                await websocket.close(code=1008, reason="Invalid authentication token.")
-                return
+        try:
+            if integration == "zoom":
+                zoom_host_id = payload.get("zoom_host_id")
+                user_id = payload.get("sub")
 
-            try:
-                await get_meeting_data(meeting_uuid=session_id, user_id=user_id)
+                with log_step("WS_CONNECT"):
+                    if zoom_host_id:
+                        logger.info(
+                            f"Proactively fetching Zoom data using zoom_host_id: {zoom_host_id}"
+                        )
+                        await get_meeting_data(
+                            meeting_uuid=session_id, zoom_host_id=zoom_host_id
+                        )
 
-            except HTTPException as e:
-                logger.error(
-                    f"Failed to get Zoom meeting data for {session_id}: {e.detail}",
-                    exc_info=True,
-                )
-                await websocket.accept()
-                await websocket.close(code=1011, reason=f"Zoom Error: {e.detail}")
-                return
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error fetching Zoom data for {session_id}: {e}",
-                    exc_info=True,
-                )
-                await websocket.accept()
-                await websocket.close(
-                    code=1011, reason="Server error: Could not prepare Zoom session."
-                )
-                return
-        await handle_receiver_session(
-            websocket=websocket,
-            integration=integration,
-            session_id=session_id,
-            viewer_manager=viewer_manager,
-        )
+                    elif user_id:
+                        logger.info(
+                            f"Proactively fetching Zoom data using user_id: {user_id}"
+                        )
+                        await get_meeting_data(meeting_uuid=session_id, user_id=user_id)
+
+                    else:
+                        logger.error(
+                            "Zoom connection rejected: Token has neither 'zoom_host_id' nor 'sub' (user_id)."
+                        )
+                        await websocket.close(
+                            code=1008,
+                            reason="Invalid authentication: missing required identifiers.",
+                        )
+                        return
+
+            await handle_receiver_session(
+                websocket=websocket,
+                integration=integration,
+                session_id=session_id,
+                viewer_manager=viewer_manager,
+            )
+
+        except HTTPException as e:
+            logger.error(
+                f"Failed to get Zoom meeting data for {session_id}: {e.detail}",
+                exc_info=True,
+            )
+            await websocket.close(code=1011, reason=f"Zoom Error: {e.detail}")
+            return
+        except Exception as e:
+            logger.error(
+                f"Unexpected error during WebSocket setup for {session_id}: {e}",
+                exc_info=True,
+            )
+            await websocket.close(
+                code=1011, reason="Server error: Could not prepare session."
+            )
+            return
 
     return router

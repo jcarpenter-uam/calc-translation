@@ -4,11 +4,7 @@ import Header from "../components/header";
 import UserAvatar from "../components/user.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
-import {
-  IntegrationCard,
-  ZoomForm,
-  TestForm,
-} from "../components/integration-card.jsx";
+import { IntegrationCard, ZoomForm } from "../components/integration-card.jsx";
 import Footer from "../components/footer.jsx";
 
 import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
@@ -71,59 +67,9 @@ export default function LandingPage() {
     }
   };
 
-  const handleTestSubmit = async ({ sessionId }) => {
-    setError(null);
-
-    if (!sessionId) {
-      setError("Please provide a Session ID.");
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/auth/test", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          session_id: sessionId,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.detail ||
-            "Test authentication failed. Please check your session ID.",
-        );
-      }
-
-      const data = await response.json();
-      console.log("Server response:", data);
-      const returnedSessionId = data.meetinguuid;
-      const token = data.token;
-
-      if (!returnedSessionId) {
-        throw new Error("Server did not return a session ID.");
-      }
-
-      if (!token) {
-        throw new Error("Server did not return an auth token.");
-      }
-
-      handleJoin("test", returnedSessionId, token);
-    } catch (err) {
-      console.error("Test authentication failed:", err);
-      setError(err.message);
-    }
-  };
-
   const renderForm = () => {
     if (integration === "zoom") {
       return <ZoomForm onSubmit={handleZoomSubmit} />;
-    }
-    if (integration === "test") {
-      return <TestForm onSubmit={handleTestSubmit} />;
     }
     return null;
   };
@@ -147,13 +93,6 @@ export default function LandingPage() {
                 id="zoom"
                 title="Zoom"
                 icon={<BiLogoZoom className="h-7 w-7 text-blue-500" />}
-                selected={integration}
-                onSelect={setIntegration}
-              />
-              <IntegrationCard
-                id="test"
-                title="Test"
-                icon={<BiSolidFlask className="h-7 w-7 text-green-500" />}
                 selected={integration}
                 onSelect={setIntegration}
               />

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/header";
+import UserAvatar from "../components/user.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
 import {
@@ -130,6 +131,7 @@ export default function LandingPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <Header>
+        <UserAvatar />
         <ThemeToggle />
         <LanguageToggle />
       </Header>

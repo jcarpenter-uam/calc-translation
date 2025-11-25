@@ -1,4 +1,8 @@
 import React, { useState } from "react";
+import Header from "../components/header";
+import Footer from "../components/footer";
+import ThemeToggle from "../components/theme-toggle.jsx";
+import LanguageToggle from "../components/language-toggle.jsx";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -38,61 +42,60 @@ export default function Login() {
   };
 
   return (
-    <div
-      style={{
-        maxWidth: "400px",
-        margin: "50px auto",
-        padding: "20px",
-        border: "1px solid #ccc",
-        borderRadius: "8px",
-      }}
-    >
-      <h1>Login</h1>
-      <p>
-        Please enter your work email address to be redirected to your company's
-        login page.
-      </p>
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: "15px" }}>
-          <label
-            htmlFor="email"
-            style={{ display: "block", marginBottom: "5px" }}
-          >
-            Email Address
-          </label>
-          <input
-            type="email"
-            id="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="user@your-company.com"
-            required
-            style={{ width: "100%", padding: "8px", boxSizing: "border-box" }}
-          />
-        </div>
+    <div className="flex flex-col min-h-screen">
+      <Header>
+        <ThemeToggle />
+        <LanguageToggle />
+      </Header>
 
-        {error && (
-          <div style={{ color: "red", marginBottom: "15px" }}>
-            <strong>Error:</strong> {error}
+      <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="max-w-md w-full">
+          <div className="bg-white dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 shadow-lg rounded-lg p-6 sm:p-8">
+            <h1 className="text-2xl font-bold text-center text-zinc-900 dark:text-zinc-100 mb-2">
+              Login
+            </h1>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 text-center mb-6">
+              Enter your work email to be redirected to your company's login
+              page.
+            </p>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+                >
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="user@your-company.com"
+                  required
+                  className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:border-blue-500"
+                />
+              </div>
+
+              {error && (
+                <div className="text-red-600 dark:text-red-400 text-sm font-medium text-center">
+                  <strong>Error:</strong> {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isLoading ? "Redirecting..." : "Continue"}
+              </button>
+            </form>
           </div>
-        )}
+        </div>
+      </main>
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          style={{
-            width: "100%",
-            padding: "10px",
-            background: "#007bff",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
-        >
-          {isLoading ? "Redirecting..." : "Continue"}
-        </button>
-      </form>
+      <Footer />
     </div>
   );
 }

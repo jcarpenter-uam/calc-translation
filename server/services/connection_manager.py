@@ -2,7 +2,7 @@ import asyncio
 import logging
 import threading
 from datetime import datetime
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List
 
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket

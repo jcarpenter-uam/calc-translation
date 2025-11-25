@@ -17,6 +17,8 @@ def create_transcribe_router(viewer_manager):
         prefix="/ws/transcribe",
     )
 
+    # BUG: Chicken and egg problem
+    # This is attempting to fetch data from zoom and save to DB, but how can I link it back to a given user?
     @router.websocket(
         "/{integration}/{session_id:path}"
     )  # Dont know if im a fan of this method
@@ -30,10 +32,16 @@ def create_transcribe_router(viewer_manager):
         Handles the WebSocket connection for per transcription session.
         """
         if integration == "zoom":
-            test_user_id = "TEST_USER_ID"  # NOTE: Temp until EntraID is integrated
+            user_id = payload.get("sub")
+
+            if not user_id:
+                logger.error("WebSocket auth token missing 'sub' (user_id) claim.")
+                await websocket.accept()
+                await websocket.close(code=1008, reason="Invalid authentication token.")
+                return
 
             try:
-                await get_meeting_data(meeting_uuid=session_id, user_id=test_user_id)
+                await get_meeting_data(meeting_uuid=session_id, user_id=user_id)
 
             except HTTPException as e:
                 logger.error(

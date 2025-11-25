@@ -1,6 +1,6 @@
 import logging
 
-from auth import entra
+from core import entra
 from core.config import settings
 from core.logging_setup import log_step
 from core.security import generate_jwt_token

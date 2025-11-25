@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "../context/auth"; // Import the hook
+import { useAuth } from "../context/auth";
 
 /**
  * Generates initials from a full name.

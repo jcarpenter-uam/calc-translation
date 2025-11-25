@@ -7,7 +7,7 @@ import LanguageToggle from "../components/language-toggle.jsx";
 import { IntegrationCard, ZoomForm } from "../components/integration-card.jsx";
 import Footer from "../components/footer.jsx";
 
-import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
+import { BiLogoZoom } from "react-icons/bi";
 
 export default function LandingPage() {
   const [integration, setIntegration] = useState("zoom");

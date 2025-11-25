@@ -78,7 +78,6 @@ export default function Transcript({
 
   return (
     <div className="grid grid-cols-[9rem_1fr] gap-x-3 mb-6 pb-6 border-b border-zinc-200 dark:border-zinc-800 last:border-b-0 last:mb-0 last:pb-0">
-      {/* Speaker Name and Status Icon*/}
       <div className="flex items-center justify-end gap-2">
         <div className="font-semibold text-zinc-900 dark:text-zinc-100 text-right text-base sm:text-lg">
           {speaker}:
@@ -86,9 +85,7 @@ export default function Transcript({
         <CorrectionStatusIndicator status={correctionStatus} />
       </div>
 
-      {/* Text Group */}
       <div className="col-start-2">
-        {/* If 'original' exists, display the old text faded and inline */}
         {original && (
           <div className="mb-1 opacity-70">
             <p className="m-0 leading-relaxed text-sm font-medium text-zinc-500 dark:text-zinc-500 line-through">
@@ -100,7 +97,6 @@ export default function Transcript({
           </div>
         )}
 
-        {/* Display the current or corrected text */}
         <p
           ref={topTextRef}
           className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}

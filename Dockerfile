@@ -35,7 +35,6 @@ COPY --from=builder /app/web/dist ./web/dist
 COPY server/main.py ./
 COPY server/core ./core/
 COPY server/api ./api/
-COPY server/auth ./auth/
 COPY server/integrations ./integrations/
 COPY server/services ./services/
 RUN mkdir -p /app/logs

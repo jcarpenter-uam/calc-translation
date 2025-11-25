@@ -4,14 +4,13 @@ import uuid
 
 import core.database as database
 import msal
-from auth.encryption import decrypt
+from core.authentication import decrypt, generate_jwt_token
 from core.config import settings
 from core.database import (
     SQL_GET_TENANT_AUTH_BY_ID,
     SQL_GET_TENANT_BY_DOMAIN,
     SQL_UPSERT_USER,
 )
-from core.security import generate_jwt_token
 from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel

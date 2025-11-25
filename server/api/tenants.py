@@ -3,7 +3,7 @@ from typing import List, Optional
 
 import asyncpg
 import core.database as database
-from auth.encryption import encrypt
+from core.authentication import encrypt
 from core.database import (
     SQL_DELETE_TENANT_BY_ID,
     SQL_GET_ALL_TENANTS,

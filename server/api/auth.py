@@ -1,9 +1,8 @@
 import logging
 
-from core import entra
+from core.authentication import generate_jwt_token
 from core.config import settings
 from core.logging_setup import log_step
-from core.security import generate_jwt_token
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from integrations.test import TestAuthRequest, authenticate_test_session
@@ -14,6 +13,8 @@ from integrations.zoom import (
     exchange_code_for_token,
 )
 from pydantic import BaseModel
+
+from integrations import entra
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,9 @@
 import logging
 
 import core.database as database
+from core.authentication import get_current_user_payload
 from core.config import settings
 from core.database import SQL_GET_USER_BY_ID
-from core.security import get_current_user_payload
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 

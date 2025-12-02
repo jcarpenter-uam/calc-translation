@@ -93,7 +93,6 @@ def create_auth_router() -> APIRouter:
                 status_code=500, detail="An internal server error occurred."
             )
 
-    # TODO: If 401, redirect to "/login"
     @router.get("/zoom/callback")
     async def handle_zoom_callback(
         request: Request,

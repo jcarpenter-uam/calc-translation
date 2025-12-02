@@ -8,6 +8,7 @@ import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
 import ScrollToTop from "./util/scroll-to-top";
 import AdminPage from "./pages/admin";
+import NotFound from "./pages/not-found";
 
 export default function App() {
   return (
@@ -31,6 +32,8 @@ export default function App() {
           <Route element={<ProtectedRoute adminOnly={true} />}>
             <Route path="/admin" element={<AdminPage />} />
           </Route>
+
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </div>

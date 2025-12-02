@@ -7,7 +7,7 @@ export default function ProtectedRoute({ adminOnly = false }) {
   const location = useLocation();
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return null;
   }
 
   if (!user) {

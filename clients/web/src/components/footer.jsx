@@ -12,12 +12,6 @@ export default function Footer() {
 
           <nav className="flex gap-6 order-1 sm:order-2">
             <Link
-              to="/"
-              className="text-sm hover:underline text-gray-600 dark:text-gray-300"
-            >
-              Home
-            </Link>
-            <Link
               to="/support"
               className="text-sm hover:underline text-gray-600 dark:text-gray-300"
             >

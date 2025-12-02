@@ -95,6 +95,24 @@ export default function UserAvatar() {
           "
         >
           <ul className="py-1">
+            <li>
+              <a
+                href="/"
+                className="
+                  block 
+                  px-4 py-2 
+                  text-sm 
+                  text-zinc-700 
+                  dark:text-zinc-200 
+                  hover:bg-zinc-100 
+                  dark:hover:bg-zinc-700
+                  transition-colors
+                "
+              >
+                Home
+              </a>
+            </li>
+
             {is_admin && (
               <li>
                 <a

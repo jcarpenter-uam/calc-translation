@@ -21,7 +21,8 @@ from api.transcribe import create_transcribe_router
 from api.users import create_user_router
 from api.viewing import create_viewer_router
 from core import database
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from services.cache import TranscriptCache
 from services.connection_manager import ConnectionManager
@@ -64,4 +65,28 @@ app.include_router(user_router)
 auth_router = create_auth_router()
 app.include_router(auth_router)
 
-app.mount("/", StaticFiles(directory="web/dist", html=True), name="web")
+app.mount("/assets", StaticFiles(directory="web/dist/assets"), name="assets")
+
+try:
+    app.mount(
+        "/favicon.ico",
+        StaticFiles(directory="web/dist", html=True, check_dir=False),
+        name="favicon",
+    )
+    app.mount(
+        "/manifest.json",
+        StaticFiles(directory="web/dist", html=True, check_dir=False),
+        name="manifest",
+    )
+except RuntimeError:
+    logger.warning("Static root files (favicon.ico, manifest.json) not found.")
+
+
+@app.get("/{full_path:path}", response_class=FileResponse)
+async def serve_spa(request: Request, full_path: str):
+    """
+    Serve the single-page application's index.html for any path
+    not handled by API routes or static file mounts.
+    """
+    logger.info(f"Serving SPA for path: {full_path}")
+    return FileResponse("web/dist/index.html")

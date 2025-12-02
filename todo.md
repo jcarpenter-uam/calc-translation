@@ -1,9 +1,9 @@
 # Before this branch can be merged
 
-- Fix backend intepreting frontend routes
 - Centralize SQL queries
 - Redo UX
 - Reduce ENV vars when possible, reduce duplicate checks
+- Clean up general logs
 
 # Once finished
 

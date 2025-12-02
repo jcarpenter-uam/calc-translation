@@ -191,7 +191,7 @@ async def handle_callback(request: Request) -> RedirectResponse:
         value=app_token,
         max_age=60 * 60,
         httponly=True,
-        secure=False,  # TODO: Make dynamic for DEV/PROD enviornments
+        secure=settings.APP_BASE_URL.startswith("https"),
         samesite="lax",
     )
 

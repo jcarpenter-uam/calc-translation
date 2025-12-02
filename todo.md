@@ -1,6 +1,6 @@
 # Before this branch can be merged
 
-- Backend redirects to frontend
+- Fix backend intepreting frontend routes
 - Centralize SQL queries
 - Redo UX
 - Reduce ENV vars when possible, reduce duplicate checks

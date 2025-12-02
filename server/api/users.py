@@ -1,9 +1,15 @@
 import logging
+from typing import List
 
 import core.database as database
 from core.authentication import get_current_user_payload
-from core.database import SQL_GET_USER_BY_ID
-from fastapi import APIRouter, Depends, HTTPException
+from core.database import (
+    SQL_DELETE_USER_BY_ID,
+    SQL_GET_ALL_USERS,
+    SQL_GET_USER_BY_ID,
+    SQL_UPSERT_USER,
+)
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -11,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 class UserResponse(BaseModel):
     id: str
+    name: str | None
+    email: str | None
+
+
+class UserUpdate(BaseModel):
     name: str | None
     email: str | None
 
@@ -45,5 +56,78 @@ def create_user_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="User not found.")
 
         return UserResponse(**dict(user_row))
+
+    # TODO: REQUIRE AUTH
+    @router.get("/", response_model=List[UserResponse])
+    async def get_all_users():
+        """
+        Get a list of all users.
+        """
+        if not database.DB_POOL:
+            raise HTTPException(status_code=503, detail="Database not initialized.")
+
+        async with database.DB_POOL.acquire() as conn:
+            user_rows = await conn.fetch(SQL_GET_ALL_USERS)
+
+        return [UserResponse(**dict(row)) for row in user_rows]
+
+    # TODO: REQUIRE AUTH
+    @router.get("/{user_id}", response_model=UserResponse)
+    async def get_user_by_id(
+        user_id: str,
+    ):
+        """
+        Get a specific user by their ID.
+        """
+        if not database.DB_POOL:
+            raise HTTPException(status_code=503, detail="Database not initialized.")
+
+        async with database.DB_POOL.acquire() as conn:
+            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        return UserResponse(**dict(user_row))
+
+    # TODO: REQUIRE AUTH
+    @router.put("/{user_id}", response_model=UserResponse)
+    async def update_user(
+        user_id: str,
+        user_update: UserUpdate,
+    ):
+        """
+        Update a user's details by their ID.
+        Uses UPSERT logic: will create if not present, or update if present.
+        """
+        if not database.DB_POOL:
+            raise HTTPException(status_code=503, detail="Database not initialized.")
+
+        async with database.DB_POOL.acquire() as conn:
+            await conn.execute(
+                SQL_UPSERT_USER, user_id, user_update.name, user_update.email
+            )
+
+        return UserResponse(id=user_id, **user_update.dict())
+
+    # TODO: REQUIRE AUTH
+    @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_user(
+        user_id: str,
+    ):
+        """
+        Delete a user by their ID.
+        """
+        if not database.DB_POOL:
+            raise HTTPException(status_code=503, detail="Database not initialized.")
+
+        async with database.DB_POOL.acquire() as conn:
+            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+            if not user_row:
+                raise HTTPException(status_code=44, detail="User not found.")
+
+            await conn.execute(SQL_DELETE_USER_BY_ID, user_id)
+
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router

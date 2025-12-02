@@ -121,7 +121,12 @@ ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     email = excluded.email;
 """
+
 SQL_GET_USER_BY_ID = "SELECT * FROM USERS WHERE id = $1;"
+
+SQL_GET_ALL_USERS = "SELECT * FROM USERS;"
+
+SQL_DELETE_USER_BY_ID = "DELETE FROM USERS WHERE id = $1;"
 
 # TENANTS
 SQL_GET_TENANT_AUTH_BY_ID = """

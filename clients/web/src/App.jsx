@@ -7,6 +7,7 @@ import Support from "./pages/support";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
 import ScrollToTop from "./util/scroll-to-top";
+import AdminPage from "./pages/admin";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<LandingPage />} />
             <Route path="/sessions/:integration/*" element={<SessionPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

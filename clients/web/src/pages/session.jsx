@@ -2,6 +2,7 @@ import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
 import Header from "../components/header";
+import UserAvatar from "../components/user.jsx";
 import Transcript from "../components/transcript.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
@@ -62,6 +63,7 @@ export default function SessionPage() {
   return (
     <>
       <Header>
+        <UserAvatar />
         <ThemeToggle />
         <LanguageToggle />
         <DownloadVttButton

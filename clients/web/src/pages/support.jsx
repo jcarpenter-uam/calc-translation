@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import Header from "../components/header";
 import Footer from "../components/footer";
 import ThemeToggle from "../components/theme-toggle.jsx";
@@ -13,6 +14,12 @@ export default function Support() {
 
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-3xl mx-auto">
+          <Link
+            to="/"
+            className="mb-4 inline-block text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+          >
+            &larr; Back to Home
+          </Link>
           <article className="prose dark:prose-invert lg:prose-xl">
             <h1>Support & Help Center</h1>
             <p>
@@ -282,6 +289,14 @@ export default function Support() {
             <ul>
               <li>Contact: Your internal IT Administrator</li>
             </ul>
+            <div className="mt-8 text-center not-prose">
+              <Link
+                to="/"
+                className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Go to Home
+              </Link>
+            </div>
           </article>
         </div>
       </main>

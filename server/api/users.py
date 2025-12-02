@@ -40,6 +40,7 @@ def create_user_router() -> APIRouter:
         prefix="/api/users",
     )
 
+    # NOTE: Requires User Auth
     @router.get("/me", response_model=UserResponse)
     async def get_me(payload: dict = Depends(get_current_user_payload)):
         """

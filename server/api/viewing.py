@@ -12,6 +12,7 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
         prefix="/ws/view",
     )
 
+    # NOTE: Requires Client token
     @router.websocket("/{integration}/{session_id:path}")
     async def websocket_viewer_endpoint(
         websocket: WebSocket,

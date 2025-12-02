@@ -1,9 +1,7 @@
 # Before this branch can be merged
 
-- Protect backend routes
 - Backend redirects to frontend
 - Centralize SQL queries
-- Admin page to manage tenants
 - Redo UX
 - Reduce ENV vars when possible, reduce duplicate checks
 

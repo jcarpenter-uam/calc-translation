@@ -18,6 +18,7 @@ def create_transcribe_router(viewer_manager):
         prefix="/ws/transcribe",
     )
 
+    # NOTE: Requires Server token
     @router.websocket("/{integration}/{session_id:path}")
     async def websocket_transcribe_endpoint(
         websocket: WebSocket,

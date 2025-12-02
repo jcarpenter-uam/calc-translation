@@ -37,11 +37,6 @@ def validate_server_token(
     Validates a server-to-server token from the Express service.
     Uses RS256 with the public key.
     """
-    if not settings.ZM_PUBLIC_KEY:
-        logger.error("FATAL: ZM_PUBLIC_KEY is not configured on the server!")
-        raise WebSocketException(
-            code=status.WS_1011_INTERNAL_ERROR, reason="Server configuration error"
-        )
     try:
         payload = jwt.decode(
             token,

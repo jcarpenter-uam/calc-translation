@@ -24,10 +24,6 @@ async def init_db():
             logger.info("Database pool already initialized.")
             return
 
-        if not POSTGRES_DSN:
-            logger.error("DATABASE_URL is not set. Cannot initialize database.")
-            raise ValueError("DATABASE_URL environment variable is not set.")
-
         try:
             DB_POOL = await asyncpg.create_pool(dsn=POSTGRES_DSN)
             async with DB_POOL.acquire() as conn:

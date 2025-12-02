@@ -23,7 +23,7 @@ class ConnectionManager:
 
         self._session_lock = threading.Lock()
 
-        with log_step("MANAGER"):
+        with log_step("CONN-MANAGER"):
             logger.debug("ConnectionManager initialized.")
 
     def get_all_clients(self) -> List[Dict[str, Any]]:
@@ -59,7 +59,7 @@ class ConnectionManager:
 
             history = self.cache.get_history(session_id)
 
-            with log_step("WEBSOCKET"):
+            with log_step("CONN-MANAGER"):
                 logger.info(
                     f"New viewer connecting. Replaying {len(history)} cached messages."
                 )
@@ -68,7 +68,7 @@ class ConnectionManager:
                 for payload in history:
                     await websocket.send_json(payload)
 
-            with log_step("WEBSOCKET"):
+            with log_step("CONN-MANAGER"):
                 logger.info(
                     f"Viewer connected and is now live. "
                     f"Total viewers: {len(self.sessions[session_id])}"
@@ -88,7 +88,7 @@ class ConnectionManager:
                 if not self.sessions[session_id]:
                     del self.sessions[session_id]
 
-            with log_step("WEBSOCKET"):
+            with log_step("CONN-MANAGER"):
                 logger.info(
                     f"Viewer disconnected. "
                     f"Remaining viewers: {len(self.sessions.get(session_id, []))}"
@@ -118,7 +118,7 @@ class ConnectionManager:
         try:
             with self._session_lock:
                 if session_id in self.active_transcription_sessions:
-                    with log_step("MANAGER"):
+                    with log_step("CONN-MANAGER"):
                         logger.warning(
                             f"Duplicate transcription session registration attempt for {session_id}."
                         )
@@ -130,7 +130,7 @@ class ConnectionManager:
                 }
                 self.active_transcription_sessions[session_id] = session_data
 
-                with log_step("MANAGER"):
+                with log_step("CONN-MANAGER"):
                     logger.info(
                         f"Transcription session registered as active for integration '{integration}'."
                     )
@@ -148,7 +148,7 @@ class ConnectionManager:
                     session_data = self.active_transcription_sessions.pop(session_id)
                     integration = session_data.get("integration", "unknown")
 
-                    with log_step("MANAGER"):
+                    with log_step("CONN-MANAGER"):
                         logger.info(
                             f"Transcription session deregistered for integration '{integration}'."
                         )

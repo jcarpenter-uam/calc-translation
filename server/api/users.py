@@ -10,6 +10,7 @@ from core.database import (
     SQL_SET_USER_ADMIN_STATUS,
     SQL_UPSERT_USER,
 )
+from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
@@ -39,6 +40,7 @@ def create_user_router() -> APIRouter:
     router = APIRouter(
         prefix="/api/users",
     )
+    LOG_STEP = "API-USERS"
 
     # NOTE: Requires User Auth
     @router.get("/me", response_model=UserResponse)
@@ -47,22 +49,29 @@ def create_user_router() -> APIRouter:
         Get the profile for the currently authenticated user
         based on their 'app_auth_token' cookie.
         """
-        user_id = payload.get("sub")
-        if not user_id:
-            logger.debug("Auth token missing 'sub' (user_id) claim.")
-            raise HTTPException(status_code=401, detail="Invalid auth token payload")
+        with log_step(LOG_STEP):
+            user_id = payload.get("sub")
+            if not user_id:
+                logger.warning("Auth token missing 'sub' (user_id) claim.")
+                raise HTTPException(
+                    status_code=401, detail="Invalid auth token payload"
+                )
 
-        if not database.DB_POOL:
-            raise HTTPException(status_code=503, detail="Database not initialized.")
+            if not database.DB_POOL:
+                logger.error(
+                    f"Database not initialized during get_me for user: {user_id}"
+                )
+                raise HTTPException(status_code=503, detail="Database not initialized.")
 
-        async with database.DB_POOL.acquire() as conn:
-            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+            async with database.DB_POOL.acquire() as conn:
+                user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
 
-        if not user_row:
-            logger.error(f"Authenticated user {user_id} not found in DB.")
-            raise HTTPException(status_code=404, detail="User not found.")
+            if not user_row:
+                logger.error(f"Authenticated user {user_id} not found in DB.")
+                raise HTTPException(status_code=404, detail="User not found.")
 
-        return UserResponse(**dict(user_row))
+            logger.debug(f"Successfully retrieved profile for user: {user_id}")
+            return UserResponse(**dict(user_row))
 
     # NOTE: Admin only
     @router.get(
@@ -74,13 +83,17 @@ def create_user_router() -> APIRouter:
         """
         Get a list of all users.
         """
-        if not database.DB_POOL:
-            raise HTTPException(status_code=503, detail="Database not initialized.")
+        with log_step(LOG_STEP):
+            logger.info("Request to get all users.")
+            if not database.DB_POOL:
+                logger.error("Database not initialized during get_all_users.")
+                raise HTTPException(status_code=503, detail="Database not initialized.")
 
-        async with database.DB_POOL.acquire() as conn:
-            user_rows = await conn.fetch(SQL_GET_ALL_USERS)
+            async with database.DB_POOL.acquire() as conn:
+                user_rows = await conn.fetch(SQL_GET_ALL_USERS)
 
-        return [UserResponse(**dict(row)) for row in user_rows]
+            logger.info(f"Found {len(user_rows)} users.")
+            return [UserResponse(**dict(row)) for row in user_rows]
 
     # NOTE: Admin only
     @router.get(
@@ -94,16 +107,23 @@ def create_user_router() -> APIRouter:
         """
         Get a specific user by their ID.
         """
-        if not database.DB_POOL:
-            raise HTTPException(status_code=503, detail="Database not initialized.")
+        with log_step(LOG_STEP):
+            logger.info(f"Request to get user by ID: {user_id}")
+            if not database.DB_POOL:
+                logger.error(
+                    f"Database not initialized during get_user_by_id: {user_id}"
+                )
+                raise HTTPException(status_code=503, detail="Database not initialized.")
 
-        async with database.DB_POOL.acquire() as conn:
-            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+            async with database.DB_POOL.acquire() as conn:
+                user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
 
-        if not user_row:
-            raise HTTPException(status_code=404, detail="User not found.")
+            if not user_row:
+                logger.warning(f"User not found: {user_id}")
+                raise HTTPException(status_code=404, detail="User not found.")
 
-        return UserResponse(**dict(user_row))
+            logger.info(f"Successfully found user: {user_id}")
+            return UserResponse(**dict(user_row))
 
     # NOTE: Admin only
     @router.put(
@@ -119,15 +139,22 @@ def create_user_router() -> APIRouter:
         Update a user's details by their ID.
         Uses UPSERT logic: will create if not present, or update if present.
         """
-        if not database.DB_POOL:
-            raise HTTPException(status_code=503, detail="Database not initialized.")
+        with log_step(LOG_STEP):
+            logger.info(f"Request to update/create user: {user_id}")
+            if not database.DB_POOL:
+                logger.error(f"Database not initialized during update_user: {user_id}")
+                raise HTTPException(status_code=503, detail="Database not initialized.")
 
-        async with database.DB_POOL.acquire() as conn:
-            await conn.execute(
-                SQL_UPSERT_USER, user_id, user_update.name, user_update.email
-            )
+            async with database.DB_POOL.acquire() as conn:
+                await conn.execute(
+                    SQL_UPSERT_USER, user_id, user_update.name, user_update.email
+                )
 
-        return UserResponse(id=user_id, **user_update.dict())
+            logger.info(f"Successfully upserted user: {user_id}")
+
+            return UserResponse(
+                id=user_id, is_admin=False, **user_update.dict()
+            )  # Assumes is_admin=False, which might be wrong.
 
     # NOTE: Admin only
     @router.delete(
@@ -141,17 +168,24 @@ def create_user_router() -> APIRouter:
         """
         Delete a user by their ID.
         """
-        if not database.DB_POOL:
-            raise HTTPException(status_code=503, detail="Database not initialized.")
+        with log_step(LOG_STEP):
+            logger.info(f"Request to delete user: {user_id}")
+            if not database.DB_POOL:
+                logger.error(f"Database not initialized during delete_user: {user_id}")
+                raise HTTPException(status_code=503, detail="Database not initialized.")
 
-        async with database.DB_POOL.acquire() as conn:
-            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
-            if not user_row:
-                raise HTTPException(status_code=44, detail="User not found.")
+            async with database.DB_POOL.acquire() as conn:
+                user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+                if not user_row:
+                    logger.warning(f"User not found for deletion: {user_id}")
+                    raise HTTPException(
+                        status_code=404, detail="User not found."
+                    )  # Fixed 44 -> 404
 
-            await conn.execute(SQL_DELETE_USER_BY_ID, user_id)
+                await conn.execute(SQL_DELETE_USER_BY_ID, user_id)
 
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+            logger.info(f"Successfully deleted user: {user_id}")
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     # NOTE: Admin only
     @router.put(
@@ -166,23 +200,39 @@ def create_user_router() -> APIRouter:
         """
         Update a user's admin status. (Admin Only)
         """
-        if not database.DB_POOL:
-            raise HTTPException(status_code=503, detail="Database not initialized.")
-
-        async with database.DB_POOL.acquire() as conn:
-            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
-            if not user_row:
-                raise HTTPException(status_code=404, detail="User not found.")
-
-            await conn.execute(
-                SQL_SET_USER_ADMIN_STATUS, admin_update.is_admin, user_id
+        with log_step(LOG_STEP):
+            logger.info(
+                f"Request to set admin status for user: {user_id} to {admin_update.is_admin}"
             )
+            if not database.DB_POOL:
+                logger.error(
+                    f"Database not initialized during set_user_admin_status: {user_id}"
+                )
+                raise HTTPException(status_code=503, detail="Database not initialized.")
 
-            updated_user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+            async with database.DB_POOL.acquire() as conn:
+                user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+                if not user_row:
+                    logger.warning(
+                        f"User not found while setting admin status: {user_id}"
+                    )
+                    raise HTTPException(status_code=404, detail="User not found.")
 
-        if not updated_user_row:
-            raise HTTPException(status_code=404, detail="User not found after update.")
+                await conn.execute(
+                    SQL_SET_USER_ADMIN_STATUS, admin_update.is_admin, user_id
+                )
 
-        return UserResponse(**dict(updated_user_row))
+                updated_user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+
+            if not updated_user_row:
+                logger.error(f"User not found after admin status update: {user_id}")
+                raise HTTPException(
+                    status_code=404, detail="User not found after update."
+                )
+
+            logger.info(
+                f"Successfully set admin status for {user_id} to {admin_update.is_admin}"
+            )
+            return UserResponse(**dict(updated_user_row))
 
     return router

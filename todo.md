@@ -2,7 +2,6 @@
 
 - Ugly loading...
 - Readding the zoom app should override existing DB entry
-- Clean up general logs
 
 # Once finished
 

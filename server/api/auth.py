@@ -49,12 +49,15 @@ def create_auth_router() -> APIRouter:
         return await entra.handle_callback(request)
 
     @router.post("/logout")
-    async def entra_logout(response: Response):
+    async def entra_logout(
+        response: Response,
+        user_payload: dict = Depends(get_current_user_payload),
+    ):
         """
         Logs the user out by clearing the auth cookie and
         providing a Microsoft logout URL.
         """
-        return await entra.handle_logout(response)
+        return await entra.handle_logout(response, user_payload)
 
     @router.post("/zoom", response_model=ZoomAuthResponse)
     async def handle_zoom_auth(

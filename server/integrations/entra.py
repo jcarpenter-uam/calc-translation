@@ -200,12 +200,21 @@ async def handle_callback(request: Request) -> RedirectResponse:
     return redirect_response
 
 
-async def handle_logout(response: Response) -> dict:
-    logger.info("Handling user logout.")
+async def handle_logout(response: Response, user_payload: dict) -> dict:
+    """
+    Logs the user out by clearing the auth cookie and
+    providing a Microsoft logout URL.
+    """
+    user_id = user_payload.get("sub", "unknown")
+    logger.debug(f"Handling user logout for user: {user_id}.")
+
     response.delete_cookie("app_auth_token")
+
     post_logout_url = f"{settings.APP_BASE_URL}/"
+
     logout_url = (
         f"https://login.microsoftonline.com/common/oauth2/v2.0/logout"
         f"?post_logout_redirect_uri={post_logout_url}"
     )
+
     return {"logout_url": logout_url}

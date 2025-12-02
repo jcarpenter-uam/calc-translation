@@ -28,9 +28,20 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
-    window.location.href = "/login";
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+
+      if (!response.ok) {
+        console.warn(
+          "Server logout failed (e.g., token expired), logging out locally.",
+        );
+      }
+    } catch (error) {
+      console.error("Network error during logout:", error);
+    } finally {
+      setUser(null);
+      window.location.href = "/login";
+    }
   };
 
   const value = { user, setUser, isLoading, logout };

@@ -15,16 +15,20 @@ export default function App() {
       <BrowserRouter>
         <ScrollToTop />
         <Routes>
+          {/* Public routes */}
           <Route path="/login" element={<Login />} />
-
-          {/* Docs need to be visable by zoom */}
           <Route path="/support" element={<Support />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
 
+          {/* Routes for all authenticated users */}
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<LandingPage />} />
             <Route path="/sessions/:integration/*" element={<SessionPage />} />
+          </Route>
+
+          {/* Routes for admin users only */}
+          <Route element={<ProtectedRoute adminOnly={true} />}>
             <Route path="/admin" element={<AdminPage />} />
           </Route>
         </Routes>

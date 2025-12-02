@@ -34,7 +34,8 @@ async def init_db():
                         CREATE TABLE IF NOT EXISTS USERS (
                             id TEXT PRIMARY KEY, -- EntraID User ID
                             name TEXT,
-                            email TEXT
+                            email TEXT,
+                            is_admin BOOLEAN DEFAULT FALSE
                         )
                         """
                     )

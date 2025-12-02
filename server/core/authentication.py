@@ -1,8 +1,10 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
+import core.database as database
 import jwt
 from core.config import settings
+from core.database import SQL_GET_USER_BY_ID
 from core.logging_setup import log_step
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, HTTPException, Query, Request, WebSocketException, status
@@ -175,3 +177,36 @@ def decrypt(ciphertext: str) -> str:
     except Exception as e:
         logger.error(f"Decryption failed: {e}")
         raise
+
+
+async def get_admin_user_payload(
+    payload: dict = Depends(get_current_user_payload),
+) -> dict:
+    """
+    Dependency that checks if the current authenticated user is an admin.
+    Raises 403 Forbidden if not.
+    """
+    user_id = payload.get("sub")
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token payload")
+
+    if not database.DB_POOL:
+        logger.error("Admin check failed: Database not initialized.")
+        raise HTTPException(status_code=503, detail="Database not initialized.")
+
+    async with database.DB_POOL.acquire() as conn:
+        user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+
+    if not user_row:
+        logger.error(f"Authenticated admin user {user_id} not found in DB.")
+        raise HTTPException(status_code=401, detail="User not found.")
+
+    if not user_row.get("is_admin"):
+        logger.warning(f"User {user_id} attempted unauthorized admin access.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Requires admin privileges",
+        )
+
+    return payload

@@ -2,7 +2,7 @@ import logging
 from typing import List
 
 import core.database as database
-from core.authentication import get_current_user_payload
+from core.authentication import get_admin_user_payload, get_current_user_payload
 from core.database import (
     SQL_DELETE_USER_BY_ID,
     SQL_GET_ALL_USERS,
@@ -19,6 +19,7 @@ class UserResponse(BaseModel):
     id: str
     name: str | None
     email: str | None
+    is_admin: bool
 
 
 class UserUpdate(BaseModel):
@@ -57,8 +58,12 @@ def create_user_router() -> APIRouter:
 
         return UserResponse(**dict(user_row))
 
-    # TODO: REQUIRE AUTH
-    @router.get("/", response_model=List[UserResponse])
+    # NOTE: Admin only
+    @router.get(
+        "/",
+        response_model=List[UserResponse],
+        dependencies=[Depends(get_admin_user_payload)],
+    )
     async def get_all_users():
         """
         Get a list of all users.
@@ -71,8 +76,12 @@ def create_user_router() -> APIRouter:
 
         return [UserResponse(**dict(row)) for row in user_rows]
 
-    # TODO: REQUIRE AUTH
-    @router.get("/{user_id}", response_model=UserResponse)
+    # NOTE: Admin only
+    @router.get(
+        "/{user_id}",
+        response_model=UserResponse,
+        dependencies=[Depends(get_admin_user_payload)],
+    )
     async def get_user_by_id(
         user_id: str,
     ):
@@ -90,8 +99,12 @@ def create_user_router() -> APIRouter:
 
         return UserResponse(**dict(user_row))
 
-    # TODO: REQUIRE AUTH
-    @router.put("/{user_id}", response_model=UserResponse)
+    # NOTE: Admin only
+    @router.put(
+        "/{user_id}",
+        response_model=UserResponse,
+        dependencies=[Depends(get_admin_user_payload)],
+    )
     async def update_user(
         user_id: str,
         user_update: UserUpdate,
@@ -110,8 +123,12 @@ def create_user_router() -> APIRouter:
 
         return UserResponse(id=user_id, **user_update.dict())
 
-    # TODO: REQUIRE AUTH
-    @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+    # NOTE: Admin only
+    @router.delete(
+        "/{user_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        dependencies=[Depends(get_admin_user_payload)],
+    )
     async def delete_user(
         user_id: str,
     ):

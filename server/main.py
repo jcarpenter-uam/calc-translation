@@ -69,17 +69,12 @@ app.mount("/assets", StaticFiles(directory="web/dist/assets"), name="assets")
 
 try:
     app.mount(
-        "/favicon.ico",
+        "/icon.png",
         StaticFiles(directory="web/dist", html=True, check_dir=False),
-        name="favicon",
-    )
-    app.mount(
-        "/manifest.json",
-        StaticFiles(directory="web/dist", html=True, check_dir=False),
-        name="manifest",
+        name="icon",
     )
 except RuntimeError:
-    logger.warning("Static root files (favicon.ico, manifest.json) not found.")
+    logger.warning("Static root files not found.")
 
 
 @app.get("/{full_path:path}", response_class=FileResponse)

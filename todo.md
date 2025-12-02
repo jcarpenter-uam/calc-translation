@@ -1,8 +1,7 @@
 # Before this branch can be merged
 
-- Centralize SQL queries
-- Redo UX
-- Reduce ENV vars when possible, reduce duplicate checks
+- Fix zoom/callback issue
+- Ugly loading...
 - Clean up general logs
 
 # Once finished

@@ -51,7 +51,7 @@ async def get_token_from_cookie(request: Request) -> str:
     token = request.cookies.get("app_auth_token")
     if not token:
         with log_step("SESSION"):
-            logger.warning("Auth failed: No 'app_auth_token' cookie.")
+            logger.debug("Auth failed: No 'app_auth_token' cookie.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",

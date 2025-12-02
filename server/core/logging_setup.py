@@ -186,6 +186,7 @@ def setup_logging():
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.INFO)
 
 
 @contextmanager

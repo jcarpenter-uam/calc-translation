@@ -93,7 +93,7 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
                     detail="Transcript file not found on disk. It may have been moved or deleted.",
                 )
 
-            logger.info(
+            logger.debug(
                 f"User '{user_id}' downloading transcript for session: '{session_id}' (Integration: '{integration}'). File: {file_path}"
             )
 

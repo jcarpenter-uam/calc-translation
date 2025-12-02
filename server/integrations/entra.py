@@ -27,7 +27,7 @@ SCOPE = ["User.Read"]
 
 
 async def get_config_for_domain(domain: str) -> dict | None:
-    logger.info(f"Checking DB for config for domain: {domain}")
+    logger.debug(f"Checking DB for config for domain: {domain}")
     if not database.DB_POOL:
         raise HTTPException(status_code=503, detail="Database not initialized.")
 
@@ -49,7 +49,7 @@ async def get_config_for_domain(domain: str) -> dict | None:
 
 
 async def get_config_for_tenant(tenant_id: str) -> dict | None:
-    logger.info(f"Checking DB for config for tenant_id: {tenant_id}")
+    logger.debug(f"Checking DB for config for tenant_id: {tenant_id}")
     if not database.DB_POOL:
         raise HTTPException(status_code=503, detail="Database not initialized.")
 
@@ -178,7 +178,7 @@ async def handle_callback(request: Request) -> RedirectResponse:
     try:
         async with database.DB_POOL.acquire() as conn:
             await conn.execute(SQL_UPSERT_USER, user_id, user_name, user_email)
-        logger.info(f"Upserted user: {user_email} (OID: {user_id})")
+        logger.debug(f"Upserted user: {user_email} (OID: {user_id})")
     except Exception as e:
         logger.error(f"Failed to upsert user {user_id}: {e}", exc_info=True)
 

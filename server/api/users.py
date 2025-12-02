@@ -49,7 +49,7 @@ def create_user_router() -> APIRouter:
         """
         user_id = payload.get("sub")
         if not user_id:
-            logger.warning("Auth token missing 'sub' (user_id) claim.")
+            logger.debug("Auth token missing 'sub' (user_id) claim.")
             raise HTTPException(status_code=401, detail="Invalid auth token payload")
 
         if not database.DB_POOL:

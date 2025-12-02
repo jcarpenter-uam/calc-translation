@@ -7,6 +7,7 @@ from core.database import (
     SQL_DELETE_USER_BY_ID,
     SQL_GET_ALL_USERS,
     SQL_GET_USER_BY_ID,
+    SQL_SET_USER_ADMIN_STATUS,
     SQL_UPSERT_USER,
 )
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -25,6 +26,10 @@ class UserResponse(BaseModel):
 class UserUpdate(BaseModel):
     name: str | None
     email: str | None
+
+
+class UserAdminUpdate(BaseModel):
+    is_admin: bool
 
 
 def create_user_router() -> APIRouter:
@@ -146,5 +151,37 @@ def create_user_router() -> APIRouter:
             await conn.execute(SQL_DELETE_USER_BY_ID, user_id)
 
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    # NOTE: Admin only
+    @router.put(
+        "/{user_id}/admin",
+        response_model=UserResponse,
+        dependencies=[Depends(get_admin_user_payload)],
+    )
+    async def set_user_admin_status(
+        user_id: str,
+        admin_update: UserAdminUpdate,
+    ):
+        """
+        Update a user's admin status. (Admin Only)
+        """
+        if not database.DB_POOL:
+            raise HTTPException(status_code=503, detail="Database not initialized.")
+
+        async with database.DB_POOL.acquire() as conn:
+            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+            if not user_row:
+                raise HTTPException(status_code=404, detail="User not found.")
+
+            await conn.execute(
+                SQL_SET_USER_ADMIN_STATUS, admin_update.is_admin, user_id
+            )
+
+            updated_user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+
+        if not updated_user_row:
+            raise HTTPException(status_code=404, detail="User not found after update.")
+
+        return UserResponse(**dict(updated_user_row))
 
     return router

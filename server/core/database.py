@@ -129,6 +129,8 @@ SQL_GET_ALL_USERS = "SELECT * FROM USERS;"
 
 SQL_DELETE_USER_BY_ID = "DELETE FROM USERS WHERE id = $1;"
 
+SQL_SET_USER_ADMIN_STATUS = "UPDATE USERS SET is_admin = $1 WHERE id = $2;"
+
 # TENANTS
 SQL_GET_TENANT_AUTH_BY_ID = """
 SELECT tenant_id, client_id, client_secret_encrypted

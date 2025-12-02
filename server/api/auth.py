@@ -130,7 +130,12 @@ def create_auth_router() -> APIRouter:
             else:
                 with log_step("AUTH"):
                     logger.info("Stashing Zoom code for logged-out user.")
-                response.set_cookie(
+
+                redirect_response = RedirectResponse(
+                    url="/login?reason=zoom_link_required"
+                )
+
+                redirect_response.set_cookie(
                     key="zoom_oauth_pending_code",
                     value=code,
                     max_age=600,  # 10 minutes
@@ -138,7 +143,8 @@ def create_auth_router() -> APIRouter:
                     secure=settings.APP_BASE_URL.startswith("https"),
                     samesite="lax",
                 )
-                return RedirectResponse(url="/login?reason=zoom_link_required")
+
+                return redirect_response
 
         except HTTPException as e:
             raise e

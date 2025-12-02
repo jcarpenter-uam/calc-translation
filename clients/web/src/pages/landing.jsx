@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/header";
 import UserAvatar from "../components/user.jsx";
@@ -13,6 +13,40 @@ export default function LandingPage() {
   const [integration, setIntegration] = useState("zoom");
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkPendingZoomLink = async () => {
+      const needsLink = sessionStorage.getItem("zoom_link_pending");
+
+      if (needsLink === "true") {
+        try {
+          console.log("Found pending Zoom link, attempting to link account...");
+          alert("Finishing Zoom account setup...");
+
+          const response = await fetch("/api/auth/zoom/link-pending", {
+            method: "POST",
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Failed to link Zoom account.");
+          }
+
+          console.log("Zoom account linked successfully!");
+          alert("Zoom account linked successfully!");
+        } catch (error) {
+          console.error("Zoom link error:", error);
+          alert(
+            `Failed to link Zoom: ${error.message}. Please try reconnecting from your profile.`,
+          );
+        } finally {
+          sessionStorage.removeItem("zoom_link_pending");
+        }
+      }
+    };
+
+    checkPendingZoomLink();
+  }, []);
 
   const handleJoin = (type, sessionId, token) => {
     navigate(`/sessions/${type}/${sessionId}?token=${token}`);

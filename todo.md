@@ -1,6 +1,5 @@
 # Before this branch can be merged
 
-- Fix zoom/callback issue
 - Ugly loading...
 - Clean up general logs
 

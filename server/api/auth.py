@@ -1,9 +1,10 @@
 import logging
+from typing import Optional
 
 from core.authentication import generate_jwt_token, get_current_user_payload
 from core.config import settings
 from core.logging_setup import log_step
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from integrations.zoom import (
     ZoomAuthRequest,
@@ -93,16 +94,15 @@ def create_auth_router() -> APIRouter:
                 status_code=500, detail="An internal server error occurred."
             )
 
-    # TODO: If someone installs the app for the first time they wont be authenticated
-    # handle stashing callback code, allowing the user to login, the registering the callback
     @router.get("/zoom/callback")
     async def handle_zoom_callback(
         request: Request,
-        user_payload: dict = Depends(get_current_user_payload),
+        response: Response,
     ):
         """
         Handles the OAuth redirect from Zoom.
-        Requires user to be logged in with Entra to link accounts.
+        If user is logged in, links accounts.
+        If user is logged out, stashes code in a cookie and redirects to login.
         """
         code = request.query_params.get("code")
         if not code:
@@ -110,16 +110,35 @@ def create_auth_router() -> APIRouter:
                 status_code=400, detail="Missing authorization code from Zoom"
             )
 
-        user_id = user_payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid user token")
+        user_id: str | None = None
+        try:
+            user_payload = await get_current_user_payload(request)
+            user_id = user_payload.get("sub")
+        except HTTPException as e:
+            if e.status_code in (401, 403):
+                pass
+            else:
+                raise e
 
         try:
-            redirect_uri = f"{settings.APP_BASE_URL}/api/auth/zoom/callback"
-
-            await exchange_code_for_token(code, redirect_uri, user_id)
-
-            return RedirectResponse(url="/")
+            if user_id:
+                with log_step("AUTH"):
+                    logger.info(f"Linking Zoom account for logged-in user {user_id}")
+                redirect_uri = f"{settings.APP_BASE_URL}/api/auth/zoom/callback"
+                await exchange_code_for_token(code, redirect_uri, user_id)
+                return RedirectResponse(url="/")
+            else:
+                with log_step("AUTH"):
+                    logger.info("Stashing Zoom code for logged-out user.")
+                response.set_cookie(
+                    key="zoom_oauth_pending_code",
+                    value=code,
+                    max_age=600,  # 10 minutes
+                    httponly=True,
+                    secure=settings.APP_BASE_URL.startswith("https"),
+                    samesite="lax",
+                )
+                return RedirectResponse(url="/login?reason=zoom_link_required")
 
         except HTTPException as e:
             raise e
@@ -131,6 +150,53 @@ def create_auth_router() -> APIRouter:
                 )
             raise HTTPException(
                 status_code=500, detail="An internal server error occurred"
+            )
+
+    @router.post("/zoom/link-pending")
+    async def link_pending_zoom_account(
+        response: Response,
+        user_payload: dict = Depends(get_current_user_payload),
+        pending_code: Optional[str] = Cookie(None, alias="zoom_oauth_pending_code"),
+    ):
+        """
+        Called by the frontend after login if a pending Zoom code is found.
+        Links the stashed Zoom code to the now-authenticated user.
+        """
+        user_id = user_payload.get("sub")
+        if not pending_code:
+            logger.warning(
+                f"User {user_id} called /link-pending but no cookie was found."
+            )
+            return {"status": "no_code_found"}
+
+        try:
+            with log_step("AUTH"):
+                logger.info(f"Found pending Zoom code. Linking to user {user_id}...")
+
+            redirect_uri = f"{settings.APP_BASE_URL}/api/auth/zoom/callback"
+            await exchange_code_for_token(pending_code, redirect_uri, user_id)
+
+            response.set_cookie(
+                key="zoom_oauth_pending_code", value="", max_age=-1, httponly=True
+            )
+            logger.info(f"Successfully linked pending Zoom account for user {user_id}")
+            return {"status": "success"}
+
+        except HTTPException as e:
+            logger.error(
+                f"Failed to link pending Zoom code for user {user_id}: {e.detail}"
+            )
+            response.set_cookie(
+                key="zoom_oauth_pending_code", value="", max_age=-1, httponly=True
+            )
+            raise e
+        except Exception as e:
+            logger.error(
+                f"Unhandled error linking pending Zoom code for {user_id}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500, detail="An internal error occurred while linking Zoom"
             )
 
     return router

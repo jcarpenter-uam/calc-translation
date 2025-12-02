@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import Header from "../components/header";
 import Footer from "../components/footer";
 import ThemeToggle from "../components/theme-toggle.jsx";
@@ -8,6 +9,17 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [infoMessage, setInfoMessage] = useState(null);
+
+  useEffect(() => {
+    const reason = searchParams.get("reason");
+    if (reason === "zoom_link_required") {
+      sessionStorage.setItem("zoom_link_pending", "true");
+
+      setInfoMessage("Please log in to finish linking your new Zoom account.");
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -58,6 +70,11 @@ export default function Login() {
               Enter your work email to be redirected to your company's login
               page.
             </p>
+            {infoMessage && (
+              <div className="text-center text-sm text-blue-600 dark:text-blue-400 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-700">
+                {infoMessage}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label

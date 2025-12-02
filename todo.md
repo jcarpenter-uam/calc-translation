@@ -1,6 +1,5 @@
 # Before this branch can be merged
 
-- Ugly loading...
 - Readding the zoom app should override existing DB entry
 
 # Once finished

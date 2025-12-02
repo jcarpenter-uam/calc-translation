@@ -182,6 +182,10 @@ def setup_logging():
     logging.getLogger("openai").setLevel(logging.INFO)
     logging.getLogger("ollama").setLevel(logging.INFO)
     logging.getLogger("msal").setLevel(logging.INFO)
+    logging.getLogger("fastapi").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 
 @contextmanager

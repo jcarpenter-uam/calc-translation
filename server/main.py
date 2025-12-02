@@ -83,5 +83,4 @@ async def serve_spa(request: Request, full_path: str):
     Serve the single-page application's index.html for any path
     not handled by API routes or static file mounts.
     """
-    logger.info(f"Serving SPA for path: {full_path}")
     return FileResponse("web/dist/index.html")

@@ -181,6 +181,7 @@ def setup_logging():
     logging.getLogger("httpcore").setLevel(logging.INFO)
     logging.getLogger("openai").setLevel(logging.INFO)
     logging.getLogger("ollama").setLevel(logging.INFO)
+    logging.getLogger("msal").setLevel(logging.INFO)
 
 
 @contextmanager

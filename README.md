@@ -163,3 +163,8 @@ OLLAMA_URL=
 # API Key for Alibaba DashScope (for Qwen-MT retranslation)
 ALIBABA_API_KEY=
 ```
+
+## Enhancements:
+
+- Redirect user back to home, when download expires
+- Full UI translation (once multilingual is introduced)

@@ -198,7 +198,7 @@ function generateAuthToken(host_id) {
   };
 
   return jwt.sign(payload, ZM_PRIVATE_KEY, {
-    expiresIn: "5m", // 5 minutes
+    expiresIn: "5m",
     algorithm: "RS256",
   });
 }
@@ -268,31 +268,19 @@ function handleRtmsStarted(payload, streamId) {
 
     clientEntry.wsClient = wsClient;
 
-    let pingInterval;
-
     wsClient.on("open", () => {
       meetingLogger.info(
         `WebSocket connection to ${BASE_SERVER_URL} established for stream ${streamId}`,
       );
       clientEntry.hasLoggedWarning = false;
       retries = 0;
-
-      pingInterval = setInterval(() => {
-        if (wsClient.readyState === WebSocket.OPEN) {
-          wsClient.ping();
-        }
-      }, 20000);
     });
-
-    wsClient.on("pong", () => {});
 
     wsClient.on("error", (error) => {
       meetingLogger.error(error, `WebSocket error for stream ${streamId}`);
     });
 
     wsClient.on("close", (code, reason) => {
-      if (pingInterval) clearInterval(pingInterval);
-
       meetingLogger.info(
         `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
       );
@@ -395,7 +383,6 @@ app.use(
 
 app.post("/zoom", rtmsWebhookHandler);
 
-// Start the server
 app.listen(PORT, () => {
   logger.info(`Zoom RTMS server listening on port ${PORT}`);
   logger.info(

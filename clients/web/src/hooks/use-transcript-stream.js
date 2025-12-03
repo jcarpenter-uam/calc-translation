@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 
-const DOWNLOAD_WINDOW_MS = 10 * 60 * 1000;
-
 /**
  * A custom hook to manage a WebSocket connection for live transcripts.
  * @param {string} wsUrl The WebSocket URL to connect to.
@@ -80,15 +78,7 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
           const data = JSON.parse(event.data);
 
           if (data.type === "session_end") {
-            if (!hideTimerRef.current) {
-              setIsDownloadable(true);
-
-              hideTimerRef.current = setTimeout(() => {
-                setIsDownloadable(false);
-                hideTimerRef.current = null;
-              }, DOWNLOAD_WINDOW_MS);
-            }
-
+            setIsDownloadable(true);
             return;
           }
 
@@ -166,9 +156,6 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
 
     return () => {
       clearTimeout(reconnectTimeoutId);
-      if (hideTimerRef.current) {
-        clearTimeout(hideTimerRef.current);
-      }
       if (ws.current) {
         ws.current.onclose = null;
         ws.current.close();

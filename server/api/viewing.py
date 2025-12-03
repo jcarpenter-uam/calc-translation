@@ -1,6 +1,7 @@
 import logging
 
 from core.authentication import get_current_user_payload, validate_client_token
+from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, Path, WebSocket, status
 from services.connection_manager import ConnectionManager
 from services.viewer import handle_viewer_session
@@ -15,6 +16,8 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
     router = APIRouter(
         prefix="/ws/view",
     )
+
+    LOG_STEP = "WS-VIEWER"
 
     # NOTE: Requires Client token AND User Cookie match
     @router.websocket("/{integration}/{session_id:path}")
@@ -37,18 +40,20 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
         )
 
         if token_user_id != cookie_user_id:
-            logger.warning(
-                f"WS Denied: Token user {token_user_id} != Cookie user {cookie_user_id}"
-            )
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
+            with log_step(LOG_STEP):
+                logger.warning(
+                    f"WS Denied: Token user {token_user_id} != Cookie user {cookie_user_id}"
+                )
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
 
         if token_session_id != session_id:
-            logger.warning(
-                f"WS Denied: Token session {token_session_id} != URL session {session_id}"
-            )
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
+            with log_step(LOG_STEP):
+                logger.warning(
+                    f"WS Denied: Token session {token_session_id} != URL session {session_id}"
+                )
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
 
         await handle_viewer_session(
             websocket=websocket,

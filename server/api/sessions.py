@@ -4,7 +4,11 @@ import urllib.parse
 from typing import Any, Dict, List
 
 from core import database
-from core.authentication import get_admin_user_payload, get_current_user_payload
+from core.authentication import (
+    get_admin_user_payload,
+    get_current_user_payload,
+    validate_client_token,
+)
 from core.database import SQL_GET_TRANSCRIPT_BY_MEETING_ID
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException, Path, status
@@ -64,7 +68,7 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
             )
             return result
 
-    # NOTE: Requires User Auth
+    # NOTE: Requires User Auth AND Session Token
     @router.get(
         "/{integration}/{session_id:path}/download/vtt",
     )
@@ -72,19 +76,42 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
         integration: str,
         session_id: str,
         user_payload: dict = Depends(get_current_user_payload),
+        token_payload: dict = Depends(validate_client_token),
     ):
         """
         Allows a user to download the WebVTT (transcript.vtt) file
         for a completed session.
-
-        This endpoint first queries the database to find the transcript record
-        and then constructs the file path to serve it.
+        SECURED: Checks that the cookie user matches the token user.
         """
         with log_step(LOG_STEP):
-            user_id = user_payload.get("sub", "unknown")
-            logger.info(
-                f"User '{user_id}' requesting download for session: '{session_id}' (Integration: '{integration}')"
+            cookie_user_id = user_payload.get("sub")
+            token_user_id = token_payload.get("user_id") or token_payload.get("sub")
+
+            token_session_id = token_payload.get("session_id") or token_payload.get(
+                "resource"
             )
+
+            logger.info(
+                f"Download Request: User '{cookie_user_id}' for Session '{session_id}'"
+            )
+
+            if cookie_user_id != token_user_id:
+                logger.warning(
+                    f"Download Denied: Cookie user '{cookie_user_id}' != Token user '{token_user_id}'"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not authorized to access this session download.",
+                )
+
+            if token_session_id != session_id:
+                logger.warning(
+                    f"Download Denied: Token session '{token_session_id}' != URL session '{session_id}'"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Invalid token for this specific session ID.",
+                )
             try:
                 file_name = None
 
@@ -117,7 +144,7 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
                     )
 
                 logger.debug(
-                    f"User '{user_id}' downloading transcript. File: {file_path}"
+                    f"User '{cookie_user_id}' downloading transcript. File: {file_path}"
                 )
 
                 return FileResponse(
@@ -128,12 +155,12 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
 
             except HTTPException as e:
                 logger.warning(
-                    f"Failed download attempt by user '{user_id}' for session '{session_id}': {e.detail}"
+                    f"Failed download attempt by user '{cookie_user_id}' for session '{session_id}': {e.detail}"
                 )
                 raise e
             except Exception as e:
                 logger.error(
-                    f"Unexpected error for user '{user_id}' downloading session '{session_id}': {e}",
+                    f"Unexpected error for user '{cookie_user_id}' downloading session '{session_id}': {e}",
                     exc_info=True,
                 )
                 raise HTTPException(

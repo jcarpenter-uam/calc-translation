@@ -79,6 +79,7 @@ export default function SessionPage() {
           isDownloadable={isDownloadable}
           integration={integration}
           sessionId={sessionId}
+          token={token}
         />
       </Header>
 

@@ -6,6 +6,11 @@ import { WebSocket } from "ws";
 import pino from "pino";
 import jwt from "jsonwebtoken";
 
+// TODO:
+// Edit dockerfile to use the new server.js, worker.js files
+// Test refactor for retained logic and multithreaded workloads
+// Monitor HW limitations and usage
+
 const logDir = "logs";
 
 const transport = pino.transport({

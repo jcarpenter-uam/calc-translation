@@ -166,8 +166,9 @@ async def main(file_path: str):
         auth_header = {"Authorization": f"Bearer {token}"}
 
         async with aiohttp.ClientSession(headers=auth_header) as session:
-            async with session.ws_connect(WEBSOCKET_URL) as ws:
-                print(f"\nConnected to {WEBSOCKET_URL}")
+            full_url = f"{WEBSOCKET_URL.rstrip('/')}/test/test2"
+            async with session.ws_connect(full_url) as ws:
+                print(f"\nConnected to {full_url}")
 
                 receiver_task = asyncio.create_task(
                     receive_transcriptions(ws, stop_event)

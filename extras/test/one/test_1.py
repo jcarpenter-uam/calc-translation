@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 WEBSOCKET_URL = os.getenv(
-    "WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe/test/test"
+    "WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe/test/test1"
 )
 SPEAKER_NAME = "CALC IT"
 TARGET_SAMPLE_RATE = 16000
@@ -166,8 +166,9 @@ async def main(file_path: str):
         auth_header = {"Authorization": f"Bearer {token}"}
 
         async with aiohttp.ClientSession(headers=auth_header) as session:
-            async with session.ws_connect(WEBSOCKET_URL) as ws:
-                print(f"\nConnected to {WEBSOCKET_URL}")
+            full_url = f"{WEBSOCKET_URL.rstrip('/')}/test/test1"
+            async with session.ws_connect(full_url) as ws:
+                print(f"\nConnected to {full_url}")
 
                 receiver_task = asyncio.create_task(
                     receive_transcriptions(ws, stop_event)

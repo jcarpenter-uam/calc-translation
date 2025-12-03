@@ -1,11 +1,16 @@
 import logging
 from typing import Optional
 
-from core.authentication import generate_jwt_token, get_current_user_payload
+from core.authentication import (
+    generate_jwt_token,
+    get_admin_user_payload,
+    get_current_user_payload,
+)
 from core.config import settings
 from core.logging_setup import log_step
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
+from integrations.test import TestAuthRequest, authenticate_test_session
 from integrations.zoom import (
     ZoomAuthRequest,
     ZoomAuthResponse,
@@ -67,6 +72,42 @@ def create_auth_router() -> APIRouter:
             user_id = user_payload.get("sub")
             logger.info(f"Handling logout for user: {user_id}")
             return await entra.handle_logout(response, user_payload)
+
+    # NOTE: Admin only
+    @router.post(
+        "/test",
+        response_model=ZoomAuthResponse,
+    )
+    async def handle_test_auth(
+        request: TestAuthRequest, admin_payload: dict = Depends(get_admin_user_payload)
+    ):
+        """
+        Generates a token for a dynamic test session ID provided
+        in the request body.
+        """
+        try:
+            user_id = admin_payload.get("sub")
+
+            session_id = await authenticate_test_session(request)
+
+            logger.info(
+                f"Generating test token for session: {session_id} and user: {user_id}"
+            )
+
+            token = generate_jwt_token(session_id=session_id, user_id=user_id)
+
+            return ZoomAuthResponse(meetinguuid=session_id, token=token)
+
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            with log_step("AUTH"):
+                logger.error(
+                    f"Unhandled error in POST /api/auth/test: {e}", exc_info=True
+                )
+            raise HTTPException(
+                status_code=500, detail="An internal server error occurred."
+            )
 
     @router.post("/zoom", response_model=ZoomAuthResponse)
     async def handle_zoom_auth(

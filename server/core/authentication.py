@@ -9,6 +9,7 @@ from core.logging_setup import log_step
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, HTTPException, Query, Request, WebSocketException, status
 from pydantic import BaseModel, ValidationError
+from starlette.requests import HTTPConnection
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def generate_jwt_token(user_id: str, session_id: str | None = None) -> str:
     return token
 
 
-async def get_token_from_cookie(request: Request) -> str:
+async def get_token_from_cookie(request: HTTPConnection) -> str:
     """Extracts the auth token from the 'app_auth_token' cookie."""
     token = request.cookies.get("app_auth_token")
     if not token:

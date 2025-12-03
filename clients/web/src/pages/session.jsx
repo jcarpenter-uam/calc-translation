@@ -1,6 +1,6 @@
 import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Header from "../components/header";
 import UserAvatar from "../components/user.jsx";
 import Transcript from "../components/transcript.jsx";
@@ -28,12 +28,17 @@ export default function SessionPage() {
   const [isAuthorized, setIsAuthorized] = useState(!!token);
   const [showUnauthorized, setShowUnauthorized] = useState(false);
 
+  const handleAuthFailure = useCallback(() => {
+    setIsAuthorized(false);
+    setShowUnauthorized(true);
+  }, []);
+
   useEffect(() => {
     if (!isAuthorized) {
       setShowUnauthorized(true);
       const timer = setTimeout(() => {
         navigate("/");
-      }, 5000); // 5-second delay
+      }, 5000);
 
       return () => clearTimeout(timer);
     }
@@ -45,7 +50,11 @@ export default function SessionPage() {
     ? `/ws/view/${integration}/${encodedSessionId}?token=${token}`
     : null;
 
-  const { transcripts, isDownloadable } = useTranscriptStream(wsUrl, sessionId);
+  const { transcripts, isDownloadable } = useTranscriptStream(
+    wsUrl,
+    sessionId,
+    handleAuthFailure,
+  );
 
   const lastTopTextRef = React.useRef(null);
   const notification = useSmartScroll(transcripts, lastTopTextRef);

@@ -5,22 +5,14 @@ const DOWNLOAD_WINDOW_MS = 10 * 60 * 1000;
 /**
  * A custom hook to manage a WebSocket connection for live transcripts.
  * @param {string} wsUrl The WebSocket URL to connect to.
+ * @param {string} sessionId The session ID (used for dependencies).
+ * @param {function} onUnauthorized Callback to trigger when auth fails (403/1008).
  * @returns {{
- * transcripts: Array<{
- * id: string,
- * speaker: string,
- * translation: string,
- * transcription: string,
- * source_language: string,
- * target_language: string,
- * isFinalized: boolean,
- * type: 'update' | 'final' | 'correction' | 'status_update',
- * original?: { translation: string, transcription: string },
- * correctionStatus?: 'correcting' | 'corrected' | null
- * }>;
+ * transcripts: Array<Object>;
+ * isDownloadable: boolean;
  * }}
  */
-export function useTranscriptStream(wsUrl, sessionId) {
+export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
   const [transcripts, setTranscripts] = useState([]);
   const [isDownloadable, setIsDownloadable] = useState(false);
   const hideTimerRef = useRef(null);
@@ -50,13 +42,31 @@ export function useTranscriptStream(wsUrl, sessionId) {
       };
 
       ws.current.onclose = (event) => {
-        if (event.code === 4001 || event.code === 4008) {
+        const code = event.code;
+
+        if (code === 1008 || code === 1006 || code === 403) {
+          console.warn("WebSocket authorization failed.");
+          if (onUnauthorized) {
+            onUnauthorized();
+          }
+          return;
+        }
+
+        if (code === 4001 || code === 4008) {
           console.error(
-            `WebSocket connection closed: ${event.reason} (${event.code})`,
+            `WebSocket connection failed permanently: ${event.reason} (${code})`,
           );
           return;
         }
-        console.log(`WebSocket disconnected. Reconnecting in 3 seconds...`);
+
+        if (code === 1000) {
+          console.log("WebSocket closed normally.");
+          return;
+        }
+
+        console.log(
+          `WebSocket disconnected (Code: ${code}). Reconnecting in 3 seconds...`,
+        );
         reconnectTimeoutId = setTimeout(connect, 3000);
       };
 
@@ -164,7 +174,7 @@ export function useTranscriptStream(wsUrl, sessionId) {
         ws.current.close();
       }
     };
-  }, [wsUrl, sessionId]);
+  }, [wsUrl, sessionId, onUnauthorized]);
 
   return { transcripts, isDownloadable };
 }

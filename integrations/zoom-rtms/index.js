@@ -42,15 +42,9 @@ function getTimestamp() {
   return `${YYYY}-${MM}-${DD}_${HH}-${MIN}-${SS}`;
 }
 
-/**
- * Creates a new pino logger instance for a specific meeting.
- * This logger writes to both the console and a unique file.
- * @param {string} meeting_uuid - The UUID of the meeting
- * @returns {{logger: pino.Logger, transport: object}}
- */
 function createMeetingLogger(meeting_uuid) {
   const timestamp = getTimestamp();
-  const safe_uuid = meeting_uuid.replace(/\//g, "_"); // Replaces all '/' with '_'
+  const safe_uuid = meeting_uuid.replace(/\//g, "_");
   const fileName = `${safe_uuid}_${timestamp}.log`;
   const logPath = `${logDir}/${fileName}`;
 
@@ -64,7 +58,7 @@ function createMeetingLogger(meeting_uuid) {
         options: {
           destination: logPath,
           colorize: false,
-          mkdir: true, // Create the log directory if it doesn't exist
+          mkdir: true,
           append: true,
         },
       },
@@ -101,9 +95,6 @@ if (!ZM_PRIVATE_KEY) {
 
 let clients = new Map();
 
-// ============================
-// --- Main Webhook Handler ---
-// ============================
 function rtmsWebhookHandler(req, res) {
   if (!ZM_WEBHOOK_SECRET) {
     logger.error("FATAL: ZM_WEBHOOK_SECRET is not defined in .env file!");
@@ -178,13 +169,6 @@ function rtmsWebhookHandler(req, res) {
   }
 }
 
-// ================================
-// --- Event-Specific Functions ---
-// ================================
-
-/**
- * Handles Zoom's URL validation challenge
- */
 function handleUrlValidation(payload, res) {
   if (!payload?.plainToken) {
     logger.warn("Validation failed: no plainToken received.");
@@ -205,10 +189,6 @@ function handleUrlValidation(payload, res) {
   return res.status(200).json(responsePayload);
 }
 
-/**
- * Generates a short-lived JWT
- * @returns {string} - A signed JWT valid for 5 minutes
- */
 function generateAuthToken(host_id) {
   const payload = {
     iss: "zoom-rtms-service",
@@ -223,9 +203,6 @@ function generateAuthToken(host_id) {
   });
 }
 
-/**
- * Handles RTMS start event by creating SDK and WebSocket clients
- */
 function handleRtmsStarted(payload, streamId) {
   const meeting_uuid = payload?.meeting_uuid;
   const host_id = payload?.operator_id;
@@ -262,9 +239,6 @@ function handleRtmsStarted(payload, streamId) {
   };
   clients.set(streamId, clientEntry);
 
-  /**
-   * Defines a recursive connect function with exponential backoff
-   */
   function connect(retries = 0) {
     if (!clients.has(streamId)) {
       meetingLogger.info(
@@ -288,10 +262,13 @@ function handleRtmsStarted(payload, streamId) {
       `${ZOOM_BASE_SERVER_URL}/${encoded_meeting_uuid}`,
       {
         headers: authHeader,
+        handshakeTimeout: 10000,
       },
     );
 
     clientEntry.wsClient = wsClient;
+
+    let pingInterval;
 
     wsClient.on("open", () => {
       meetingLogger.info(
@@ -299,13 +276,23 @@ function handleRtmsStarted(payload, streamId) {
       );
       clientEntry.hasLoggedWarning = false;
       retries = 0;
+
+      pingInterval = setInterval(() => {
+        if (wsClient.readyState === WebSocket.OPEN) {
+          wsClient.ping();
+        }
+      }, 20000);
     });
+
+    wsClient.on("pong", () => {});
 
     wsClient.on("error", (error) => {
       meetingLogger.error(error, `WebSocket error for stream ${streamId}`);
     });
 
     wsClient.on("close", (code, reason) => {
+      if (pingInterval) clearInterval(pingInterval);
+
       meetingLogger.info(
         `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
       );
@@ -322,7 +309,6 @@ function handleRtmsStarted(payload, streamId) {
         return;
       }
 
-      // It was an unexpected close, so let's retry.
       const nextRetries = retries + 1;
       const delay = Math.min(1000 * 2 ** retries, 30000);
 
@@ -362,9 +348,6 @@ function handleRtmsStarted(payload, streamId) {
   connect();
 }
 
-/**
- * Handles RTMS stop event
- */
 function handleRtmsStopped(streamId) {
   if (!streamId) {
     logger.info(`Received meeting.rtms_stopped event without stream ID`);
@@ -400,17 +383,7 @@ function handleRtmsStopped(streamId) {
   }
 }
 
-// ====================
-// --- Server Setup ---
-// ====================
-
 const app = express();
-
-// NOTE: This is for logging request when needed
-// app.use((req, res, next) => {
-//   logger.info({ method: req.method, path: req.path }, "Incoming request");
-//   next();
-// });
 
 app.use(
   "/",

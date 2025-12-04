@@ -22,10 +22,12 @@ process.on("message", (msg) => {
 });
 
 process.on("uncaughtException", (err) => {
+  console.error("CRITICAL WORKER CRASH:", err);
+
   if (currentClientEntry?.meetingLogger) {
-    currentClientEntry.meetingLogger.fatal(err, "WORKER UNCAUGHT EXCEPTION");
-  } else {
-    console.error("WORKER UNCAUGHT EXCEPTION", err);
+    try {
+      currentClientEntry.meetingLogger.fatal(err, "WORKER UNCAUGHT EXCEPTION");
+    } catch (e) {}
   }
   process.exit(1);
 });
@@ -47,7 +49,6 @@ function createMeetingLogger(meeting_uuid) {
   const fileName = `${safe_uuid}_${timestamp}.log`;
   const logPath = `${logDir}/${fileName}`;
 
-  // Local logger just for creating the file transport
   const meetingTransport = pino.transport({
     targets: [
       {
@@ -146,16 +147,13 @@ function handleRtmsStarted(payload, streamId) {
     });
 
     wsClient.on("close", (code, reason) => {
+      if (isStopping) {
+        return;
+      }
+
       meetingLogger.info(
         `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
       );
-
-      if (isStopping) {
-        meetingLogger.info(
-          `Stream ${streamId} was intentionally stopped, not reconnecting.`,
-        );
-        return;
-      }
 
       const nextRetries = retries + 1;
       const delay = Math.min(1000 * 2 ** retries, 30000);
@@ -208,15 +206,25 @@ function handleRtmsStopped(streamId) {
 
   meetingLogger.info(`Cleaning up clients for stream: ${streamId}`);
 
-  rtmsClient.leave();
+  try {
+    rtmsClient.leave();
+  } catch (err) {}
 
-  if (wsClient) {
-    wsClient.close();
-  }
+  try {
+    if (wsClient) {
+      wsClient.close();
+    }
+  } catch (err) {}
 
   meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
 
+  const forceExitTimer = setTimeout(() => {
+    console.error("Log transport failed to close in time, forcing exit.");
+    process.exit(0);
+  }, 5000);
+
   meetingTransport.end(() => {
+    clearTimeout(forceExitTimer);
     process.exit(0);
   });
 }

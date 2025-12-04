@@ -1,3 +1,6 @@
+// TODO: Logs files per session
+// Stop creating node_ log files
+
 import "dotenv/config";
 import crypto from "crypto";
 import express from "express";
@@ -134,7 +137,7 @@ app.post("/zoom", (req, res) => {
             targetWorker.kill();
             activeWorkers.delete(streamId);
           }
-        }, 5000);
+        }, 10000);
       }
       return res.status(200).send("OK");
 

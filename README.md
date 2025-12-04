@@ -59,8 +59,8 @@ services:
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
-      - translation-data:/app/logs
-      - translation-data:/app/output
+      - translation-logs:/app/logs
+      - translation-vtts:/app/output
     networks:
       - calc-translation
 
@@ -77,15 +77,16 @@ services:
       - ZM_PRIVATE_KEY=${ZM_PRIVATE_KEY}
       - BASE_SERVER_URL=ws://translation-server:8000/ws/transcribe
     volumes:
-      - zoom_rtms-data:/app/logs
+      - zoom_rtms-logs:/app/logs
     depends_on:
       - translation-server
     networks:
       - calc-translation
 
 volumes:
-  translation-data:
-  zoom_rtms-data:
+  translation-logs:
+  translation-vtts:
+  zoom_rtms-logs:
 
 networks:
   calc-translation:
@@ -163,8 +164,3 @@ OLLAMA_URL=
 # API Key for Alibaba DashScope (for Qwen-MT retranslation)
 ALIBABA_API_KEY=
 ```
-
-## Enhancements:
-
-- Redirect user back to home, when download expires
-- Full UI translation (once multilingual is introduced)

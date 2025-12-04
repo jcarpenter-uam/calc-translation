@@ -127,7 +127,7 @@ app.post("/zoom", (req, res) => {
       logger.info(`Handling meeting.rtms_stopped for stream: ${streamId}`);
       if (streamId && activeWorkers.has(streamId)) {
         const targetWorker = activeWorkers.get(streamId);
-        targetWorker.send({ type: "STOP" });
+        targetWorker.send({ type: "STOP", streamId: streamId });
 
         setTimeout(() => {
           if (activeWorkers.has(streamId)) {

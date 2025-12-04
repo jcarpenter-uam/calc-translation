@@ -6,11 +6,9 @@ import { fork } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Setup directory resolution for ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- Logging Setup (Global Server) ---
 const transport = pino.transport({
   targets: [
     {
@@ -31,7 +29,6 @@ process.on("unhandledRejection", (reason) => {
   process.exit(1);
 });
 
-// --- Configuration ---
 const ZM_WEBHOOK_SECRET = process.env.ZM_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 8080;
 
@@ -40,10 +37,8 @@ if (!process.env.ZM_PRIVATE_KEY) {
   process.exit(1);
 }
 
-// Track active workers: Map<streamId, ChildProcess>
 const activeWorkers = new Map();
 
-// --- Webhook Handler ---
 const app = express();
 
 app.use(
@@ -60,7 +55,6 @@ app.post("/zoom", (req, res) => {
     return res.status(500).send("Server configuration error");
   }
 
-  // 1. Signature Validation
   const timestamp = req.headers["x-zm-request-timestamp"];
   const msgPrefix = `v0:${timestamp}:`;
   const hashForVerify = crypto
@@ -90,7 +84,6 @@ app.post("/zoom", (req, res) => {
 
   logger.info(`Received valid webhook for event: ${event}`);
 
-  // 2. Event Routing
   switch (event) {
     case "endpoint.url_validation":
       logger.info("Handling endpoint.url_validation");
@@ -109,13 +102,11 @@ app.post("/zoom", (req, res) => {
     case "meeting.rtms_started":
       logger.info(`Handling meeting.rtms_started for stream: ${streamId}`);
 
-      // Prevent duplicate starts
       if (activeWorkers.has(streamId)) {
         logger.warn(`Worker already exists for stream ${streamId}`);
         return res.status(200).send("OK");
       }
 
-      // SPAWN WORKER
       const worker = fork(path.resolve(__dirname, "./worker.js"));
 
       worker.on("exit", (code) => {
@@ -123,7 +114,6 @@ app.post("/zoom", (req, res) => {
         activeWorkers.delete(streamId);
       });
 
-      // Pass payload to worker
       worker.send({
         type: "START",
         payload: payload,
@@ -139,10 +129,9 @@ app.post("/zoom", (req, res) => {
         const targetWorker = activeWorkers.get(streamId);
         targetWorker.send({ type: "STOP" });
 
-        // Safety cleanup from map (worker exit handler will confirm)
         setTimeout(() => {
           if (activeWorkers.has(streamId)) {
-            targetWorker.kill(); // Force kill if it hangs
+            targetWorker.kill();
             activeWorkers.delete(streamId);
           }
         }, 5000);

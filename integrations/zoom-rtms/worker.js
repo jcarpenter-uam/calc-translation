@@ -4,19 +4,15 @@ import { WebSocket } from "ws";
 import pino from "pino";
 import jwt from "jsonwebtoken";
 
-// --- Configuration ---
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
 const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 const ZM_PRIVATE_KEY = process.env.ZM_PRIVATE_KEY;
 const logDir = "logs";
 
-// --- Worker State ---
-// We don't need a Map here because 1 process = 1 stream
 let currentClientEntry = null;
 let isStopping = false;
 
-// --- Process Logic ---
 process.on("message", (msg) => {
   if (msg.type === "START") {
     handleRtmsStarted(msg.payload, msg.streamId);
@@ -25,7 +21,6 @@ process.on("message", (msg) => {
   }
 });
 
-// Reuse the global error handlers for the worker process
 process.on("uncaughtException", (err) => {
   if (currentClientEntry?.meetingLogger) {
     currentClientEntry.meetingLogger.fatal(err, "WORKER UNCAUGHT EXCEPTION");
@@ -34,8 +29,6 @@ process.on("uncaughtException", (err) => {
   }
   process.exit(1);
 });
-
-// --- Helper Functions (Replicated from index.js) ---
 
 function getTimestamp() {
   const d = new Date();
@@ -96,8 +89,6 @@ function generateAuthToken(host_id) {
   });
 }
 
-// --- Main Logic (Adapted from index.js) ---
-
 function handleRtmsStarted(payload, streamId) {
   const meeting_uuid = payload?.meeting_uuid;
   const host_id = payload?.operator_id;
@@ -110,7 +101,6 @@ function handleRtmsStarted(payload, streamId) {
     log: { enable: false },
   });
 
-  // Store state in file-scope variable
   currentClientEntry = {
     rtmsClient,
     wsClient: null,
@@ -120,7 +110,6 @@ function handleRtmsStarted(payload, streamId) {
     streamId,
   };
 
-  // Internal connect function (Exact replica of logic)
   function connect(retries = 0) {
     if (isStopping) {
       meetingLogger.info("Stream stopping, aborting WebSocket connect.");
@@ -161,7 +150,6 @@ function handleRtmsStarted(payload, streamId) {
         `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
       );
 
-      // Check if this was an intentional stop
       if (isStopping) {
         meetingLogger.info(
           `Stream ${streamId} was intentionally stopped, not reconnecting.`,
@@ -208,7 +196,7 @@ function handleRtmsStarted(payload, streamId) {
 }
 
 function handleRtmsStopped(streamId) {
-  isStopping = true; // Prevents WS reconnect
+  isStopping = true;
 
   if (!currentClientEntry) {
     process.exit(0);
@@ -228,7 +216,6 @@ function handleRtmsStopped(streamId) {
 
   meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
 
-  // Wait for log flush then exit process
   meetingTransport.end(() => {
     process.exit(0);
   });

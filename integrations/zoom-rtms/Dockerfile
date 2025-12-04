@@ -15,7 +15,8 @@ RUN npm install
 
 # Explicialy copy files into container
 # Removes need for .dockerignore
-COPY ./index.js ./
+COPY ./server.js ./
+COPY ./worker.js ./
 RUN mkdir -p /app/logs
 
 RUN chown -R node:node /app
@@ -24,4 +25,4 @@ USER node
 
 EXPOSE 8080
 
-CMD [ "node", "index.js" ]
+CMD [ "node", "server.js" ]

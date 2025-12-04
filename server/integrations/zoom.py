@@ -1,3 +1,6 @@
+# BUG: There is an error that is thrown when attempting to refresh zoom tokens
+# Once replicated it needs to be fixed
+
 import base64
 import logging
 import time

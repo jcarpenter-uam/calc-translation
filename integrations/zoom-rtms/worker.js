@@ -3,6 +3,7 @@ import rtms from "@zoom/rtms";
 import { WebSocket } from "ws";
 import pino from "pino";
 import jwt from "jsonwebtoken";
+import pretty from "pino-pretty";
 
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
@@ -49,32 +50,48 @@ function createMeetingLogger(meeting_uuid) {
   const fileName = `${safe_uuid}_${timestamp}.log`;
   const logPath = `${logDir}/${fileName}`;
 
-  const meetingTransport = pino.transport({
-    targets: [
-      {
-        level: "info",
-        target: "pino-pretty",
-        options: {
-          destination: logPath,
-          colorize: false,
-          mkdir: true,
-          append: true,
-        },
-      },
-      {
-        level: "info",
-        target: "pino-pretty",
-        options: { colorize: true },
-      },
-    ],
+  const fileStream = pretty({
+    destination: pino.destination({
+      dest: logPath,
+      sync: true,
+      mkdir: true,
+      append: true,
+    }),
+    colorize: false,
   });
 
-  const meetingLogger = pino(meetingTransport);
-  meetingLogger.info(
+  const consoleStream = pretty({
+    destination: pino.destination({ fd: 1, sync: true }),
+    colorize: true,
+  });
+
+  const fileLogger = pino(fileStream);
+  const consoleLogger = pino(consoleStream);
+
+  const dualLogger = {
+    info: (msg) => {
+      fileLogger.info(msg);
+      consoleLogger.info(msg);
+    },
+    warn: (msg) => {
+      fileLogger.warn(msg);
+      consoleLogger.warn(msg);
+    },
+    error: (err, msg) => {
+      fileLogger.error(err, msg);
+      consoleLogger.error(err, msg);
+    },
+    fatal: (err, msg) => {
+      fileLogger.fatal(err, msg);
+      consoleLogger.fatal(err, msg);
+    },
+  };
+
+  dualLogger.info(
     `--- Log for Meeting ${meeting_uuid} started at ${timestamp} ---`,
   );
 
-  return { logger: meetingLogger, transport: meetingTransport };
+  return { logger: dualLogger, transport: { end: (cb) => cb && cb() } };
 }
 
 function generateAuthToken(host_id) {
@@ -218,13 +235,5 @@ function handleRtmsStopped(streamId) {
 
   meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
 
-  const forceExitTimer = setTimeout(() => {
-    console.error("Log transport failed to close in time, forcing exit.");
-    process.exit(0);
-  }, 5000);
-
-  meetingTransport.end(() => {
-    clearTimeout(forceExitTimer);
-    process.exit(0);
-  });
+  process.exit(0);
 }

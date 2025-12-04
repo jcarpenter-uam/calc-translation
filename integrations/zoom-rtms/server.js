@@ -1,5 +1,4 @@
-// TODO: Logs files per session
-// Stop creating node_ log files
+// TODO: Stop creating node_ log files
 
 import "dotenv/config";
 import crypto from "crypto";

@@ -223,7 +223,7 @@ async def handle_callback(request: Request) -> RedirectResponse:
             max_age=60 * 60,
             httponly=True,
             secure=settings.APP_BASE_URL.startswith("https"),
-            samesite="lax",
+            samesite="none",
         )
 
         redirect_response.delete_cookie("entra_auth_state")

@@ -1,0 +1,280 @@
+import logging
+from typing import List, Optional
+
+import asyncpg
+import core.database as database
+from core.authentication import encrypt, get_admin_user_payload
+from core.database import (
+    SQL_DELETE_TENANT_BY_ID,
+    SQL_GET_ALL_TENANTS,
+    SQL_GET_TENANT_BY_ID,
+    SQL_INSERT_TENANT,
+)
+from core.logging_setup import log_step
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
+
+
+class TenantBase(BaseModel):
+    """Base model with common fields."""
+
+    domain: str
+    client_id: str
+    organization_name: str
+
+
+class TenantCreate(TenantBase):
+    """Model for creating a new tenant. Receives a plaintext secret."""
+
+    tenant_id: str = Field(..., description="The Entra ID (Directory) Tenant ID")
+    client_secret: str = Field(..., description="The plaintext client secret")
+
+
+class TenantUpdate(BaseModel):
+    """Model for updating a tenant. All fields are optional."""
+
+    domain: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    organization_name: Optional[str] = None
+
+
+class TenantResponse(TenantBase):
+    """Model for returning tenant info. NEVER includes the secret."""
+
+    tenant_id: str
+    has_secret: bool = Field(..., description="True if a client secret is set")
+
+    class Config:
+        from_attributes = True
+
+
+def create_tenant_router() -> APIRouter:
+    """
+    Creates the REST API router for tenants.
+    """
+    router = APIRouter(
+        prefix="/api/tenant",
+    )
+    LOG_STEP = "API-TENANT"
+
+    # NOTE: Admin only
+    @router.post(
+        "/",
+        response_model=TenantResponse,
+        status_code=status.HTTP_201_CREATED,
+        dependencies=[Depends(get_admin_user_payload)],
+    )
+    async def post_tenant(tenant: TenantCreate):
+        """
+        Create a new tenant configuration.
+        If a tenant with the same `tenant_id` already exists,
+        it will be updated (UPSERT).
+        """
+        with log_step(LOG_STEP):
+            logger.info(f"Attempting to create/update tenant: {tenant.tenant_id}")
+            if not database.DB_POOL:
+                logger.error("Database not initialized during tenant creation.")
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            try:
+                encrypted_secret = encrypt(tenant.client_secret)
+
+                async with database.DB_POOL.acquire() as conn:
+                    await conn.execute(
+                        SQL_INSERT_TENANT,
+                        tenant.tenant_id,
+                        tenant.domain,
+                        tenant.client_id,
+                        encrypted_secret,
+                        tenant.organization_name,
+                    )
+
+                    new_tenant_row = await conn.fetchrow(
+                        SQL_GET_TENANT_BY_ID, tenant.tenant_id
+                    )
+
+                logger.info(f"Successfully created/updated tenant: {tenant.tenant_id}")
+                return TenantResponse.model_validate(dict(new_tenant_row))
+
+            except asyncpg.exceptions.UniqueViolationError:
+                logger.warning(
+                    f"Failed to create tenant: domain {tenant.domain} already exists."
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"A tenant with domain '{tenant.domain}' already exists.",
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error creating tenant {tenant.tenant_id}: {e}", exc_info=True
+                )
+                raise HTTPException(status_code=500, detail="Internal server error.")
+
+    # NOTE: Admin only
+    @router.get(
+        "/",
+        response_model=List[TenantResponse],
+        dependencies=[Depends(get_admin_user_payload)],
+    )
+    async def get_tenants():
+        """
+        Retrieve a list of all configured tenants.
+        """
+        with log_step(LOG_STEP):
+            logger.info("Request to get all tenants.")
+            if not database.DB_POOL:
+                logger.error("Database not initialized during get tenants.")
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            async with database.DB_POOL.acquire() as conn:
+                rows = await conn.fetch(SQL_GET_ALL_TENANTS)
+
+            logger.info(f"Found {len(rows)} tenants.")
+            return [TenantResponse.model_validate(dict(row)) for row in rows]
+
+    # NOTE: Admin only
+    @router.get(
+        "/{tenant_id}",
+        response_model=TenantResponse,
+        dependencies=[Depends(get_admin_user_payload)],
+    )
+    async def get_tenant(tenant_id: str):
+        """
+        Retrieve a specific tenant configuration by its Tenant ID.
+        """
+        with log_step(LOG_STEP):
+            logger.info(f"Request to get tenant: {tenant_id}")
+            if not database.DB_POOL:
+                logger.error(f"Database not initialized during get tenant: {tenant_id}")
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            async with database.DB_POOL.acquire() as conn:
+                row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
+
+            if not row:
+                logger.warning(f"Tenant not found: {tenant_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tenant with ID '{tenant_id}' not found.",
+                )
+            logger.info(f"Successfully found tenant: {tenant_id}")
+            return TenantResponse.model_validate(dict(row))
+
+    # NOTE: Admin only
+    @router.patch(
+        "/{tenant_id}",
+        response_model=TenantResponse,
+        dependencies=[Depends(get_admin_user_payload)],
+    )
+    async def patch_tenant(tenant_id: str, patch: TenantUpdate):
+        """
+        Update one or more fields of an existing tenant configuration.
+        Only fields provided in the request body will be updated.
+        """
+        with log_step(LOG_STEP):
+            logger.info(f"Request to update tenant: {tenant_id}")
+            if not database.DB_POOL:
+                logger.error(
+                    f"Database not initialized during patch tenant: {tenant_id}"
+                )
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            update_data = patch.model_dump(exclude_unset=True)
+
+            if "client_secret" in update_data:
+                update_data["client_secret_encrypted"] = encrypt(
+                    update_data.pop("client_secret")
+                )
+
+            if not update_data:
+                logger.warning(f"Update called for tenant {tenant_id} with no data.")
+                async with database.DB_POOL.acquire() as conn:
+                    row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
+                if not row:
+                    logger.warning(f"Tenant not found: {tenant_id} (on no-op patch)")
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Tenant with ID '{tenant_id}' not found.",
+                    )
+                return TenantResponse.model_validate(dict(row))
+
+            query_parts = []
+            query_args = []
+            arg_counter = 1
+
+            for key, value in update_data.items():
+                query_parts.append(f"{key} = ${arg_counter}")
+                query_args.append(value)
+                arg_counter += 1
+
+            query_args.append(tenant_id)
+
+            set_clause = ", ".join(query_parts)
+            query = f"UPDATE TENANTS SET {set_clause} WHERE tenant_id = ${arg_counter}"
+
+            try:
+                async with database.DB_POOL.acquire() as conn:
+                    result = await conn.execute(query, *query_args)
+
+                    if result == "UPDATE 0":
+                        logger.warning(
+                            f"Tenant not found during update attempt: {tenant_id}"
+                        )
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Tenant with ID '{tenant_id}' not found.",
+                        )
+
+                    row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
+
+                if not row:
+                    logger.error(
+                        f"Tenant {tenant_id} not found after update, this should not happen."
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Tenant with ID '{tenant_id}' not found after update.",
+                    )
+
+                logger.info(f"Successfully updated tenant: {tenant_id}")
+                return TenantResponse.model_validate(dict(row))
+
+            except Exception as e:
+                logger.error(f"Error updating tenant {tenant_id}: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail="Internal server error.")
+
+    # NOTE: Admin only
+    @router.delete(
+        "/{tenant_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        dependencies=[Depends(get_admin_user_payload)],
+    )
+    async def delete_tenant_endpoint(tenant_id: str):
+        """
+        Delete a tenant configuration by its Tenant ID.
+        """
+        with log_step(LOG_STEP):
+            logger.info(f"Request to delete tenant: {tenant_id}")
+            if not database.DB_POOL:
+                logger.error(
+                    f"Database not initialized during delete tenant: {tenant_id}"
+                )
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            async with database.DB_POOL.acquire() as conn:
+                result = await conn.execute(SQL_DELETE_TENANT_BY_ID, tenant_id)
+
+            if result == "DELETE 0":
+                logger.warning(f"Tenant not found for deletion: {tenant_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Tenant with ID '{tenant_id}' not found.",
+                )
+
+            logger.info(f"Successfully deleted tenant: {tenant_id}")
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    return router

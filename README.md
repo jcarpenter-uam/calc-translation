@@ -52,14 +52,15 @@ services:
       - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
       - DATABASE_URL=${DATABASE_URL}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - ZM_PUBLIC_KEY=${ZM_PUBLIC_KEY}
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
-      - translation-data:/app/logs
-      - translation-data:/app/output
+      - translation-logs:/app/logs
+      - translation-vtts:/app/output
     networks:
       - calc-translation
 
@@ -76,15 +77,16 @@ services:
       - ZM_PRIVATE_KEY=${ZM_PRIVATE_KEY}
       - BASE_SERVER_URL=ws://translation-server:8000/ws/transcribe
     volumes:
-      - zoom_rtms-data:/app/logs
+      - zoom_rtms-logs:/app/logs
     depends_on:
       - translation-server
     networks:
       - calc-translation
 
 volumes:
-  translation-data:
-  zoom_rtms-data:
+  translation-logs:
+  translation-vtts:
+  zoom_rtms-logs:
 
 networks:
   calc-translation:
@@ -121,6 +123,10 @@ APP_BASE_URL="http://localhost:8000" # Default if not set
 #
 # Get this from your Soniox account dashboard.
 SONIOX_API_KEY=
+#
+# Encryption key for storing secrets
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+ENCRYPTION_KEY=""
 #
 # A secret token to authenticate incoming WebSocket connections.
 # This should be a long, random string.

@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/auth";
 import Header from "../components/header";
+import UserAvatar from "../components/user.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
 import LanguageToggle from "../components/language-toggle.jsx";
 import {
@@ -13,9 +15,44 @@ import Footer from "../components/footer.jsx";
 import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
 
 export default function LandingPage() {
+  const { user } = useAuth();
   const [integration, setIntegration] = useState("zoom");
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkPendingZoomLink = async () => {
+      const needsLink = sessionStorage.getItem("zoom_link_pending");
+
+      if (needsLink === "true") {
+        try {
+          console.log("Found pending Zoom link, attempting to link account...");
+          alert("Finishing Zoom account setup...");
+
+          const response = await fetch("/api/auth/zoom/link-pending", {
+            method: "POST",
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Failed to link Zoom account.");
+          }
+
+          console.log("Zoom account linked successfully!");
+          alert("Zoom account linked successfully!");
+        } catch (error) {
+          console.error("Zoom link error:", error);
+          alert(
+            `Failed to link Zoom: ${error.message}. Please try reconnecting from your profile.`,
+          );
+        } finally {
+          sessionStorage.removeItem("zoom_link_pending");
+        }
+      }
+    };
+
+    checkPendingZoomLink();
+  }, []);
 
   const handleJoin = (type, sessionId, token) => {
     navigate(`/sessions/${type}/${sessionId}?token=${token}`);
@@ -130,6 +167,7 @@ export default function LandingPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <Header>
+        <UserAvatar />
         <ThemeToggle />
         <LanguageToggle />
       </Header>
@@ -148,13 +186,15 @@ export default function LandingPage() {
                 selected={integration}
                 onSelect={setIntegration}
               />
-              <IntegrationCard
-                id="test"
-                title="Test"
-                icon={<BiSolidFlask className="h-7 w-7 text-green-500" />}
-                selected={integration}
-                onSelect={setIntegration}
-              />
+              {user?.is_admin && (
+                <IntegrationCard
+                  id="test"
+                  title="Test"
+                  icon={<BiSolidFlask className="h-7 w-7 text-green-500" />}
+                  selected={integration}
+                  onSelect={setIntegration}
+                />
+              )}
             </div>
           </div>
 

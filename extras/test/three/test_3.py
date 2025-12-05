@@ -164,7 +164,7 @@ async def main(file_path: str):
         auth_header = {"Authorization": f"Bearer {token}"}
 
         async with aiohttp.ClientSession(headers=auth_header) as session:
-            full_url = f"{WEBSOCKET_URL.rstrip('/')}/test/test1"
+            full_url = f"{WEBSOCKET_URL.rstrip('/')}/test/test3"
             async with session.ws_connect(full_url) as ws:
                 print(f"\nConnected to {full_url}")
 
@@ -202,7 +202,7 @@ async def main(file_path: str):
 
 if __name__ == "__main__":
     try:
-        file_path = "./one/test_1.m4a"
+        file_path = "./three/test_3.m4a"
 
         if not os.path.exists(file_path):
             print(f"Error: File not found at '{file_path}'", file=sys.stderr)

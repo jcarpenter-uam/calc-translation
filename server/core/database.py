@@ -24,10 +24,6 @@ async def init_db():
             logger.info("Database pool already initialized.")
             return
 
-        if not POSTGRES_DSN:
-            logger.error("DATABASE_URL is not set. Cannot initialize database.")
-            raise ValueError("DATABASE_URL environment variable is not set.")
-
         try:
             DB_POOL = await asyncpg.create_pool(dsn=POSTGRES_DSN)
             async with DB_POOL.acquire() as conn:
@@ -38,11 +34,30 @@ async def init_db():
                         CREATE TABLE IF NOT EXISTS USERS (
                             id TEXT PRIMARY KEY, -- EntraID User ID
                             name TEXT,
-                            email TEXT
+                            email TEXT,
+                            is_admin BOOLEAN DEFAULT FALSE
                         )
                         """
                     )
-
+                    # Create TENANTS table for Entra ID
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS TENANTS (
+                            tenant_id TEXT PRIMARY KEY,
+                            domain TEXT NOT NULL UNIQUE,
+                            client_id TEXT NOT NULL,
+                            client_secret_encrypted TEXT NOT NULL,
+                            organization_name TEXT
+                        )
+                        """
+                    )
+                    # Add an index for faster domain lookups
+                    await conn.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_tenants_domain
+                        ON TENANTS(domain);
+                        """
+                    )
                     # Create INTEGRATIONS table
                     await conn.execute(
                         """
@@ -50,6 +65,7 @@ async def init_db():
                             id SERIAL PRIMARY KEY, -- integration_id
                             user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
                             platform TEXT,
+                            platform_user_id TEXT,
                             access_token TEXT,
                             refresh_token TEXT,
                             expires_at BIGINT, -- Use BIGINT for 64-bit timestamps
@@ -57,7 +73,10 @@ async def init_db():
                         )
                         """
                     )
-
+                    # Index for fast lookups by Zoom ID
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_integrations_platform_id ON INTEGRATIONS(platform, platform_user_id);"
+                    )
                     # Create MEETINGS table
                     await conn.execute(
                         """
@@ -73,7 +92,6 @@ async def init_db():
                         )
                         """
                     )
-
                     # Create TRANSCRIPTS table
                     await conn.execute(
                         """
@@ -104,14 +122,69 @@ ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     email = excluded.email;
 """
+
 SQL_GET_USER_BY_ID = "SELECT * FROM USERS WHERE id = $1;"
 
+SQL_GET_ALL_USERS = "SELECT * FROM USERS;"
+
+SQL_DELETE_USER_BY_ID = "DELETE FROM USERS WHERE id = $1;"
+
+SQL_SET_USER_ADMIN_STATUS = "UPDATE USERS SET is_admin = $1 WHERE id = $2;"
+
+# TENANTS
+SQL_GET_TENANT_AUTH_BY_ID = """
+SELECT tenant_id, client_id, client_secret_encrypted
+FROM TENANTS
+WHERE tenant_id = $1;
+"""
+
+SQL_INSERT_TENANT = """
+INSERT INTO TENANTS (tenant_id, domain, client_id, client_secret_encrypted, organization_name)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT(tenant_id) DO UPDATE SET
+    domain = excluded.domain,
+    client_id = excluded.client_id,
+    client_secret_encrypted = excluded.client_secret_encrypted,
+    organization_name = excluded.organization_name;
+"""
+
+SQL_GET_TENANT_BY_DOMAIN = """
+SELECT tenant_id, client_id, client_secret_encrypted
+FROM TENANTS
+WHERE domain = $1;
+"""
+
+SQL_GET_TENANT_BY_ID = """
+SELECT 
+    tenant_id, 
+    domain, 
+    client_id, 
+    organization_name, 
+    (client_secret_encrypted IS NOT NULL AND client_secret_encrypted != '') as has_secret
+FROM TENANTS
+WHERE tenant_id = $1;
+"""
+
+SQL_GET_ALL_TENANTS = """
+SELECT 
+    tenant_id, 
+    domain, 
+    client_id, 
+    organization_name, 
+    (client_secret_encrypted IS NOT NULL AND client_secret_encrypted != '') as has_secret
+FROM TENANTS;
+"""
+
+SQL_DELETE_TENANT_BY_ID = """
+DELETE FROM TENANTS WHERE tenant_id = $1;
+"""
 
 # --- INTEGRATIONS ---
 SQL_UPSERT_INTEGRATION = """
-INSERT INTO INTEGRATIONS (user_id, platform, access_token, refresh_token, expires_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO INTEGRATIONS (user_id, platform, platform_user_id, access_token, refresh_token, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT(user_id, platform) DO UPDATE SET
+    platform_user_id = excluded.platform_user_id,
     access_token = excluded.access_token,
     refresh_token = excluded.refresh_token,
     expires_at = excluded.expires_at;

@@ -1,10 +1,14 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import ProtectedRoute from "./components/protected-route";
+import Login from "./pages/login";
 import LandingPage from "./pages/landing";
 import SessionPage from "./pages/session";
 import Support from "./pages/support";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
 import ScrollToTop from "./util/scroll-to-top";
+import AdminPage from "./pages/admin";
+import NotFound from "./pages/not-found";
 
 export default function App() {
   return (
@@ -12,15 +16,24 @@ export default function App() {
       <BrowserRouter>
         <ScrollToTop />
         <Routes>
-          <Route path="/" element={<LandingPage />} />
-
-          <Route path="/sessions/:integration/*" element={<SessionPage />} />
-
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
           <Route path="/support" element={<Support />} />
-
           <Route path="/privacy" element={<Privacy />} />
-
           <Route path="/terms" element={<Terms />} />
+
+          {/* Routes for all authenticated users */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/sessions/:integration/*" element={<SessionPage />} />
+          </Route>
+
+          {/* Routes for admin users only */}
+          <Route element={<ProtectedRoute adminOnly={true} />}>
+            <Route path="/admin" element={<AdminPage />} />
+          </Route>
+
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </div>

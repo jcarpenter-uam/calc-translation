@@ -10,7 +10,7 @@ const LoadingIcon = () => <SpinnerBall size={23} />;
  * An icon-button component to download a .vtt transcript file.
  * Becomes green and enabled when isDownloadable is true.
  */
-function DownloadVttButton({ isDownloadable, integration, sessionId }) {
+function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleDownload = async () => {
@@ -19,7 +19,7 @@ function DownloadVttButton({ isDownloadable, integration, sessionId }) {
     setIsLoading(true);
 
     const encodedSessionId = encodeURIComponent(sessionId);
-    const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt`;
+    const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt?token=${token}`;
 
     try {
       const response = await fetch(downloadUrl, {

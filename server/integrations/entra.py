@@ -148,7 +148,7 @@ async def handle_login(
             max_age=600,
             httponly=True,
             secure=settings.APP_BASE_URL.startswith("https"),
-            samesite="lax",
+            samesite="none",
         )
         auth_url = _build_auth_url(tenant_config, state)
         logger.info(f"Redirecting user from domain {domain} to auth URL.")

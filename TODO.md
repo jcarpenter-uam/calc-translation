@@ -16,3 +16,5 @@
 - Cache, VTT files will both have to be reworked to allow for multiple languages per session
 
 - Authenticating for a given session allows you access to any language even switching mid meeting
+
+- Liked language dropdown component [here](https://github.com/soniox/soniox_examples/blob/master/speech_to_text/apps/soniox-live-demo/react/src/renderers/translate-to.tsx)

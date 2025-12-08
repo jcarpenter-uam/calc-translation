@@ -43,16 +43,16 @@ export default function AdminPage() {
     fetchData();
   }, []);
 
-  const handleUpdateUser = async (userId, updateData) => {
+  const handleToggleUserAdmin = async (userId, isAdmin) => {
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await fetch(`/api/users/${userId}/admin`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updateData),
+        body: JSON.stringify({ is_admin: isAdmin }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update user");
+        throw new Error("Failed to update admin status");
       }
 
       const updatedUser = await response.json();
@@ -63,7 +63,8 @@ export default function AdminPage() {
         ),
       );
     } catch (err) {
-      console.error("User update error:", err);
+      console.error("Admin toggle error:", err);
+      setError(err.message);
     }
   };
 
@@ -162,7 +163,7 @@ export default function AdminPage() {
       <div className="space-y-12">
         <UserManagement
           users={users}
-          onUpdateUser={handleUpdateUser}
+          onToggleAdmin={handleToggleUserAdmin}
           onDeleteUser={handleDeleteUser}
         />
 

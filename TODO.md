@@ -11,6 +11,8 @@
 
 - How can I handle someone joining mid utterance?
 
+- I need to account for language hints with the soniox api for better results
+
 - Cache, VTT files will both have to be reworked to allow for multiple languages per session
 
 - Authenticating for a given session allows you access to any language even switching mid meeting

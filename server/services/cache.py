@@ -1,3 +1,5 @@
+# NOTE: A cache will need to be built per language per meeting, but finding a solution for backfeeding
+
 import logging
 from collections import deque
 from typing import Any, Deque, Dict, List

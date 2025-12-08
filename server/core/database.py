@@ -44,18 +44,18 @@ async def init_db():
                         """
                         CREATE TABLE IF NOT EXISTS TENANTS (
                             tenant_id TEXT PRIMARY KEY,
-                            domain TEXT NOT NULL UNIQUE,
                             client_id TEXT NOT NULL,
                             client_secret_encrypted TEXT NOT NULL,
                             organization_name TEXT
                         )
                         """
                     )
-                    # Add an index for faster domain lookups
                     await conn.execute(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_tenants_domain
-                        ON TENANTS(domain);
+                        CREATE TABLE IF NOT EXISTS TENANT_DOMAINS (
+                            domain TEXT PRIMARY KEY,
+                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE
+                        )
                         """
                     )
                     # Create INTEGRATIONS table
@@ -139,46 +139,59 @@ WHERE tenant_id = $1;
 """
 
 SQL_INSERT_TENANT = """
-INSERT INTO TENANTS (tenant_id, domain, client_id, client_secret_encrypted, organization_name)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO TENANTS (tenant_id, client_id, client_secret_encrypted, organization_name)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT(tenant_id) DO UPDATE SET
-    domain = excluded.domain,
     client_id = excluded.client_id,
     client_secret_encrypted = excluded.client_secret_encrypted,
     organization_name = excluded.organization_name;
 """
 
+SQL_INSERT_DOMAIN = """
+INSERT INTO TENANT_DOMAINS (domain, tenant_id)
+VALUES ($1, $2)
+ON CONFLICT(domain) DO UPDATE SET tenant_id = excluded.tenant_id;
+"""
+
 SQL_GET_TENANT_BY_DOMAIN = """
-SELECT tenant_id, client_id, client_secret_encrypted
-FROM TENANTS
-WHERE domain = $1;
+SELECT t.tenant_id, t.client_id, t.client_secret_encrypted
+FROM TENANTS t
+JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
+WHERE d.domain = $1;
 """
 
 SQL_GET_TENANT_BY_ID = """
 SELECT 
-    tenant_id, 
-    domain, 
-    client_id, 
-    organization_name, 
-    (client_secret_encrypted IS NOT NULL AND client_secret_encrypted != '') as has_secret
-FROM TENANTS
-WHERE tenant_id = $1;
+    t.tenant_id, 
+    t.client_id, 
+    t.organization_name, 
+    (t.client_secret_encrypted IS NOT NULL AND t.client_secret_encrypted != '') as has_secret,
+    COALESCE(array_agg(d.domain) FILTER (WHERE d.domain IS NOT NULL), '{}') as domains
+FROM TENANTS t
+LEFT JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
+WHERE t.tenant_id = $1
+GROUP BY t.tenant_id;
 """
 
 SQL_GET_ALL_TENANTS = """
 SELECT 
-    tenant_id, 
-    domain, 
-    client_id, 
-    organization_name, 
-    (client_secret_encrypted IS NOT NULL AND client_secret_encrypted != '') as has_secret
-FROM TENANTS;
+    t.tenant_id, 
+    t.client_id, 
+    t.organization_name, 
+    (t.client_secret_encrypted IS NOT NULL AND t.client_secret_encrypted != '') as has_secret,
+    COALESCE(array_agg(d.domain) FILTER (WHERE d.domain IS NOT NULL), '{}') as domains
+FROM TENANTS t
+LEFT JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
+GROUP BY t.tenant_id;
 """
 
 SQL_DELETE_TENANT_BY_ID = """
 DELETE FROM TENANTS WHERE tenant_id = $1;
 """
 
+SQL_DELETE_DOMAINS_BY_TENANT_ID = """
+DELETE FROM TENANT_DOMAINS WHERE tenant_id = $1;
+"""
 # --- INTEGRATIONS ---
 SQL_UPSERT_INTEGRATION = """
 INSERT INTO INTEGRATIONS (user_id, platform, platform_user_id, access_token, refresh_token, expires_at)

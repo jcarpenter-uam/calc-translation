@@ -5,9 +5,11 @@ import asyncpg
 import core.database as database
 from core.authentication import encrypt, get_admin_user_payload
 from core.database import (
+    SQL_DELETE_DOMAINS_BY_TENANT_ID,
     SQL_DELETE_TENANT_BY_ID,
     SQL_GET_ALL_TENANTS,
     SQL_GET_TENANT_BY_ID,
+    SQL_INSERT_DOMAIN,
     SQL_INSERT_TENANT,
 )
 from core.logging_setup import log_step
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 class TenantBase(BaseModel):
     """Base model with common fields."""
 
-    domain: str
+    domains: List[str]
     client_id: str
     organization_name: str
 
@@ -35,7 +37,7 @@ class TenantCreate(TenantBase):
 class TenantUpdate(BaseModel):
     """Model for updating a tenant. All fields are optional."""
 
-    domain: Optional[str] = None
+    domains: Optional[List[str]] = None
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
     organization_name: Optional[str] = None
@@ -83,29 +85,37 @@ def create_tenant_router() -> APIRouter:
                 encrypted_secret = encrypt(tenant.client_secret)
 
                 async with database.DB_POOL.acquire() as conn:
-                    await conn.execute(
-                        SQL_INSERT_TENANT,
-                        tenant.tenant_id,
-                        tenant.domain,
-                        tenant.client_id,
-                        encrypted_secret,
-                        tenant.organization_name,
-                    )
+                    async with conn.transaction():
+                        await conn.execute(
+                            SQL_INSERT_TENANT,
+                            tenant.tenant_id,
+                            tenant.client_id,
+                            encrypted_secret,
+                            tenant.organization_name,
+                        )
 
-                    new_tenant_row = await conn.fetchrow(
-                        SQL_GET_TENANT_BY_ID, tenant.tenant_id
-                    )
+                        await conn.execute(
+                            SQL_DELETE_DOMAINS_BY_TENANT_ID, tenant.tenant_id
+                        )
+
+                        if tenant.domains:
+                            for domain in tenant.domains:
+                                await conn.execute(
+                                    SQL_INSERT_DOMAIN, domain, tenant.tenant_id
+                                )
+
+                        new_tenant_row = await conn.fetchrow(
+                            SQL_GET_TENANT_BY_ID, tenant.tenant_id
+                        )
 
                 logger.info(f"Successfully created/updated tenant: {tenant.tenant_id}")
                 return TenantResponse.model_validate(dict(new_tenant_row))
 
             except asyncpg.exceptions.UniqueViolationError:
-                logger.warning(
-                    f"Failed to create tenant: domain {tenant.domain} already exists."
-                )
+                logger.warning(f"Failed to create tenant: Unique violation occurred.")
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"A tenant with domain '{tenant.domain}' already exists.",
+                    detail=f"A conflict occurred while creating the tenant.",
                 )
             except Exception as e:
                 logger.error(
@@ -184,12 +194,16 @@ def create_tenant_router() -> APIRouter:
 
             update_data = patch.model_dump(exclude_unset=True)
 
+            new_domains = None
+            if "domains" in update_data:
+                new_domains = update_data.pop("domains")
+
             if "client_secret" in update_data:
                 update_data["client_secret_encrypted"] = encrypt(
                     update_data.pop("client_secret")
                 )
 
-            if not update_data:
+            if not update_data and new_domains is None:
                 logger.warning(f"Update called for tenant {tenant_id} with no data.")
                 async with database.DB_POOL.acquire() as conn:
                     row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
@@ -201,34 +215,44 @@ def create_tenant_router() -> APIRouter:
                     )
                 return TenantResponse.model_validate(dict(row))
 
-            query_parts = []
-            query_args = []
-            arg_counter = 1
-
-            for key, value in update_data.items():
-                query_parts.append(f"{key} = ${arg_counter}")
-                query_args.append(value)
-                arg_counter += 1
-
-            query_args.append(tenant_id)
-
-            set_clause = ", ".join(query_parts)
-            query = f"UPDATE TENANTS SET {set_clause} WHERE tenant_id = ${arg_counter}"
-
             try:
                 async with database.DB_POOL.acquire() as conn:
-                    result = await conn.execute(query, *query_args)
+                    async with conn.transaction():
 
-                    if result == "UPDATE 0":
-                        logger.warning(
-                            f"Tenant not found during update attempt: {tenant_id}"
-                        )
-                        raise HTTPException(
-                            status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"Tenant with ID '{tenant_id}' not found.",
-                        )
+                        if update_data:
+                            query_parts = []
+                            query_args = []
+                            arg_counter = 1
 
-                    row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
+                            for key, value in update_data.items():
+                                query_parts.append(f"{key} = ${arg_counter}")
+                                query_args.append(value)
+                                arg_counter += 1
+
+                            query_args.append(tenant_id)
+
+                            set_clause = ", ".join(query_parts)
+                            query = f"UPDATE TENANTS SET {set_clause} WHERE tenant_id = ${arg_counter}"
+
+                            result = await conn.execute(query, *query_args)
+
+                            if result == "UPDATE 0":
+                                logger.warning(
+                                    f"Tenant not found during update attempt: {tenant_id}"
+                                )
+                                raise HTTPException(
+                                    status_code=status.HTTP_404_NOT_FOUND,
+                                    detail=f"Tenant with ID '{tenant_id}' not found.",
+                                )
+
+                        if new_domains is not None:
+                            await conn.execute(
+                                SQL_DELETE_DOMAINS_BY_TENANT_ID, tenant_id
+                            )
+                            for domain in new_domains:
+                                await conn.execute(SQL_INSERT_DOMAIN, domain, tenant_id)
+
+                        row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
 
                 if not row:
                     logger.error(

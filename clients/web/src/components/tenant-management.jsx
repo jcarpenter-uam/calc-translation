@@ -7,7 +7,7 @@ import { FaEdit, FaTrash, FaSave, FaTimes, FaPlus } from "react-icons/fa";
 function CreateTenantForm({ onCreate }) {
   const [formData, setFormData] = useState({
     tenant_id: "",
-    domain: "",
+    domains: "",
     client_id: "",
     client_secret: "",
     organization_name: "",
@@ -20,11 +20,20 @@ function CreateTenantForm({ onCreate }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onCreate(formData);
-    // Reset form
+
+    const domainArray = formData.domains
+      .split(",")
+      .map((d) => d.trim())
+      .filter((d) => d.length > 0);
+
+    onCreate({
+      ...formData,
+      domains: domainArray,
+    });
+
     setFormData({
       tenant_id: "",
-      domain: "",
+      domains: "",
       client_id: "",
       client_secret: "",
       organization_name: "",
@@ -48,10 +57,10 @@ function CreateTenantForm({ onCreate }) {
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
       <input
-        name="domain"
-        value={formData.domain}
+        name="domains"
+        value={formData.domains}
         onChange={handleChange}
-        placeholder="Domain (e.g., contoso.onmicrosoft.com)"
+        placeholder="Domains (comma separated, e.g., contoso.com, sub.contoso.com)"
         required
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
@@ -59,7 +68,7 @@ function CreateTenantForm({ onCreate }) {
         name="tenant_id"
         value={formData.tenant_id}
         onChange={handleChange}
-        placeholder="Entra ID (Directory) Tenant ID"
+        placeholder="Tenant ID"
         required
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
@@ -67,7 +76,7 @@ function CreateTenantForm({ onCreate }) {
         name="client_id"
         value={formData.client_id}
         onChange={handleChange}
-        placeholder="Application (Client) ID"
+        placeholder="Client ID"
         required
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
@@ -95,9 +104,12 @@ function CreateTenantForm({ onCreate }) {
  */
 function TenantRow({ tenant, onUpdate, onDelete }) {
   const [isEditing, setIsEditing] = useState(false);
+
+  const initialDomains = (tenant.domains || []).join(", ");
+
   const [formData, setFormData] = useState({
     organization_name: tenant.organization_name || "",
-    domain: tenant.domain || "",
+    domains: initialDomains,
     client_id: tenant.client_id || "",
     client_secret: "",
   });
@@ -112,8 +124,12 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
     if (formData.organization_name !== tenant.organization_name) {
       updateData.organization_name = formData.organization_name;
     }
-    if (formData.domain !== tenant.domain) {
-      updateData.domain = formData.domain;
+    const currentDomainString = (tenant.domains || []).join(", ");
+    if (formData.domains !== currentDomainString) {
+      updateData.domains = formData.domains
+        .split(",")
+        .map((d) => d.trim())
+        .filter((d) => d.length > 0);
     }
     if (formData.client_id !== tenant.client_id) {
       updateData.client_id = formData.client_id;
@@ -131,7 +147,7 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
   const handleCancel = () => {
     setFormData({
       organization_name: tenant.organization_name || "",
-      domain: tenant.domain || "",
+      domains: initialDomains,
       client_id: tenant.client_id || "",
       client_secret: "",
     });
@@ -148,6 +164,25 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
     }
   };
 
+  const renderDomains = () => {
+    const list = tenant.domains || [];
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {list.map(
+          (d, i) =>
+            d && (
+              <span
+                key={i}
+                className="px-2 py-0.5 text-xs bg-zinc-100 dark:bg-zinc-700 rounded text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600"
+              >
+                {d}
+              </span>
+            ),
+        )}
+      </div>
+    );
+  };
+
   if (isEditing) {
     return (
       <div className="p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm space-y-3">
@@ -159,10 +194,10 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
           className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
-          name="domain"
-          value={formData.domain}
+          name="domains"
+          value={formData.domains}
           onChange={handleChange}
-          placeholder="Domain"
+          placeholder="Domains (comma separated)"
           className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
@@ -206,9 +241,7 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
         <p className="font-semibold text-lg text-zinc-900 dark:text-zinc-100">
           {tenant.organization_name}
         </p>
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">
-          {tenant.domain}
-        </p>
+        {renderDomains()}
         <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
           Client ID: {tenant.client_id}
         </p>

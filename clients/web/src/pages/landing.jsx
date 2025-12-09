@@ -4,7 +4,7 @@ import { useAuth } from "../context/auth";
 import Header from "../components/header";
 import UserAvatar from "../components/user.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
-import LanguageToggle from "../components/language-toggle.jsx";
+import Language from "../components/language.jsx";
 import {
   IntegrationCard,
   ZoomForm,
@@ -169,7 +169,7 @@ export default function LandingPage() {
       <Header>
         <UserAvatar />
         <ThemeToggle />
-        <LanguageToggle />
+        <Language />
       </Header>
 
       <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">

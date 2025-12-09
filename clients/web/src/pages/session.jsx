@@ -5,7 +5,7 @@ import Header from "../components/header";
 import UserAvatar from "../components/user.jsx";
 import Transcript from "../components/transcript.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
-import LanguageToggle from "../components/language-toggle.jsx";
+import Language from "../components/language.jsx";
 import DownloadVttButton from "../components/vtt-download.jsx";
 import Unauthorized from "../components/unauthorized.jsx";
 import Notification from "../components/notification.jsx";
@@ -74,7 +74,7 @@ export default function SessionPage() {
       <Header>
         <UserAvatar />
         <ThemeToggle />
-        <LanguageToggle />
+        <Language />
         <DownloadVttButton
           isDownloadable={isDownloadable}
           integration={integration}

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import Header from "../components/header";
 import Footer from "../components/footer";
 import ThemeToggle from "../components/theme-toggle.jsx";
-import LanguageToggle from "../components/language-toggle.jsx";
+import Language from "../components/language.jsx";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -57,7 +57,7 @@ export default function Login() {
     <div className="flex flex-col min-h-screen">
       <Header>
         <ThemeToggle />
-        <LanguageToggle />
+        <Language />
       </Header>
 
       <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">

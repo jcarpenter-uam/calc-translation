@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Header from "../components/header";
 import UserAvatar from "../components/user.jsx";
 import ThemeToggle from "../components/theme-toggle.jsx";
-import LanguageToggle from "../components/language-toggle.jsx";
+import Language from "../components/language.jsx";
 import Footer from "../components/footer.jsx";
 import UserManagement from "../components/user-management.jsx";
 import TenantManagement from "../components/tenant-management.jsx";
@@ -184,7 +184,7 @@ export default function AdminPage() {
       <Header>
         <UserAvatar />
         <ThemeToggle />
-        <LanguageToggle />
+        <Language />
       </Header>
 
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">

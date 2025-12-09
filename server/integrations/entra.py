@@ -208,7 +208,9 @@ async def handle_callback(request: Request) -> RedirectResponse:
 
         try:
             async with database.DB_POOL.acquire() as conn:
-                await conn.execute(SQL_UPSERT_USER, user_id, user_name, user_email)
+                await conn.execute(
+                    SQL_UPSERT_USER, user_id, user_name, user_email, "en"
+                )
             logger.debug(f"Upserted user: {user_email} (OID: {user_id})")
         except Exception as e:
             logger.error(f"Failed to upsert user {user_id}: {e}", exc_info=True)
@@ -217,13 +219,18 @@ async def handle_callback(request: Request) -> RedirectResponse:
 
         redirect_response = RedirectResponse(url="/")
 
+        is_production_ssl = settings.APP_BASE_URL.startswith("https")
+
+        samesite_policy = "none" if is_production_ssl else "lax"
+        secure_policy = is_production_ssl
+
         redirect_response.set_cookie(
             key="app_auth_token",
             value=app_token,
             max_age=60 * 60,
             httponly=True,
-            secure=settings.APP_BASE_URL.startswith("https"),
-            samesite="none",
+            secure=secure_policy,
+            samesite=samesite_policy,
         )
 
         redirect_response.delete_cookie("entra_auth_state")

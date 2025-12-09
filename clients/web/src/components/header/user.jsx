@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useAuth } from "../context/auth";
+import { useAuth } from "../../context/auth";
 
 /**
  * Generates initials from a full name.

@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/auth";
-import Header from "../components/header";
-import UserAvatar from "../components/user.jsx";
-import ThemeToggle from "../components/theme-toggle.jsx";
-import Language from "../components/language.jsx";
+import Header from "../components/header/header";
+import UserAvatar from "../components/header/user.jsx";
+import ThemeToggle from "../components/header/theme-toggle.jsx";
+import Language from "../components/header/language.jsx";
 import {
   IntegrationCard,
   ZoomForm,
   TestForm,
-} from "../components/integration-card.jsx";
-import Footer from "../components/footer.jsx";
+} from "../components/auth/integration-card.jsx";
+import Footer from "../components/misc/footer.jsx";
 
 import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { HiOutlineSparkles, HiPencil } from "react-icons/hi";
-import { useLanguage } from "../context/language.jsx";
+import { useLanguage } from "../../context/language.jsx";
 
 /**
  * A component to display a visual status if correction is needed.

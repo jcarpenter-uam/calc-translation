@@ -1,5 +1,5 @@
 import React from "react";
-import { useTheme } from "../context/theme.jsx";
+import { useTheme } from "../../context/theme.jsx";
 import { Sun } from "@phosphor-icons/react/dist/csr/Sun";
 import { Moon } from "@phosphor-icons/react/dist/csr/Moon";
 

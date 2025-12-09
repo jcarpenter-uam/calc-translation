@@ -1,14 +1,14 @@
 import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
-import Header from "../components/header";
-import UserAvatar from "../components/user.jsx";
-import Transcript from "../components/transcript.jsx";
-import ThemeToggle from "../components/theme-toggle.jsx";
-import Language from "../components/language.jsx";
-import DownloadVttButton from "../components/vtt-download.jsx";
-import Unauthorized from "../components/unauthorized.jsx";
-import Notification from "../components/notification.jsx";
+import Header from "../components/header/header";
+import UserAvatar from "../components/header/user.jsx";
+import Transcript from "../components/session/transcript.jsx";
+import ThemeToggle from "../components/header/theme-toggle.jsx";
+import Language from "../components/header/language.jsx";
+import DownloadVttButton from "../components/header/vtt-download.jsx";
+import Unauthorized from "../components/auth/unauthorized.jsx";
+import Notification from "../components/misc/notification.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 import { useSmartScroll } from "../hooks/use-smart-scroll.js";
 

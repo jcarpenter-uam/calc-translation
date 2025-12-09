@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import Header from "../components/header";
-import Footer from "../components/footer";
-import ThemeToggle from "../components/theme-toggle.jsx";
-import Language from "../components/language.jsx";
+import Header from "../components/header/header";
+import Footer from "../components/misc/footer";
+import ThemeToggle from "../components/header/theme-toggle.jsx";
+import Language from "../components/header/language.jsx";
 import { useLanguage } from "../context/language.jsx";
 
 export default function Login() {

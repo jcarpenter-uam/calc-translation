@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import Header from "../components/header";
-import UserAvatar from "../components/user.jsx";
-import ThemeToggle from "../components/theme-toggle.jsx";
-import Language from "../components/language.jsx";
-import Footer from "../components/footer.jsx";
-import UserManagement from "../components/user-management.jsx";
-import TenantManagement from "../components/tenant-management.jsx";
+import Header from "../components/header/header";
+import UserAvatar from "../components/header/user.jsx";
+import ThemeToggle from "../components/header/theme-toggle.jsx";
+import Language from "../components/header/language.jsx";
+import Footer from "../components/misc/footer.jsx";
+import UserManagement from "../components/admin/user-management.jsx";
+import TenantManagement from "../components/admin/tenant-management.jsx";
 
 // TODO: Make this look better later
 

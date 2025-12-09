@@ -8,6 +8,7 @@ from core.database import (
     SQL_GET_ALL_USERS,
     SQL_GET_USER_BY_ID,
     SQL_SET_USER_ADMIN_STATUS,
+    SQL_UPDATE_USER_LANGUAGE,
     SQL_UPSERT_USER,
 )
 from core.logging_setup import log_step
@@ -22,6 +23,7 @@ class UserResponse(BaseModel):
     name: str | None
     email: str | None
     is_admin: bool
+    language_code: str | None
 
 
 class UserUpdate(BaseModel):
@@ -31,6 +33,10 @@ class UserUpdate(BaseModel):
 
 class UserAdminUpdate(BaseModel):
     is_admin: bool
+
+
+class UserLanguageUpdate(BaseModel):
+    language_code: str
 
 
 def create_user_router() -> APIRouter:
@@ -71,6 +77,44 @@ def create_user_router() -> APIRouter:
                 raise HTTPException(status_code=404, detail="User not found.")
 
             logger.debug(f"Successfully retrieved profile for user: {user_id}")
+            return UserResponse(**dict(user_row))
+
+    # NOTE: Requires User Auth
+    @router.put("/me/language", response_model=UserResponse)
+    async def update_my_language(
+        language_update: UserLanguageUpdate,
+        payload: dict = Depends(get_current_user_payload),
+    ):
+        """
+        Updates the preferred language for the currently authenticated user.
+        """
+        with log_step(LOG_STEP):
+            user_id = payload.get("sub")
+            if not user_id:
+                logger.warning("Auth token missing 'sub' (user_id) claim.")
+                raise HTTPException(
+                    status_code=401, detail="Invalid auth token payload"
+                )
+
+            new_lang = language_update.language_code
+            logger.info(
+                f"Request to update language for user {user_id} to '{new_lang}'"
+            )
+
+            if not database.DB_POOL:
+                logger.error("Database not initialized during language update.")
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            async with database.DB_POOL.acquire() as conn:
+                await conn.execute(SQL_UPDATE_USER_LANGUAGE, new_lang, user_id)
+
+                user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+
+            if not user_row:
+                logger.error(f"User {user_id} not found after language update.")
+                raise HTTPException(status_code=404, detail="User not found.")
+
+            logger.info(f"Successfully updated language for user: {user_id}")
             return UserResponse(**dict(user_row))
 
     # NOTE: Admin only

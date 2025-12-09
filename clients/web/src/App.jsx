@@ -6,7 +6,7 @@ import SessionPage from "./pages/session";
 import Support from "./pages/support";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
-import ScrollToTop from "./util/scroll-to-top";
+import ScrollToTop from "./components/misc/scroll-to-top";
 import AdminPage from "./pages/admin";
 import NotFound from "./pages/not-found";
 

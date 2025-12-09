@@ -15,6 +15,9 @@ from openai import APIError, AsyncOpenAI
 logger = logging.getLogger(__name__)
 
 
+# NOTE: This needs to become a reusable function that can either be used for:
+#   - Backfeeding tranlations when a new language is needed using semaphore. 200+ ms ping BTW
+#   - Retranslation once correction is fune tuned
 class RetranslationService:
     """
     Handles retranslation by making REST API calls to Alibaba's Qwen model

@@ -109,6 +109,7 @@ class SonioxService:
             "num_channels": 1,
             # Translation options.
             # See: soniox.com/docs/stt/rt/real-time-translation#translation-modes
+            # NOTE: Switch to one way with a variable for the target lang.
             "translation": {
                 # Translates ZH -> EN and EN -> ZH
                 "type": "two_way",
@@ -118,6 +119,7 @@ class SonioxService:
             #
             # Set language hints when possible to significantly improve accuracy.
             # See: soniox.com/docs/stt/concepts/language-hints
+            # NOTE: I will need a way to add to this list during a meeting
             "language_hints": ["en", "zh"],
         }
 

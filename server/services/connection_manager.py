@@ -1,3 +1,5 @@
+# NOTE: This service will be used to track languages within a meeting, determining if a new soniox connection needs to be opened or if a user can join an existing stream
+
 import asyncio
 import logging
 import threading

@@ -1,3 +1,5 @@
+# NOTE: In combination with connection_manager we will track languages per session
+
 import logging
 
 from core.logging_setup import log_step, session_id_var

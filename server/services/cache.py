@@ -1,4 +1,4 @@
-# NOTE: A cache will need to be built per language per meeting, but finding a solution for backfeeding
+# NOTE: A cache will need to be built per language per meeting
 
 import logging
 from collections import deque

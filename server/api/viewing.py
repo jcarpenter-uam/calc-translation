@@ -1,6 +1,8 @@
 import logging
 
+from core import database
 from core.authentication import get_current_user_payload, validate_client_token
+from core.database import SQL_ADD_MEETING_LANGUAGE, SQL_GET_USER_BY_ID
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, Path, WebSocket, status
 from services.connection_manager import ConnectionManager
@@ -54,6 +56,29 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
                 )
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                 return
+
+        if database.DB_POOL:
+            try:
+                async with database.DB_POOL.acquire() as conn:
+                    user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, cookie_user_id)
+
+                    if user_row and user_row.get("language_code"):
+                        language_code = user_row.get("language_code")
+
+                        await conn.execute(
+                            SQL_ADD_MEETING_LANGUAGE, session_id, language_code
+                        )
+
+                        logger.info(
+                            f"Registered language '{language_code}' for session '{session_id}' based on user profile."
+                        )
+                    else:
+                        logger.warning(
+                            f"User {cookie_user_id} has no 'language_code' in database. Skipping meeting language registration."
+                        )
+
+            except Exception as e:
+                logger.error(f"Failed to register meeting language from DB: {e}")
 
         await handle_viewer_session(
             websocket=websocket,

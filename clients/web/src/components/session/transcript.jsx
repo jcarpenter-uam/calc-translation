@@ -51,7 +51,7 @@ export default function Transcript({
   const englishText = isSourceEnglish ? transcription : translation;
   const chineseText = isSourceEnglish ? translation : transcription;
 
-  if (selectedLanguage === "english") {
+  if (selectedLanguage === "en") {
     topText = englishText;
     bottomText = chineseText;
   } else {
@@ -67,7 +67,7 @@ export default function Transcript({
       ? original.translation
       : original.transcription;
 
-    if (selectedLanguage === "english") {
+    if (selectedLanguage === "en") {
       topOriginal = originalEnglish;
       bottomOriginal = originalChinese;
     } else {

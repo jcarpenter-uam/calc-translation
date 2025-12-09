@@ -21,6 +21,7 @@ class ConnectionManager:
         """Initializes the manager with connections and a transcript cache."""
         self.sessions: Dict[str, List[WebSocket]] = {}
         self.active_transcription_sessions: Dict[str, Dict[str, Any]] = {}
+        self.socket_languages: Dict[WebSocket, str] = {}
         self.cache = cache
 
         self._session_lock = threading.Lock()
@@ -47,8 +48,11 @@ class ConnectionManager:
         """Checks if a transcription session is currently active."""
         return session_id in self.active_transcription_sessions
 
-    async def connect(self, websocket: WebSocket, session_id: str):
-        """Accepts a new connection and replays the transcript history for a session."""
+    async def connect(self, websocket: WebSocket, session_id: str, language_code: str):
+        """
+        Accepts a new connection, registers their language,
+        and replays the transcript history for a session.
+        """
 
         session_token = session_id_var.set(session_id)
 
@@ -59,11 +63,14 @@ class ConnectionManager:
                 self.sessions[session_id] = []
             self.sessions[session_id].append(websocket)
 
+            self.socket_languages[websocket] = language_code
+
             history = self.cache.get_history(session_id)
 
             with log_step("CONN-MANAGER"):
                 logger.info(
-                    f"New viewer connecting. Replaying {len(history)} cached messages."
+                    f"New viewer connecting (Language: {language_code}). "
+                    f"Replaying {len(history)} cached messages."
                 )
 
             if history:
@@ -89,6 +96,9 @@ class ConnectionManager:
                     self.sessions[session_id].remove(websocket)
                 if not self.sessions[session_id]:
                     del self.sessions[session_id]
+
+            if websocket in self.socket_languages:
+                del self.socket_languages[websocket]
 
             with log_step("CONN-MANAGER"):
                 logger.info(

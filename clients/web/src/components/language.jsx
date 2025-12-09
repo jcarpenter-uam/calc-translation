@@ -2,8 +2,8 @@ import React from "react";
 import { useLanguage } from "../context/language.jsx";
 
 const languages = [
-  { code: "english", name: "English" },
-  { code: "chinese", name: "中文 (Chinese)" },
+  { code: "en", name: "English" },
+  { code: "zh", name: "中文 (Chinese)" },
 ];
 
 export default function Language() {
@@ -38,7 +38,6 @@ export default function Language() {
           </option>
         ))}
       </select>
-
       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-500 dark:text-zinc-400">
         <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
           <path

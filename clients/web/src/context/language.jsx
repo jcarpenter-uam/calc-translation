@@ -5,7 +5,6 @@ const LanguageContext = createContext();
 const STORAGE_KEY = "app-language";
 
 function getInitialLanguage() {
-  // 1. Check for a saved value in localStorage
   try {
     const storedLanguage = window.localStorage.getItem(STORAGE_KEY);
     if (storedLanguage) {
@@ -15,15 +14,12 @@ function getInitialLanguage() {
     console.error("Error reading from localStorage", error);
   }
 
-  // 2. If no saved value, check the browser's language
-  //    'navigator.language' returns codes like "en-US", "en", "zh-CN", "zh"
   const browserLang = window.navigator.language;
   if (browserLang.startsWith("zh")) {
-    return "chinese";
+    return "zh";
   }
 
-  // 3. Fallback to English
-  return "english";
+  return "en";
 }
 
 export function LanguageProvider({ children }) {

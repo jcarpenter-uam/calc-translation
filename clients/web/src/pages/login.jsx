@@ -4,6 +4,7 @@ import Header from "../components/header";
 import Footer from "../components/footer";
 import ThemeToggle from "../components/theme-toggle.jsx";
 import Language from "../components/language.jsx";
+import { useLanguage } from "../context/language.jsx";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -11,6 +12,8 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams] = useSearchParams();
   const [infoMessage, setInfoMessage] = useState(null);
+
+  const { language } = useLanguage();
 
   useEffect(() => {
     const reason = searchParams.get("reason");
@@ -32,7 +35,7 @@ export default function Login() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, language }),
       });
 
       if (!response.ok) {

@@ -23,6 +23,7 @@ LOG_STEP = "INT-ENTRA"
 
 class EntraLoginRequest(BaseModel):
     email: str
+    language: str
 
 
 REDIRECT_PATH = "/api/auth/entra/callback"
@@ -140,7 +141,11 @@ async def handle_login(
             )
 
         state = str(uuid.uuid4())
-        auth_data = {"state": state, "tenant_id": tenant_config["tenant_id"]}
+        auth_data = {
+            "state": state,
+            "tenant_id": tenant_config["tenant_id"],
+            "language": request.language,
+        }
 
         response.set_cookie(
             key="entra_auth_state",
@@ -206,10 +211,12 @@ async def handle_callback(request: Request) -> RedirectResponse:
             logger.error("Database pool not available to save user.")
             raise HTTPException(status_code=503, detail="Database not initialized.")
 
+        user_language = cookie_data.get("language")
+
         try:
             async with database.DB_POOL.acquire() as conn:
                 await conn.execute(
-                    SQL_UPSERT_USER, user_id, user_name, user_email, "en"
+                    SQL_UPSERT_USER, user_id, user_name, user_email, user_language
                 )
             logger.debug(f"Upserted user: {user_email} (OID: {user_id})")
         except Exception as e:

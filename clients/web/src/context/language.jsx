@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
-import { useAuth } from "./auth";
 
 const LanguageContext = createContext();
+
 const STORAGE_KEY = "app-language";
 
 function getInitialLanguage() {
@@ -18,18 +18,12 @@ function getInitialLanguage() {
   if (browserLang.startsWith("zh")) {
     return "zh";
   }
+
   return "en";
 }
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguageState] = useState(getInitialLanguage);
-  const { user } = useAuth();
-
-  useEffect(() => {
-    if (user?.language_code && user.language_code !== language) {
-      setLanguageState(user.language_code);
-    }
-  }, [user]);
+  const [language, setLanguage] = useState(getInitialLanguage);
 
   useEffect(() => {
     try {
@@ -38,20 +32,6 @@ export function LanguageProvider({ children }) {
       console.error("Error writing to localStorage", error);
     }
   }, [language]);
-
-  const setLanguage = (newLanguage) => {
-    setLanguageState(newLanguage);
-
-    if (user) {
-      fetch("/api/users/me/language", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language_code: newLanguage }),
-      }).catch((err) => {
-        console.error("Failed to sync language preference to DB:", err);
-      });
-    }
-  };
 
   const value = { language, setLanguage };
 

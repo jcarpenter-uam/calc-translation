@@ -1,13 +1,24 @@
 import React from "react";
-import { useLanguage } from "../../context/language.jsx";
+import { useLanguageCode } from "../../hooks/use-language-code";
 
 const languages = [
   { code: "en", name: "English" },
   { code: "zh", name: "中文 (Chinese)" },
+  { code: "es", name: "Español (Spanish)" },
+  { code: "hi", name: "हिन्दी (Hindi)" },
+  { code: "ar", name: "العربية (Arabic)" },
+  { code: "pt", name: "Português (Portuguese)" },
+  { code: "ru", name: "Русский (Russian)" },
+  { code: "ja", name: "日本語 (Japanese)" },
+  { code: "de", name: "Deutsch (German)" },
+  { code: "fr", name: "Français (French)" },
+  { code: "ko", name: "한국어 (Korean)" },
+  { code: "vi", name: "Tiếng Việt (Vietnamese)" },
+  { code: "it", name: "Italiano (Italian)" },
 ];
 
 export default function Language() {
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage } = useLanguageCode();
 
   return (
     <div className="relative">
@@ -38,6 +49,7 @@ export default function Language() {
           </option>
         ))}
       </select>
+
       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-500 dark:text-zinc-400">
         <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
           <path

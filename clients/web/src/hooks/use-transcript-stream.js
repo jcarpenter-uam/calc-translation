@@ -42,6 +42,7 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
       ws.current.onclose = (event) => {
         const code = event.code;
 
+        // BUG: code = 1006 should be fixed
         if (code === 1008 || code === 403) {
           console.warn("WebSocket authorization failed.");
           if (onUnauthorized) {

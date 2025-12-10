@@ -11,6 +11,7 @@ import Unauthorized from "../components/auth/unauthorized.jsx";
 import Notification from "../components/misc/notification.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 import { useSmartScroll } from "../hooks/use-smart-scroll.js";
+import { useLanguage } from "../context/language.jsx";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -27,6 +28,7 @@ export default function SessionPage() {
 
   const [isAuthorized, setIsAuthorized] = useState(!!token);
   const [showUnauthorized, setShowUnauthorized] = useState(false);
+  const { language } = useLanguage();
 
   const handleAuthFailure = useCallback(() => {
     setIsAuthorized(false);
@@ -47,7 +49,7 @@ export default function SessionPage() {
   const encodedSessionId = isAuthorized ? encodeURIComponent(sessionId) : null;
 
   const wsUrl = isAuthorized
-    ? `/ws/view/${integration}/${encodedSessionId}?token=${token}`
+    ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${language}`
     : null;
 
   const { transcripts, isDownloadable } = useTranscriptStream(

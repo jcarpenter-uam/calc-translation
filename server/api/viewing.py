@@ -8,7 +8,7 @@ from core.database import (
     SQL_GET_USER_BY_ID,
 )
 from core.logging_setup import log_step
-from fastapi import APIRouter, Depends, Path, WebSocket, status
+from fastapi import APIRouter, Depends, Path, Query, WebSocket, status
 from services.connection_manager import ConnectionManager
 from services.viewer import handle_viewer_session
 
@@ -28,6 +28,7 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
         websocket: WebSocket,
         integration: str = Path(),
         session_id: str = Path(),
+        language: str | None = Query(None),
         token_payload: dict = Depends(validate_client_token),
         user_cookie: dict = Depends(get_current_user_payload),
     ):
@@ -53,16 +54,19 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                 return
 
-        language_code = None
+        language_code = language
 
         if database.DB_POOL:
             try:
                 async with database.DB_POOL.acquire() as conn:
-                    user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, cookie_user_id)
+                    if not language_code:
+                        user_row = await conn.fetchrow(
+                            SQL_GET_USER_BY_ID, cookie_user_id
+                        )
+                        if user_row and user_row.get("language_code"):
+                            language_code = user_row.get("language_code")
 
-                    if user_row and user_row.get("language_code"):
-                        language_code = user_row.get("language_code")
-
+                    if language_code:
                         await conn.execute(
                             SQL_ADD_MEETING_LANGUAGE, session_id, language_code
                         )
@@ -84,7 +88,7 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
                     else:
                         with log_step(LOG_STEP):
                             logger.error(
-                                f"User {cookie_user_id} has no 'language_code' in database."
+                                f"User {cookie_user_id} has no 'language_code' in database and no query param provided."
                             )
 
             except Exception as e:

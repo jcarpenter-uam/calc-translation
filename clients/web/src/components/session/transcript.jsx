@@ -29,7 +29,7 @@ const CorrectionStatusIndicator = ({ status }) => {
 };
 
 /**
- * A component to display a pair of translated and transcribed sentences.
+ * A component to display a single sentence in the selected language.
  */
 export default function Transcript({
   speaker,
@@ -44,38 +44,6 @@ export default function Transcript({
   const { language: selectedLanguage } = useLanguage();
   const textOpacity = isFinalized ? "opacity-100" : "opacity-60";
 
-  let topText, bottomText, topOriginal, bottomOriginal;
-
-  const isSourceEnglish = source_language === "en";
-
-  const englishText = isSourceEnglish ? transcription : translation;
-  const chineseText = isSourceEnglish ? translation : transcription;
-
-  if (selectedLanguage === "en") {
-    topText = englishText;
-    bottomText = chineseText;
-  } else {
-    topText = chineseText;
-    bottomText = englishText;
-  }
-
-  if (original) {
-    const originalEnglish = isSourceEnglish
-      ? original.transcription
-      : original.translation;
-    const originalChinese = isSourceEnglish
-      ? original.translation
-      : original.transcription;
-
-    if (selectedLanguage === "en") {
-      topOriginal = originalEnglish;
-      bottomOriginal = originalChinese;
-    } else {
-      topOriginal = originalChinese;
-      bottomOriginal = originalEnglish;
-    }
-  }
-
   return (
     <div className="grid grid-cols-[9rem_1fr] gap-x-3 mb-6 pb-6 border-b border-zinc-200 dark:border-zinc-800 last:border-b-0 last:mb-0 last:pb-0">
       <div className="flex items-center justify-end gap-2">
@@ -86,27 +54,12 @@ export default function Transcript({
       </div>
 
       <div className="col-start-2">
-        {original && (
-          <div className="mb-1 opacity-70">
-            <p className="m-0 leading-relaxed text-sm font-medium text-zinc-500 dark:text-zinc-500 line-through">
-              {topOriginal}
-            </p>
-            <p className="m-0 leading-relaxed text-xs text-zinc-400 dark:text-zinc-600 line-through">
-              {bottomOriginal}
-            </p>
-          </div>
-        )}
-
         <p
           ref={topTextRef}
           className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}
         >
-          {topText}
-        </p>
-        <p
-          className={`m-0 leading-relaxed text-sm text-zinc-500 dark:text-zinc-400 ${textOpacity}`}
-        >
-          {bottomText}
+          {translation || transcription}{" "}
+          {/* BUG: There is a better solution to this */}
         </p>
       </div>
     </div>

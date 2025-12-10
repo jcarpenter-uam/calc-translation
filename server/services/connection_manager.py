@@ -1,10 +1,8 @@
-# NOTE: This service will be used to track languages within a meeting, determining if a new soniox connection needs to be opened or if a user can join an existing stream
-
 import asyncio
 import logging
 import threading
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket
@@ -22,8 +20,10 @@ class ConnectionManager:
         self.sessions: Dict[str, List[WebSocket]] = {}
         self.active_transcription_sessions: Dict[str, Dict[str, Any]] = {}
         self.socket_languages: Dict[WebSocket, str] = {}
-        self.cache = cache
 
+        self.language_request_callbacks: Dict[str, Callable[[str], Any]] = {}
+
+        self.cache = cache
         self._session_lock = threading.Lock()
 
         with log_step("CONN-MANAGER"):
@@ -48,10 +48,16 @@ class ConnectionManager:
         """Checks if a transcription session is currently active."""
         return session_id in self.active_transcription_sessions
 
+    def register_language_callback(
+        self, session_id: str, callback: Callable[[str], Any]
+    ):
+        """Registers a callback to be triggered when a new language is requested for a session."""
+        self.language_request_callbacks[session_id] = callback
+
     async def connect(self, websocket: WebSocket, session_id: str, language_code: str):
         """
         Accepts a new connection, registers their language,
-        and replays the transcript history for a session.
+        and replays the transcript history for that specific language.
         """
 
         session_token = session_id_var.set(session_id)
@@ -65,7 +71,19 @@ class ConnectionManager:
 
             self.socket_languages[websocket] = language_code
 
-            history = self.cache.get_history(session_id)
+            if session_id in self.language_request_callbacks:
+                try:
+                    callback = self.language_request_callbacks[session_id]
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(language_code)
+                    else:
+                        callback(language_code)
+                except Exception as e:
+                    logger.error(
+                        f"Error triggering language request callback for session {session_id}: {e}"
+                    )
+
+            history = self.cache.get_history(session_id, language_code)
 
             with log_step("CONN-MANAGER"):
                 logger.info(
@@ -110,15 +128,26 @@ class ConnectionManager:
 
     async def broadcast_to_session(self, session_id: str, payload: Dict[str, Any]):
         """
-        Broadcasts a JSON object to a specific session and caches it.
-        (No logging here, so no changes needed)
+        Broadcasts a JSON object to a specific session.
+        Only sends the payload to users whose subscribed language matches
+        the payload's 'target_language' (or if it's a general system message).
         """
-        if payload.get("message_id"):
-            self.cache.process_message(session_id, payload)
+        payload_lang = payload.get("target_language")
+
+        if payload.get("message_id") and payload_lang:
+            self.cache.process_message(session_id, payload_lang, payload)
 
         if session_id in self.sessions:
-            tasks = [conn.send_json(payload) for conn in self.sessions[session_id]]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            connections_to_send = []
+
+            for conn in self.sessions[session_id]:
+                user_lang = self.socket_languages.get(conn)
+                if not payload_lang or user_lang == payload_lang:
+                    connections_to_send.append(conn)
+
+            if connections_to_send:
+                tasks = [conn.send_json(payload) for conn in connections_to_send]
+                await asyncio.gather(*tasks, return_exceptions=True)
 
     def register_transcription_session(self, session_id: str, integration: str) -> bool:
         """
@@ -159,6 +188,9 @@ class ConnectionManager:
                 if session_id in self.active_transcription_sessions:
                     session_data = self.active_transcription_sessions.pop(session_id)
                     integration = session_data.get("integration", "unknown")
+
+                    if session_id in self.language_request_callbacks:
+                        del self.language_request_callbacks[session_id]
 
                     with log_step("CONN-MANAGER"):
                         logger.info(

@@ -61,6 +61,7 @@ class SonioxService:
         on_error_callback: Callable[[SonioxError], Awaitable[None]],
         on_close_callback: Callable[[int, str], Awaitable[None]],
         loop: asyncio.AbstractEventLoop,
+        target_language: str = "en",
     ):
         self.api_key = settings.SONIOX_API_KEY
 
@@ -68,6 +69,7 @@ class SonioxService:
         self.on_error_callback = on_error_callback
         self.on_close_callback = on_close_callback
         self.loop = loop
+        self.target_language = target_language
         self.ws = None
         self.receive_task = None
         self._is_connected = False
@@ -109,18 +111,15 @@ class SonioxService:
             "num_channels": 1,
             # Translation options.
             # See: soniox.com/docs/stt/rt/real-time-translation#translation-modes
-            # NOTE: Switch to one way with a variable for the target lang.
             "translation": {
-                # Translates ZH -> EN and EN -> ZH
-                "type": "two_way",
-                "language_a": "zh",
-                "language_b": "en",
+                "type": "one_way",
+                "target_language": self.target_language,
             },
             #
             # Set language hints when possible to significantly improve accuracy.
             # See: soniox.com/docs/stt/concepts/language-hints
             # NOTE: I will need a way to add to this list during a meeting
-            "language_hints": ["en", "zh"],
+            "language_hints": ["en", "zh", "es", "fr", "de", "it", "pt", "ru"],
         }
 
     async def _receive_loop(self):
@@ -200,6 +199,9 @@ class SonioxService:
                     self.final_translation_language or non_final_target_lang
                 )
 
+                if not target_lang_to_send:
+                    target_lang_to_send = self.target_language
+
                 await self.on_message_callback(
                     SonioxResult(
                         transcription=full_transcription,
@@ -217,7 +219,9 @@ class SonioxService:
                         )
 
                     final_source_lang = self.final_source_language
-                    final_target_lang = self.final_translation_language
+                    final_target_lang = (
+                        self.final_translation_language or self.target_language
+                    )
 
                     await self.on_message_callback(
                         SonioxResult(
@@ -246,7 +250,8 @@ class SonioxService:
                             translation="".join(self.final_translation_tokens).strip(),
                             is_final=True,
                             source_language=self.final_source_language,
-                            target_language=self.final_translation_language,
+                            target_language=self.final_translation_language
+                            or self.target_language,
                         )
                     )
                     break
@@ -260,7 +265,8 @@ class SonioxService:
                     translation="".join(self.final_translation_tokens).strip(),
                     is_final=True,
                     source_language=self.final_source_language,
-                    target_language=self.final_translation_language,
+                    target_language=self.final_translation_language
+                    or self.target_language,
                 )
             )
             await self.on_close_callback(1000, "Normal closure")
@@ -303,7 +309,9 @@ class SonioxService:
             self._is_connected = True
             self.receive_task = self.loop.create_task(self._receive_loop())
             with log_step("SONIOX"):
-                logger.debug("Soniox service connected.")
+                logger.debug(
+                    f"Soniox service connected (Target: {self.target_language})."
+                )
         except Exception as e:
             self._is_connected = False
             with log_step("SONIOX"):

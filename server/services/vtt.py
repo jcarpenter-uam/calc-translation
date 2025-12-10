@@ -1,5 +1,3 @@
-# BUG: Terminating the session before responses from the SONIOX API might result in 0'd timestamps
-
 import logging
 import os
 import urllib.parse
@@ -97,17 +95,20 @@ class TimestampService:
 
 
 async def create_vtt_file(
-    session_id: str, integration: str, history: List[Dict[str, Any]]
+    session_id: str,
+    integration: str,
+    language_code: str,
+    history: List[Dict[str, Any]],
 ):
     """
-    Saves a session's transcript history to a .vtt file.
+    Saves a session's transcript history for a specific language to a .vtt file.
     """
     session_token = session_id_var.set(session_id)
     with log_step("VTT"):
         try:
             if not history:
                 logger.info(
-                    f"No history to save for integration '{integration}', list is empty."
+                    f"No history to save for integration '{integration}' (Language: {language_code}), list is empty."
                 )
                 return
 
@@ -115,7 +116,8 @@ async def create_vtt_file(
             output_dir = os.path.join("output", integration, safe_session_id)
             os.makedirs(output_dir, exist_ok=True)
 
-            vtt_filepath = os.path.join(output_dir, "transcript.vtt")
+            filename = f"transcript_{language_code}.vtt"
+            vtt_filepath = os.path.join(output_dir, filename)
 
             formatted_lines = ["WEBVTT", ""]
 
@@ -128,11 +130,11 @@ async def create_vtt_file(
                     "vtt_timestamp", "00:00:00.000 --> 00:00:00.000"
                 )
 
+                primary_text = translation if translation else transcription
+
                 formatted_lines.append(f"{utterance_num}")
                 formatted_lines.append(f"{timestamp_str}")
-                formatted_lines.append(f"{speaker}: {transcription}")
-                if translation:
-                    formatted_lines.append(f"{translation}")
+                formatted_lines.append(f"{speaker}: {primary_text}")
                 formatted_lines.append("")
 
             with open(vtt_filepath, "w", encoding="utf-8") as f:
@@ -145,14 +147,16 @@ async def create_vtt_file(
             async with database.DB_POOL.acquire() as conn:
                 async with conn.transaction():
                     await conn.execute(
-                        SQL_INSERT_TRANSCRIPT, session_id, "transcript.vtt"
+                        SQL_INSERT_TRANSCRIPT, session_id, language_code, filename
                     )
-            logger.info(f"Saved transcript record to DB for meeting {session_id}.")
+            logger.info(
+                f"Saved transcript record to DB for meeting {session_id} (Lang: {language_code})."
+            )
 
         except Exception as e:
             if "UNIQUE constraint failed" in str(e) or "unique_violation" in str(e):
                 logger.warning(
-                    f"Transcript record already exists in DB for meeting {session_id}. Skipping insert."
+                    f"Transcript record already exists in DB for meeting {session_id} (Lang: {language_code}). Skipping insert."
                 )
             else:
                 logger.error(

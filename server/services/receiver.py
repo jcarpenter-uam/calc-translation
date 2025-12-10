@@ -3,7 +3,7 @@ import base64
 import json
 import logging
 import uuid
-from typing import Optional
+from typing import Dict, Optional
 
 from core.config import settings
 from core.logging_setup import (
@@ -30,18 +30,169 @@ from .vtt import TimestampService
 logger = logging.getLogger(__name__)
 
 
+class StreamHandler:
+    """
+    Manages the state and connection for a single Soniox stream (per target language).
+    """
+
+    def __init__(
+        self,
+        language_code: str,
+        session_id: str,
+        viewer_manager,
+        loop,
+        correction_service=None,
+        active_correction_tasks=None,
+    ):
+        self.language_code = language_code
+        self.session_id = session_id
+        self.viewer_manager = viewer_manager
+        self.loop = loop
+        self.correction_service = correction_service
+        self.active_correction_tasks = active_correction_tasks or set()
+
+        self.service: Optional[SonioxService] = None
+        self.current_message_id = None
+        self.is_new_utterance = True
+        self.current_speaker = "Unknown"
+
+        self.timestamp_service = TimestampService()
+
+    def update_speaker(self, speaker: str):
+        self.current_speaker = speaker
+
+    async def _on_service_error(self, error: SonioxError):
+        if isinstance(error, SonioxFatalError):
+            with log_step("SONIOX"):
+                logger.error(
+                    f"Fatal Transcription Error ({self.language_code}): {error}."
+                )
+        elif isinstance(error, SonioxConnectionError):
+            with log_step("SONIOX"):
+                logger.warning(
+                    f"Restartable Connection Error ({self.language_code}): {error}."
+                )
+
+    async def _on_service_close(self, code: int, reason: str):
+        with log_step("SONIOX"):
+            logger.info(
+                f"Transcription service ({self.language_code}) closed. Code: {code}, Reason: {reason}"
+            )
+
+    async def _on_transcription_message(self, result: SonioxResult):
+        session_token = session_id_var.set(self.session_id)
+        speaker_token = speaker_var.set(self.current_speaker)
+        try:
+            if self.is_new_utterance and not result.is_final:
+                self.current_message_id = str(uuid.uuid4())
+                self.is_new_utterance = False
+
+                message_id_var.set(self.current_message_id)
+                with log_step("UTTERANCE"):
+                    logger.info(
+                        f"Starting pipeline for utterance ({self.language_code})."
+                    )
+
+            if not self.current_message_id:
+                if result.is_final:
+                    self.is_new_utterance = True
+                return
+
+            has_text = (result.transcription and result.transcription.strip()) or (
+                result.translation and result.translation.strip()
+            )
+
+            if has_text:
+                payload_type = "final" if result.is_final else "partial"
+
+                vtt_timestamp = None
+                if payload_type == "partial":
+                    self.timestamp_service.mark_utterance_start(self.current_message_id)
+
+                if payload_type == "final":
+                    vtt_timestamp = self.timestamp_service.complete_utterance(
+                        self.current_message_id
+                    )
+
+                payload = {
+                    "message_id": self.current_message_id,
+                    "transcription": result.transcription,
+                    "translation": result.translation,
+                    "source_language": result.source_language,
+                    "target_language": result.target_language,
+                    "speaker": self.current_speaker,
+                    "type": payload_type,
+                    "isfinalize": result.is_final,
+                    "vtt_timestamp": vtt_timestamp,
+                }
+                await self.viewer_manager.broadcast_to_session(self.session_id, payload)
+
+            if result.is_final:
+                with log_step("UTTERANCE"):
+                    logger.info(
+                        f"Finished pipeline for utterance ({self.language_code})."
+                    )
+
+                # NOTE: Correction only for Chinese source currently
+                if (
+                    self.correction_service
+                    and result.transcription
+                    and result.transcription.strip()
+                    and result.source_language == "zh"
+                ):
+                    utterance_to_store = {
+                        "message_id": self.current_message_id,
+                        "speaker": self.current_speaker,
+                        "transcription": result.transcription,
+                    }
+                    task = asyncio.create_task(
+                        self.correction_service.process_final_utterance(
+                            utterance_to_store
+                        )
+                    )
+                    self.active_correction_tasks.add(task)
+                    task.add_done_callback(self.active_correction_tasks.discard)
+
+                self.is_new_utterance = True
+                self.current_message_id = None
+                message_id_var.set(None)
+
+        finally:
+            speaker_var.reset(speaker_token)
+            session_id_var.reset(session_token)
+
+    async def connect(self):
+        self.service = SonioxService(
+            on_message_callback=self._on_transcription_message,
+            on_error_callback=self._on_service_error,
+            on_close_callback=self._on_service_close,
+            loop=self.loop,
+            target_language=self.language_code,
+        )
+        await self.loop.run_in_executor(None, self.service.connect)
+
+    async def send_audio(self, audio_chunk: bytes):
+        if self.service:
+            await self.loop.run_in_executor(None, self.service.send_chunk, audio_chunk)
+
+    async def close(self):
+        if self.service:
+            await self.loop.run_in_executor(None, self.service.finalize_stream)
+
+
 async def handle_receiver_session(
     websocket: WebSocket, integration: str, session_id: str, viewer_manager
 ):
     """
     Contains all the business logic for handling a single
-    transcription/interpretation WebSocket session.
+    transcription/interpretation WebSocket session with multi-language support.
     """
     session_token = session_id_var.set(session_id)
-    transcription_service: Optional[SonioxService] = None
+    active_handlers: Dict[str, StreamHandler] = {}
+    handlers_lock = asyncio.Lock()
+
     correction_service = None
     active_correction_tasks = set()
-    final_message_processed = asyncio.Event()
     loop = asyncio.get_running_loop()
     session_log_handler = None
     registration_success = False
@@ -66,8 +217,6 @@ async def handle_receiver_session(
         with log_step("SESSION"):
             logger.info(f"Client connected for integration: {integration}")
 
-        timestamp_service = TimestampService()
-
         audio_processor = AudioProcessingService()
 
         if settings.OLLAMA_URL and settings.ALIBABA_API_KEY:
@@ -76,209 +225,50 @@ async def handle_receiver_session(
                 session_id=session_id,
             )
 
-        current_message_id = None
-        is_new_utterance = True
-        current_speaker = "Unknown"
-
-        async def on_service_error(error: SonioxError):
-            """
-            Handles errors reported by the SonioxService.
-            This is the "brain" for the fail-fast/restart logic.
-            """
-            if isinstance(error, SonioxFatalError):
-                with log_step("SONIOX"):
-                    logger.error(
-                        f"Fatal Transcription Error: {error}. Closing client session."
-                    )
-                await websocket.close(
-                    code=1011, reason=f"Fatal Transcription Error: {error}"
-                )
-            elif isinstance(error, SonioxConnectionError):
-                with log_step("SONIOX"):
-                    logger.warning(
-                        f"Restartable Connection Error: {error}. Will attempt to reconnect."
-                    )
-            else:
-                with log_step("SONIOX"):
-                    logger.error(
-                        f"Unknown Soniox Error: {error}. Closing client session."
-                    )
-                await websocket.close(
-                    code=1011, reason=f"Unknown Transcription Error: {error}"
-                )
-
-        async def on_transcription_message_local(
-            result: SonioxResult,
-        ):
-            nonlocal current_message_id, is_new_utterance, current_speaker
-
-            session_token = session_id_var.set(session_id)
-            speaker_token = speaker_var.set(current_speaker)
-            try:
-                if is_new_utterance and not result.is_final:
-                    current_message_id = str(uuid.uuid4())
-                    is_new_utterance = False
-
-                    message_id_var.set(current_message_id)
-                    with log_step("UTTERANCE"):
-                        logger.info("Starting pipeline for utterance.")
-
-                if not current_message_id:
-                    with log_step("SONIOX"):
-                        logger.debug(
-                            f"Received result (is_final={result.is_final}) with no active utterance, dropping."
-                        )
-                    if result.is_final:
-                        is_new_utterance = True
+        async def add_language_stream(language_code: str):
+            async with handlers_lock:
+                if language_code in active_handlers:
                     return
 
-                with log_step("SONIOX"):
-                    logger.debug(
-                        f"Received T&T chunk (is_final={result.is_final}). "
-                        f"T: '{result.transcription}' | "
-                        f"TL: '{result.translation}'"
+                with log_step("SESSION"):
+                    logger.info(
+                        f"Starting new Soniox stream for language: {language_code}"
                     )
 
-                has_text = (result.transcription and result.transcription.strip()) or (
-                    result.translation and result.translation.strip()
+                handler = StreamHandler(
+                    language_code=language_code,
+                    session_id=session_id,
+                    viewer_manager=viewer_manager,
+                    loop=loop,
+                    correction_service=correction_service,
+                    active_correction_tasks=active_correction_tasks,
                 )
 
-                if has_text:
-                    payload_type = "final" if result.is_final else "partial"
+                try:
+                    await handler.connect()
+                    active_handlers[language_code] = handler
+                except Exception as e:
+                    logger.error(f"Failed to start stream for {language_code}: {e}")
 
-                    vtt_timestamp = None
-                    if payload_type == "partial":
-                        timestamp_service.mark_utterance_start(current_message_id)
+        viewer_manager.register_language_callback(session_id, add_language_stream)
 
-                    if payload_type == "final":
-                        vtt_timestamp = timestamp_service.complete_utterance(
-                            current_message_id
-                        )
+        await add_language_stream("en")
 
-                    payload = {
-                        "message_id": current_message_id,
-                        "transcription": result.transcription,
-                        "translation": result.translation,
-                        "source_language": result.source_language,
-                        "target_language": result.target_language,
-                        "speaker": current_speaker,
-                        "type": payload_type,
-                        "isfinalize": result.is_final,
-                        "vtt_timestamp": vtt_timestamp,
-                    }
-                    await viewer_manager.broadcast_to_session(session_id, payload)
-                else:
-                    with log_step("SONIOX"):
-                        logger.debug("Dropping empty partial result.")
-
-                if result.is_final:
-                    with log_step("UTTERANCE"):
-                        logger.info("Finished pipeline for utterance.")
-
-                    if (
-                        correction_service
-                        and result.transcription
-                        and result.transcription.strip()
-                        and result.source_language == "zh"
-                    ):
-                        utterance_to_store = {
-                            "message_id": current_message_id,
-                            "speaker": current_speaker,
-                            "transcription": result.transcription,
-                        }
-                        task = asyncio.create_task(
-                            correction_service.process_final_utterance(
-                                utterance_to_store
-                            )
-                        )
-                        active_correction_tasks.add(task)
-                        task.add_done_callback(active_correction_tasks.discard)
-
-                    is_new_utterance = True
-                    current_message_id = None
-                    message_id_var.set(None)
-
-            finally:
-                speaker_var.reset(speaker_token)
-                session_id_var.reset(session_token)
-
-        async def on_service_close_local(code: int, reason: str):
-            with log_step("SONIOX"):
-                logger.info(
-                    f"Transcription service closed. Code: {code}, Reason: {reason}"
-                )
-            final_message_processed.set()
-
-        async def _create_and_connect_soniox() -> SonioxService:
-            """
-            Creates a new SonioxService, connects it (blocking),
-            and returns the instance.
-            """
-            service = SonioxService(
-                on_message_callback=on_transcription_message_local,
-                on_error_callback=on_service_error,
-                on_close_callback=on_service_close_local,
-                loop=loop,
-            )
-            with log_step("SESSION"):
-                logger.info("Connecting to transcription service...")
-
-            await loop.run_in_executor(None, service.connect)
-
-            with log_step("SESSION"):
-                logger.info("Transcription service connected.")
-            return service
-
-        current_retry_delay = 0
         try:
-            transcription_service = await _create_and_connect_soniox()
-
             while True:
-                if not transcription_service or not transcription_service._is_connected:
-                    if current_retry_delay > 0:
-                        with log_step("SESSION"):
-                            logger.warning(
-                                f"Reconnection attempt failed. Retrying in {current_retry_delay}s..."
-                            )
-                        await asyncio.sleep(current_retry_delay)
-                    else:
-                        with log_step("SESSION"):
-                            logger.warning(
-                                "Transcription service disconnected. Attempting immediate reconnect..."
-                            )
-
-                    if transcription_service:
-                        await loop.run_in_executor(
-                            None, transcription_service.finalize_stream
-                        )
-
-                    try:
-                        transcription_service = await _create_and_connect_soniox()
-                        with log_step("SESSION"):
-                            logger.info("Reconnection successful.")
-                        current_retry_delay = 0
-
-                    except Exception as e:
-                        with log_step("SESSION"):
-                            logger.error(f"Failed to reconnect to Soniox: {e}.")
-
-                        if current_retry_delay == 0:
-                            current_retry_delay = 3
-                        else:
-                            current_retry_delay = 5
-
-                        logger.warning(f"Will retry in {current_retry_delay}s...")
-                        continue
-
                 raw_message = await websocket.receive_text()
                 message = json.loads(raw_message)
                 current_speaker = message.get("userName", "Unknown")
                 speaker_var.set(current_speaker)
+
                 audio_chunk = base64.b64decode(message.get("audio"))
 
-                await loop.run_in_executor(
-                    None, transcription_service.send_chunk, audio_chunk
-                )
+                async with handlers_lock:
+                    current_handlers_list = list(active_handlers.values())
+
+                for handler in current_handlers_list:
+                    handler.update_speaker(current_speaker)
+                    await handler.send_audio(audio_chunk)
 
         except WebSocketDisconnect as e:
             if e.code == 1000:
@@ -304,23 +294,15 @@ async def handle_receiver_session(
             session_id_var.reset(session_token)
             return
 
-        if transcription_service:
-            with log_step("SESSION"):
-                logger.debug("Client disconnected. Finalizing Soniox stream...")
-            await loop.run_in_executor(None, transcription_service.finalize_stream)
+        with log_step("SESSION"):
+            logger.debug("Closing all active Soniox streams...")
 
-        if transcription_service:
-            with log_step("SESSION"):
-                logger.debug("Waiting for Soniox connection to fully close...")
-            try:
-                await asyncio.wait_for(final_message_processed.wait(), timeout=5.0)
-                with log_step("SESSION"):
-                    logger.debug("Soniox connection closed.")
-            except asyncio.TimeoutError:
-                with log_step("SESSION"):
-                    logger.warning("Timeout waiting for Soniox to close.")
-        else:
-            await asyncio.sleep(0.1)
+        async with handlers_lock:
+            for handler in active_handlers.values():
+                await handler.close()
+            active_handlers.clear()
+
+        await asyncio.sleep(0.1)
 
         if correction_service:
             with log_step("SESSION"):

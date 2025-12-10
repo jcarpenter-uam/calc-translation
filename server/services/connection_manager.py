@@ -22,6 +22,9 @@ class ConnectionManager:
         self.socket_languages: Dict[WebSocket, str] = {}
 
         self.language_request_callbacks: Dict[str, Callable[[str], Any]] = {}
+        self.language_removal_callbacks: Dict[str, Callable[[str], Any]] = {}
+
+        self.cleanup_tasks: Dict[str, Dict[str, asyncio.Task]] = {}
 
         self.cache = cache
         self._session_lock = threading.Lock()
@@ -54,6 +57,58 @@ class ConnectionManager:
         """Registers a callback to be triggered when a new language is requested for a session."""
         self.language_request_callbacks[session_id] = callback
 
+    def register_language_removal_callback(
+        self, session_id: str, callback: Callable[[str], Any]
+    ):
+        """Registers a callback to be triggered when a language stream should be stopped."""
+        self.language_removal_callbacks[session_id] = callback
+
+    def get_viewer_count(self, session_id: str, language_code: str) -> int:
+        """Returns the number of active viewers for a specific language in a session."""
+        count = 0
+        if session_id in self.sessions:
+            for ws in self.sessions[session_id]:
+                if self.socket_languages.get(ws) == language_code:
+                    count += 1
+        return count
+
+    async def _cleanup_language_stream(self, session_id: str, language_code: str):
+        """
+        Waits for a grace period, then checks if viewers are still 0.
+        If so, triggers the removal callback.
+        """
+        try:
+            await asyncio.sleep(20)
+
+            if self.get_viewer_count(session_id, language_code) == 0:
+                with log_step("CONN-MANAGER"):
+                    logger.info(
+                        f"Language '{language_code}' for session '{session_id}' idle for 20s. Triggering cleanup."
+                    )
+
+                if session_id in self.language_removal_callbacks:
+                    try:
+                        callback = self.language_removal_callbacks[session_id]
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback(language_code)
+                        else:
+                            callback(language_code)
+                    except Exception as e:
+                        logger.error(
+                            f"Error triggering language removal callback for session {session_id}: {e}"
+                        )
+        except asyncio.CancelledError:
+            with log_step("CONN-MANAGER"):
+                logger.debug(
+                    f"Cleanup task for language '{language_code}' cancelled (viewers reconnected)."
+                )
+        finally:
+            if (
+                session_id in self.cleanup_tasks
+                and language_code in self.cleanup_tasks[session_id]
+            ):
+                del self.cleanup_tasks[session_id][language_code]
+
     async def connect(self, websocket: WebSocket, session_id: str, language_code: str):
         """
         Accepts a new connection, registers their language,
@@ -70,6 +125,13 @@ class ConnectionManager:
             self.sessions[session_id].append(websocket)
 
             self.socket_languages[websocket] = language_code
+
+            if (
+                session_id in self.cleanup_tasks
+                and language_code in self.cleanup_tasks[session_id]
+            ):
+                self.cleanup_tasks[session_id][language_code].cancel()
+                del self.cleanup_tasks[session_id][language_code]
 
             if session_id in self.language_request_callbacks:
                 try:
@@ -109,20 +171,41 @@ class ConnectionManager:
         session_token = session_id_var.set(session_id)
 
         try:
+            language_code = None
+            if websocket in self.socket_languages:
+                language_code = self.socket_languages.pop(websocket)
+
             if session_id in self.sessions:
                 if websocket in self.sessions[session_id]:
                     self.sessions[session_id].remove(websocket)
                 if not self.sessions[session_id]:
                     del self.sessions[session_id]
 
-            if websocket in self.socket_languages:
-                del self.socket_languages[websocket]
-
             with log_step("CONN-MANAGER"):
                 logger.info(
                     f"Viewer disconnected. "
                     f"Remaining viewers: {len(self.sessions.get(session_id, []))}"
                 )
+
+            if language_code and language_code != "en":
+                remaining_viewers = self.get_viewer_count(session_id, language_code)
+                if remaining_viewers == 0:
+                    with log_step("CONN-MANAGER"):
+                        logger.info(
+                            f"No active viewers left for language '{language_code}'. Scheduling cleanup task."
+                        )
+
+                    if session_id not in self.cleanup_tasks:
+                        self.cleanup_tasks[session_id] = {}
+
+                    if language_code in self.cleanup_tasks[session_id]:
+                        self.cleanup_tasks[session_id][language_code].cancel()
+
+                    task = asyncio.create_task(
+                        self._cleanup_language_stream(session_id, language_code)
+                    )
+                    self.cleanup_tasks[session_id][language_code] = task
+
         finally:
             session_id_var.reset(session_token)
 
@@ -191,6 +274,12 @@ class ConnectionManager:
 
                     if session_id in self.language_request_callbacks:
                         del self.language_request_callbacks[session_id]
+                    if session_id in self.language_removal_callbacks:
+                        del self.language_removal_callbacks[session_id]
+                    if session_id in self.cleanup_tasks:
+                        for task in self.cleanup_tasks[session_id].values():
+                            task.cancel()
+                        del self.cleanup_tasks[session_id]
 
                     with log_step("CONN-MANAGER"):
                         logger.info(

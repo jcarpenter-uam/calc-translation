@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { FileArrowDown } from "@phosphor-icons/react/dist/csr/FileArrowDown";
 import { SpinnerBall } from "@phosphor-icons/react/dist/csr/SpinnerBall";
+import { useLanguage } from "../../context/language.jsx";
 
 const DownloadIcon = () => <FileArrowDown size={23} />;
 
@@ -12,6 +13,7 @@ const LoadingIcon = () => <SpinnerBall size={23} />;
  */
 function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
   const [isLoading, setIsLoading] = useState(false);
+  const { language } = useLanguage();
 
   const handleDownload = async () => {
     if (isLoading || !isDownloadable || !integration || !sessionId) return;
@@ -19,7 +21,7 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
     setIsLoading(true);
 
     const encodedSessionId = encodeURIComponent(sessionId);
-    const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt?token=${token}`;
+    const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt?token=${token}&language=${language}`;
 
     try {
       const response = await fetch(downloadUrl, {
@@ -34,7 +36,7 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.setAttribute("download", `meeting_transcript.vtt`);
+      link.setAttribute("download", `meeting_transcript_${language}.vtt`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

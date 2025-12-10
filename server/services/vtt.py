@@ -94,6 +94,82 @@ class TimestampService:
             message_id_var.reset(token)
 
 
+def _parse_timestamp_seconds(ts_str: str) -> float:
+    """Parses HH:MM:SS.mmm into total seconds."""
+    try:
+        parts = ts_str.split(":")
+        hours = int(parts[0])
+        minutes = int(parts[1])
+        seconds = float(parts[2])
+        return hours * 3600 + minutes * 60 + seconds
+    except (ValueError, IndexError, AttributeError):
+        return 0.0
+
+
+def _parse_vtt_range(vtt_str: str) -> tuple[float, float]:
+    """Parses 'HH:MM:SS.mmm --> HH:MM:SS.mmm' into (start_seconds, end_seconds)."""
+    try:
+        start_str, end_str = vtt_str.split(" --> ")
+        return _parse_timestamp_seconds(start_str), _parse_timestamp_seconds(end_str)
+    except (ValueError, AttributeError):
+        return 0.0, 0.0
+
+
+def align_history(
+    master_history: List[Dict[str, Any]], target_history: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Aligns the target_history to the structure of master_history based on timestamp overlaps.
+    Assigns each target utterance to the master utterance it overlaps the most.
+    Returns a new list with master's timestamps/speakers but target's text as translation.
+    """
+    if not master_history:
+        return []
+
+    if not target_history:
+        return [{**item, "translation": ""} for item in master_history]
+
+    master_intervals = []
+    for idx, item in enumerate(master_history):
+        s, e = _parse_vtt_range(item.get("vtt_timestamp", ""))
+        master_intervals.append({"start": s, "end": e, "index": idx})
+
+    buckets = [[] for _ in master_history]
+
+    for item in target_history:
+        t_s, t_e = _parse_vtt_range(item.get("vtt_timestamp", ""))
+        text = item.get("translation", "") or item.get("transcription", "")
+
+        if not text:
+            continue
+
+        best_m_idx = -1
+        max_overlap = -1.0
+
+        for m in master_intervals:
+            if t_e <= m["start"] or t_s >= m["end"]:
+                continue
+
+            overlap_start = max(t_s, m["start"])
+            overlap_end = min(t_e, m["end"])
+            overlap = max(0, overlap_end - overlap_start)
+
+            if overlap > max_overlap:
+                max_overlap = overlap
+                best_m_idx = m["index"]
+
+        if best_m_idx != -1 and max_overlap > 0:
+            buckets[best_m_idx].append(text)
+
+    aligned = []
+    for idx, m_item in enumerate(master_history):
+        new_item = m_item.copy()
+        new_item["translation"] = " ".join(buckets[idx])
+        aligned.append(new_item)
+
+    return aligned
+
+
 async def create_vtt_file(
     session_id: str,
     integration: str,

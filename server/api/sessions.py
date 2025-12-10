@@ -11,7 +11,7 @@ from core.authentication import (
 )
 from core.database import SQL_GET_TRANSCRIPT_BY_MEETING_ID
 from core.logging_setup import log_step
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import FileResponse
 from services.connection_manager import ConnectionManager
 
@@ -75,6 +75,9 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
     async def download_session_vtt(
         integration: str,
         session_id: str,
+        language: str = Query(
+            ..., description="The language code for the transcript to download"
+        ),
         user_payload: dict = Depends(get_current_user_payload),
         token_payload: dict = Depends(validate_client_token),
     ):
@@ -92,7 +95,7 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
             )
 
             logger.info(
-                f"Download Request: User '{cookie_user_id}' for Session '{session_id}'"
+                f"Download Request: User '{cookie_user_id}' for Session '{session_id}' (Language: {language})"
             )
 
             if cookie_user_id != token_user_id:
@@ -113,22 +116,22 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
                     detail="Invalid token for this specific session ID.",
                 )
             try:
-                file_name = None
+                language_code = language
 
                 async with database.DB_POOL.acquire() as conn:
                     row = await conn.fetchrow(
-                        SQL_GET_TRANSCRIPT_BY_MEETING_ID, session_id
+                        SQL_GET_TRANSCRIPT_BY_MEETING_ID, session_id, language_code
                     )
-                    if row:
-                        file_name = row[0]
+
+                    file_name = row[0] if row else None
 
                 if not file_name:
                     logger.warning(
-                        f"Transcript record not found in DB for session: {session_id}"
+                        f"Transcript record not found in DB for session: {session_id} (Lang: {language_code})"
                     )
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Transcript record not found in database. The session may be invalid or has not been processed.",
+                        detail=f"Transcript ({language_code}) not found. The session may be invalid or processing not complete.",
                     )
 
                 safe_session_id = urllib.parse.quote(session_id, safe="")
@@ -149,7 +152,7 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
 
                 return FileResponse(
                     path=file_path,
-                    filename=f"{integration}_{safe_session_id}_transcript.vtt",
+                    filename=f"{integration}_{safe_session_id}_{language_code}.vtt",
                     media_type="text/vtt",
                 )
 

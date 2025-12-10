@@ -133,7 +133,6 @@ class StreamHandler:
                         f"Finished pipeline for utterance ({self.language_code})."
                     )
 
-                # NOTE: Correction only for Chinese source currently
                 if (
                     self.correction_service
                     and result.transcription
@@ -250,7 +249,20 @@ async def handle_receiver_session(
                 except Exception as e:
                     logger.error(f"Failed to start stream for {language_code}: {e}")
 
+        async def remove_language_stream(language_code: str):
+            async with handlers_lock:
+                if language_code in active_handlers:
+                    with log_step("SESSION"):
+                        logger.info(
+                            f"Stopping idle Soniox stream for language: {language_code}"
+                        )
+                    handler = active_handlers.pop(language_code)
+                    await handler.close()
+
         viewer_manager.register_language_callback(session_id, add_language_stream)
+        viewer_manager.register_language_removal_callback(
+            session_id, remove_language_stream
+        )
 
         await add_language_stream("en")
 

@@ -133,30 +133,118 @@ export default function Support() {
             </div>
 
             <h2>Getting Started: For Meeting Hosts (Sending Audio)</h2>
+
+            <h3>1. Adding the App</h3>
             <p>
-              As the host, you are responsible for sending the meeting's audio
-              to the translation service.
+              To enable real-time translation for your meetings, you must first
+              install the app using the private distribution link.
+            </p>
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-4 dark:bg-yellow-900/20 dark:border-yellow-600">
+              <p className="text-sm text-yellow-700 dark:text-yellow-200">
+                <strong>Note:</strong> Because this is an internal tool, it is{" "}
+                <strong>unlisted</strong>. You cannot find it by searching the
+                public Zoom Marketplace.
+              </p>
+            </div>
+            <ol>
+              <li>
+                Navigate to the <strong>private installation URL</strong>{" "}
+                provided by your IT administrator.
+              </li>
+              <li>If prompted, log in to your Zoom account.</li>
+              <li>
+                Click the <strong>Add</strong> (or "Visit Site to Install")
+                button.
+              </li>
+              <li>
+                Follow the on-screen prompts to authorize the app. This grants
+                permission for the app to capture meeting audio for translation.
+              </li>
+            </ol>
+            <p className="text-sm mt-2">
+              <em>
+                Trouble installing? Please refer to the{" "}
+                <span className="font-semibold">
+                  Frequently Asked Questions (FAQ)
+                </span>{" "}
+                section below or contact support.
+              </em>
+            </p>
+
+            <h3>2. Usage</h3>
+            <p>
+              The app is designed to run quietly in the sidebar of your meeting.
+            </p>
+            <p>
+              <span className="font-semibold">Prerequisites:</span> You must be
+              the Meeting Host to start the translation stream.
             </p>
             <ul>
               <li>
-                <span className="font-semibold">Authorize App:</span> Ensure the
-                CALC Translation App (the app from the Zoom Marketplace, not the
-                desktop app) is installed and authorized for your Zoom account.
-                Contact your IT Administrator if you need this set up.
+                <span className="font-semibold">Start Meeting:</span> Open Zoom
+                and start your meeting.
               </li>
               <li>
-                <span className="font-semibold">Start Meeting:</span> Start your
-                Zoom meeting as the host.
+                <span className="font-semibold">Launch App:</span> Click the{" "}
+                <strong>Apps</strong> icon in your Zoom toolbar, then select{" "}
+                <strong>CALC Translation App</strong>.
               </li>
               <li>
-                <span className="font-semibold">Run App:</span> Open the app
-                within your Zoom client. This action begins the secure audio
-                stream to our servers.
+                <span className="font-semibold">Active Stream:</span> The app
+                sidebar will open. Once the status shows "Active," audio is
+                being securely streamed to the translation server.
               </li>
               <li>
-                <span className="font-semibold">Confirm:</span> Inform your
-                participants that the feed is now live and they can view it on
-                the web or desktop application.
+                <span className="font-semibold">Stop Stream:</span> To stop
+                translation, simply close the App sidebar or end the meeting.
+              </li>
+            </ul>
+
+            <h3>3. Removing the App</h3>
+            <p>
+              If you no longer need translation services, you may remove the app
+              from your account at any time.
+            </p>
+            <ol>
+              <li>
+                Log in to your Zoom account and navigate to the{" "}
+                <a
+                  href="https://marketplace.zoom.us/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  Zoom App Marketplace
+                </a>
+                .
+              </li>
+              <li>
+                Click <strong>Manage</strong> &gt;&gt;{" "}
+                <strong>Added Apps</strong> or search for "CALC Translation
+                App".
+              </li>
+              <li>Select the "CALC Translation App".</li>
+              <li>
+                Click <strong>Remove</strong>.
+              </li>
+            </ol>
+            <p className="font-semibold mt-4">
+              Data Handling & Implications of Removal:
+            </p>
+            <ul>
+              <li>
+                <strong>Service Interruption:</strong> Removing the app prevents
+                you from broadcasting audio for translation in future meetings.
+              </li>
+              <li>
+                <strong>Data Retention:</strong> Removing the app does not
+                delete past meeting transcripts instantly. Historical
+                transcripts are retained on CALC internal servers in accordance
+                with company data retention policies for compliance and review.
+              </li>
+              <li>
+                <strong>Re-installation:</strong> You may re-add the app at any
+                time to resume service.
               </li>
             </ul>
 

@@ -1,10 +1,13 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Header from "../components/header/header";
 import Footer from "../components/misc/footer";
 import ThemeToggle from "../components/header/theme-toggle.jsx";
 import Language from "../components/header/language.jsx";
 
 export default function NotFound() {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header>
@@ -16,17 +19,17 @@ export default function NotFound() {
         <div className="max-w-md w-full">
           <div className="bg-white dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 shadow-lg rounded-lg p-6 sm:p-8 text-center">
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">
-              404 - Page Not Found
+              {t("not_found_title")}
             </h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
-              This page does not exist. Let's get you back home.
+              {t("not_found_description")}
             </p>
 
             <Link
               to="/"
               className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              Go to Home
+              {t("go_to_home")}
             </Link>
           </div>
         </div>

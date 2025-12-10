@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Header from "../components/header/header";
 import Footer from "../components/misc/footer";
 import ThemeToggle from "../components/header/theme-toggle.jsx";
@@ -7,11 +8,13 @@ import Language from "../components/header/language.jsx";
 import { useLanguage } from "../context/language.jsx";
 
 export default function Login() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams] = useSearchParams();
-  const [infoMessage, setInfoMessage] = useState(null);
+
+  const [infoMessageKey, setInfoMessageKey] = useState(null);
 
   const { language } = useLanguage();
 
@@ -19,8 +22,7 @@ export default function Login() {
     const reason = searchParams.get("reason");
     if (reason === "zoom_link_required") {
       sessionStorage.setItem("zoom_link_pending", "true");
-
-      setInfoMessage("Please log in to finish linking your new Zoom account.");
+      setInfoMessageKey("zoom_link_info");
     }
   }, [searchParams]);
 
@@ -67,15 +69,14 @@ export default function Login() {
         <div className="max-w-md w-full">
           <div className="bg-white dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 shadow-lg rounded-lg p-6 sm:p-8">
             <h1 className="text-2xl font-bold text-center text-zinc-900 dark:text-zinc-100 mb-2">
-              Login
+              {t("login")}
             </h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400 text-center mb-6">
-              Enter your work email to be redirected to your company's login
-              page.
+              {t("login_description")}
             </p>
-            {infoMessage && (
+            {infoMessageKey && (
               <div className="text-center text-sm text-blue-600 dark:text-blue-400 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-700">
-                {infoMessage}
+                {t(infoMessageKey)}
               </div>
             )}
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -84,14 +85,14 @@ export default function Login() {
                   htmlFor="email"
                   className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
                 >
-                  Email Address
+                  {t("email_label")}
                 </label>
                 <input
                   type="email"
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@your-company.com"
+                  placeholder={t("email_placeholder")}
                   required
                   className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:border-blue-500"
                 />
@@ -99,7 +100,7 @@ export default function Login() {
 
               {error && (
                 <div className="text-red-600 dark:text-red-400 text-sm font-medium text-center">
-                  <strong>Error:</strong> {error}
+                  <strong>{t("error_label")}</strong> {error}
                 </div>
               )}
 
@@ -108,7 +109,7 @@ export default function Login() {
                 disabled={isLoading}
                 className="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isLoading ? "Redirecting..." : "Continue"}
+                {isLoading ? t("redirecting") : t("continue")}
               </button>
             </form>
           </div>

@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 const LanguageContext = createContext();
 
@@ -23,15 +24,23 @@ function getInitialLanguage() {
 }
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState(getInitialLanguage);
+  const [language, setLanguageState] = useState(getInitialLanguage);
+  const { i18n } = useTranslation();
 
   useEffect(() => {
+    i18n.changeLanguage(language);
+  }, []);
+
+  const setLanguage = (newLang) => {
+    setLanguageState(newLang);
+    i18n.changeLanguage(newLang);
+
     try {
-      window.localStorage.setItem(STORAGE_KEY, language);
+      window.localStorage.setItem(STORAGE_KEY, newLang);
     } catch (error) {
       console.error("Error writing to localStorage", error);
     }
-  }, [language]);
+  };
 
   const value = { language, setLanguage };
 

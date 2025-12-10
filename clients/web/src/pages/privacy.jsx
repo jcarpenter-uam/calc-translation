@@ -1,10 +1,13 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Header from "../components/header/header";
 import Footer from "../components/misc/footer";
 import ThemeToggle from "../components/header/theme-toggle.jsx";
 import Language from "../components/header/language.jsx";
 
 export default function Privacy() {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header>
@@ -18,192 +21,144 @@ export default function Privacy() {
             to="/"
             className="mb-4 inline-block text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
           >
-            &larr; Back to Home
+            {t("back_to_home")}
           </Link>
           <article className="prose dark:prose-invert lg:prose-xl">
-            <h1>Privacy Policy</h1>
+            <h1>{t("privacy_title")}</h1>
             <p>
-              <span className="font-semibold">
-                This application is intended for internal organization use
-              </span>
+              <span className="font-semibold">{t("internal_use_only")}</span>
             </p>
             <p>
-              <span className="font-semibold">
-                Effective Date: November 2025
-              </span>
+              <span className="font-semibold">{t("effective_date")}</span>
             </p>
             <hr />
 
             <h2>
-              <span className="font-semibold">Purpose</span>
+              <span className="font-semibold">{t("purpose_title")}</span>
             </h2>
-            <p>
-              This Privacy Policy applies to the CALC Translation application.
-              This App is developed and maintained by Jonah Carpenter and is
-              intended solely for internal use by authorized members of the CALC
-              organization or its subsidiaries.
-            </p>
-            <p>
-              The purpose of the App is to provide real-time translation and
-              transcription services during internal Zoom meetings to improve
-              communication and accessibility for our staff.
-            </p>
+            <p>{t("privacy_policy_intro")}</p>
+            <p>{t("app_purpose_desc")}</p>
             <hr />
 
             <h2>
-              <span className="font-semibold">Information We Process</span>
+              <span className="font-semibold">{t("info_process_title")}</span>
             </h2>
-            <p>
-              To provide its services, the App processes the following data:
-            </p>
+            <p>{t("info_process_intro")}</p>
             <ul>
               <li>
-                <span className="font-semibold">Real-Time Audio Data:</span> The
-                App captures the audio stream from your Zoom meeting in
-                real-time. This audio is immediately processed to generate
-                translations and transcriptions.
+                <span className="font-semibold">{t("data_audio_title")}</span>{" "}
+                {t("data_audio_desc")}
               </li>
               <li>
-                <span className="font-semibold">User Identifiers:</span> We use
-                basic Zoom participant information (e.g., display name) to
-                accurately attribute speech to the correct speaker in the live
-                transcription and the final stored transcript.
+                <span className="font-semibold">{t("data_user_id_title")}</span>{" "}
+                {t("data_user_id_desc")}
               </li>
               <li>
                 <span className="font-semibold">
-                  Transcription and Translation Data:
+                  {t("data_transcription_title")}
                 </span>{" "}
-                This is the text generated from the audio stream. This text is
-                displayed live during the meeting and within the downloadable
-                transcript file on meeting end.
+                {t("data_transcription_desc")}
+              </li>
+            </ul>
+            <hr />
+
+            <h2>
+              <span className="font-semibold">{t("data_sharing_title")}</span>
+            </h2>
+            <p>{t("no_selling_data")}</p>
+            <p>{t("third_party_requirement")}</p>
+            <ul>
+              <li>
+                <span className="font-semibold">
+                  {t("service_provider_title")}
+                </span>{" "}
+                {t("service_provider_text")}{" "}
+                <a href="https://soniox.com">Soniox</a>{" "}
+                {t("service_provider_role")}
+              </li>
+              <li>
+                <span className="font-semibold">{t("data_shared_title")}</span>{" "}
+                {t("data_shared_text")}
+              </li>
+              <li>
+                <span className="font-semibold">
+                  {t("sharing_purpose_title")}
+                </span>{" "}
+                {t("sharing_purpose_text")}
               </li>
             </ul>
             <hr />
 
             <h2>
               <span className="font-semibold">
-                Data Sharing and Third-Party Services
+                {t("storage_security_title")}
               </span>
             </h2>
-            <p>
-              We do not sell, rent, or trade any personal data with third
-              parties for marketing or advertising purposes.
-            </p>
-            <p>
-              To provide the core translation functionality, we must share a
-              live audio stream with a third-party services.
-            </p>
             <ul>
               <li>
-                <span className="font-semibold">Service Provider:</span> We use{" "}
-                <a href="https://soniox.com">Soniox</a> as a sub-processor to
-                convert speech to text and perform translation.
+                <span className="font-semibold">{t("data_storage_title")}</span>{" "}
+                {t("data_storage_text")}
               </li>
               <li>
-                <span className="font-semibold">Data Shared:</span> Only the
-                real-time meeting audio is sent to this provider.
+                <span className="font-semibold">
+                  {t("data_retention_title")}
+                </span>{" "}
+                {t("data_retention_text")}
               </li>
               <li>
-                <span className="font-semibold">Purpose:</span> This sharing is
-                strictly for the purpose of generating the translation and
-                transcription.
+                <span className="font-semibold">{t("security_title")}</span>{" "}
+                {t("security_text")}
               </li>
             </ul>
             <hr />
 
             <h2>
-              <span className="font-semibold">
-                Data Storage, Retention, and Security
-              </span>
+              <span className="font-semibold">{t("access_info_title")}</span>
             </h2>
+            <p>{t("access_control_intro")}</p>
             <ul>
               <li>
-                <span className="font-semibold">Data Storage:</span> The App
-                stores the final meeting transcript. This transcript includes
-                the full text of the transcription, speaker names, and
-                timestamps.
+                <span className="font-semibold">
+                  {t("app_installation_title")}
+                </span>{" "}
+                {t("app_installation_text")}
               </li>
               <li>
-                <span className="font-semibold">Data Retention:</span> Stored
-                transcripts are retained on our secure cloud database
+                <span className="font-semibold">{t("live_data_title")}</span>{" "}
+                {t("live_data_text")}
               </li>
               <li>
-                <span className="font-semibold">Security:</span> We implement
-                reasonable administrative, technical, and physical safeguards to
-                protect the data we process and store. This includes per meeting
-                authentication, and secure tokens between client and server to
-                prevent unauthorized access, use, or disclosure.
+                <span className="font-semibold">
+                  {t("stored_transcripts_title")}
+                </span>{" "}
+                {t("stored_transcripts_text")}
               </li>
             </ul>
             <hr />
 
             <h2>
-              <span className="font-semibold">Access to Information</span>
+              <span className="font-semibold">{t("user_rights_title")}</span>
             </h2>
-            <p>Access to data is strictly controlled:</p>
-            <ul>
-              <li>
-                <span className="font-semibold">App Installation:</span> Only
-                authorized Zoom accounts within the organization can install and
-                use the App using the private URL.
-              </li>
-              <li>
-                <span className="font-semibold">Live Data:</span> The real-time
-                transcription and translation feed is visible to all
-                participants in the Zoom meeting for transparency given they
-                have the proper meeting credentials.
-              </li>
-              <li>
-                <span className="font-semibold">Stored Transcripts:</span>{" "}
-                Access to stored transcripts is restricted to users attending or
-                attended a given meeting.
-              </li>
-            </ul>
+            <p>{t("user_rights_text_1")}</p>
+            <p>{t("user_rights_text_2")}</p>
             <hr />
 
             <h2>
-              <span className="font-semibold">
-                User Rights and Data Management
-              </span>
+              <span className="font-semibold">{t("policy_changes_title")}</span>
             </h2>
-            <p>
-              In accordance with our internal data governance policies,
-              employees may have the right to access, review, or request the
-              deletion of a meeting transcript they participated in.
-            </p>
-            <p>
-              All requests will be handled in line with company policy and data
-              retention requirements. To make such a request, please contact the
-              developer or your IT administrator via the contact information
-              below.
-            </p>
+            <p>{t("policy_changes_text")}</p>
             <hr />
 
             <h2>
-              <span className="font-semibold">Changes to this Policy</span>
+              <span className="font-semibold">{t("contact_info_title")}</span>
             </h2>
-            <p>
-              This policy may be updated periodically to reflect changes in our
-              operations, technology, or compliance obligations. All internal
-              users will be notified of material updates through official
-              company communication channels.
-            </p>
-            <hr />
-
-            <h2>
-              <span className="font-semibold">Contact Information</span>
-            </h2>
-            <p>
-              For any questions, concerns, or data requests related to this
-              Privacy Policy or the App, please contact the application
-              developer, Jonah Carpenter, via the email icon below.
-            </p>
+            <p>{t("contact_info_text")}</p>
             <div className="mt-8 text-center not-prose">
               <Link
                 to="/"
                 className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Go to Home
+                {t("go_to_home")}
               </Link>
             </div>
           </article>

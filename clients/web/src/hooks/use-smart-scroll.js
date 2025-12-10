@@ -59,20 +59,16 @@ export function useSmartScroll(list, lastElementRef) {
 
       if (isAtTarget && !isAutoScrollEnabled) {
         setIsAutoScrollEnabled(true);
-        const message =
-          language === "english" ? "Auto Scroll On" : "自动滚动开启";
-        showNotification(message);
+        showNotification(t("auto_scroll_on"));
       } else if (!isAtTarget && isAutoScrollEnabled) {
         setIsAutoScrollEnabled(false);
-        const message =
-          language === "english" ? "Auto Scroll Off" : "自动滚动关闭";
-        showNotification(message);
+        showNotification(t("auto_scroll_off"));
       }
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isAutoScrollEnabled, language, lastElementRef]);
+  }, [isAutoScrollEnabled, t, lastElementRef]);
 
   useLayoutEffect(() => {
     if (isAutoScrollEnabled) {

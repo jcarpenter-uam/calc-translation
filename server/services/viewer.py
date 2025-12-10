@@ -2,8 +2,6 @@
 
 import logging
 
-from core import database
-from core.database import SQL_GET_USER_BY_ID
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket, WebSocketDisconnect, status
 
@@ -16,43 +14,14 @@ async def handle_viewer_session(
     websocket: WebSocket,
     session_id: str,
     viewer_manager: ConnectionManager,
-    payload: dict,
+    language_code: str,
 ):
     """
     Handles the business logic for a single viewer's WebSocket session.
     """
     session_token = session_id_var.set(session_id)
-    user_id = payload.get("sub")
 
     try:
-        if not database.DB_POOL:
-            logger.error("Database not initialized. Cannot retrieve user language.")
-            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
-            return
-
-        language_code = None
-        try:
-            async with database.DB_POOL.acquire() as conn:
-                user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
-                if user_row:
-                    language_code = user_row.get("language_code")
-        except Exception as e:
-            logger.error(
-                f"Error fetching user language for {user_id}: {e}", exc_info=True
-            )
-            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
-            return
-
-        if not language_code:
-            with log_step("WEBSOCKET"):
-                logger.error(
-                    f"User {user_id} has no language_code set. Rejecting connection."
-                )
-            await websocket.close(
-                code=status.WS_1008_POLICY_VIOLATION, reason="User language not set"
-            )
-            return
-
         with log_step("WEBSOCKET"):
             if not viewer_manager.is_session_active(session_id):
                 logger.warning(

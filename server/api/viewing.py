@@ -1,12 +1,6 @@
 import logging
 
-from core import database
 from core.authentication import get_current_user_payload, validate_client_token
-from core.database import (
-    SQL_ADD_MEETING_LANGUAGE,
-    SQL_GET_MEETING_LANGUAGES,
-    SQL_GET_USER_BY_ID,
-)
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, Path, Query, WebSocket, status
 from services.connection_manager import ConnectionManager
@@ -55,50 +49,6 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
                 return
 
         language_code = language
-
-        if database.DB_POOL:
-            try:
-                async with database.DB_POOL.acquire() as conn:
-                    if not language_code:
-                        user_row = await conn.fetchrow(
-                            SQL_GET_USER_BY_ID, cookie_user_id
-                        )
-                        if user_row and user_row.get("language_code"):
-                            language_code = user_row.get("language_code")
-
-                    if language_code:
-                        await conn.execute(
-                            SQL_ADD_MEETING_LANGUAGE, session_id, language_code
-                        )
-
-                        check_rows = await conn.fetch(
-                            SQL_GET_MEETING_LANGUAGES, session_id
-                        )
-                        langs_in_db = [r["language_code"] for r in check_rows]
-
-                        with log_step(LOG_STEP):
-                            if language_code in langs_in_db:
-                                logger.info(
-                                    f"CONFIRMED: Language '{language_code}' is saved in DB for session '{session_id}'."
-                                )
-                            else:
-                                logger.error(
-                                    f"CRITICAL: Insert failed? Language '{language_code}' NOT found in DB check."
-                                )
-                    else:
-                        with log_step(LOG_STEP):
-                            logger.error(
-                                f"User {cookie_user_id} has no 'language_code' in database and no query param provided."
-                            )
-
-            except Exception as e:
-                with log_step(LOG_STEP):
-                    logger.error(
-                        f"Failed to register meeting language from DB: {e}",
-                        exc_info=True,
-                    )
-        else:
-            logger.error("DB Pool not initialized.")
 
         if not language_code:
             with log_step(LOG_STEP):

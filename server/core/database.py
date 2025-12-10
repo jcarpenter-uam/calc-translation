@@ -91,16 +91,6 @@ async def init_db():
                         )
                         """
                     )
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS MEETING_LANGUAGES (
-                            meeting_id TEXT REFERENCES MEETINGS(id) ON DELETE CASCADE,
-                            language_code TEXT NOT NULL,
-                            added_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                            PRIMARY KEY (meeting_id, language_code)
-                        );
-                        """
-                    )
 
                     # Transcripts
                     await conn.execute(
@@ -258,18 +248,6 @@ SELECT m.*
 FROM MEETINGS m
 JOIN INTEGRATIONS i ON m.integration_id = i.id
 WHERE i.user_id = $1;
-"""
-
-# --- MEETING LANGUAGES ---
-
-SQL_ADD_MEETING_LANGUAGE = """
-INSERT INTO MEETING_LANGUAGES (meeting_id, language_code)
-VALUES ($1, $2)
-ON CONFLICT DO NOTHING;
-"""
-
-SQL_GET_MEETING_LANGUAGES = """
-SELECT language_code FROM MEETING_LANGUAGES WHERE meeting_id = $1;
 """
 
 

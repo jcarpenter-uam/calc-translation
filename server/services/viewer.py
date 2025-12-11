@@ -1,5 +1,3 @@
-# NOTE: In combination with connection_manager we will track languages per session
-
 import logging
 
 from core.logging_setup import log_step, session_id_var
@@ -31,7 +29,7 @@ async def handle_viewer_session(
                 return
 
             await viewer_manager.connect(websocket, session_id, language_code)
-            logger.info(
+            logger.debug(
                 f"Viewer connected to session '{session_id}' with language '{language_code}'."
             )
 
@@ -40,7 +38,7 @@ async def handle_viewer_session(
 
     except WebSocketDisconnect:
         with log_step("WEBSOCKET"):
-            logger.info(f"Viewer disconnected from session '{session_id}'.")
+            logger.debug(f"Viewer disconnected from session '{session_id}'.")
         viewer_manager.disconnect(websocket, session_id)
 
     except Exception as e:

@@ -146,7 +146,7 @@ class ConnectionManager:
             history = self.cache.get_history(session_id, language_code)
 
             with log_step("CONN-MANAGER"):
-                logger.info(
+                logger.debug(
                     f"New viewer connecting (Language: {language_code}). "
                     f"Replaying {len(history)} cached messages."
                 )
@@ -155,10 +155,13 @@ class ConnectionManager:
                 for payload in history:
                     await websocket.send_json(payload)
 
+            total_count = len(self.sessions[session_id])
+            lang_count = self.get_viewer_count(session_id, language_code)
+
             with log_step("CONN-MANAGER"):
                 logger.info(
-                    f"Viewer connected and is now live. "
-                    f"Total viewers: {len(self.sessions[session_id])}"
+                    f"Viewer connected (Lang: {language_code}). "
+                    f"Active Viewers: Total={total_count}, {language_code}={lang_count}"
                 )
         finally:
             session_id_var.reset(session_token)
@@ -179,17 +182,22 @@ class ConnectionManager:
                 if not self.sessions[session_id]:
                     del self.sessions[session_id]
 
+            total_count = len(self.sessions.get(session_id, []))
+            lang_count = 0
+            if language_code:
+                lang_count = self.get_viewer_count(session_id, language_code)
+
             with log_step("CONN-MANAGER"):
                 logger.info(
-                    f"Viewer disconnected. "
-                    f"Remaining viewers: {len(self.sessions.get(session_id, []))}"
+                    f"Viewer disconnected (Lang: {language_code}). "
+                    f"Active Viewers: Total={total_count}, {language_code}={lang_count}"
                 )
 
             if language_code and language_code != "en":
                 remaining_viewers = self.get_viewer_count(session_id, language_code)
                 if remaining_viewers == 0:
                     with log_step("CONN-MANAGER"):
-                        logger.info(
+                        logger.debug(
                             f"No active viewers left for language '{language_code}'. Scheduling cleanup task."
                         )
 

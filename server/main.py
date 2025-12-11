@@ -65,16 +65,17 @@ app.include_router(user_router)
 auth_router = create_auth_router()
 app.include_router(auth_router)
 
+app.mount(
+    "/icon.png",
+    StaticFiles(directory="web/dist", html=True, check_dir=False),
+    name="icon",
+)
+
 app.mount("/assets", StaticFiles(directory="web/dist/assets"), name="assets")
 
-try:
-    app.mount(
-        "/icon.png",
-        StaticFiles(directory="web/dist", html=True, check_dir=False),
-        name="icon",
-    )
-except RuntimeError:
-    logger.warning("Static root files not found.")
+app.mount(
+    "/translations", StaticFiles(directory="web/dist/translations"), name="translations"
+)
 
 
 @app.get("/{full_path:path}", response_class=FileResponse)

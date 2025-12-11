@@ -89,7 +89,7 @@ class StreamHandler:
 
                 message_id_var.set(self.current_message_id)
                 with log_step("UTTERANCE"):
-                    logger.info(
+                    logger.debug(
                         f"Starting pipeline for utterance ({self.language_code})."
                     )
 
@@ -175,8 +175,26 @@ class StreamHandler:
             await self.loop.run_in_executor(None, self.service.send_chunk, audio_chunk)
 
     async def close(self):
+        """
+        Signals the service to finish and waits for the receive loop to complete
+        to ensure all final messages are processed and cached.
+        """
         if self.service:
             await self.loop.run_in_executor(None, self.service.finalize_stream)
+
+            if self.service.receive_task:
+                try:
+                    await asyncio.wait_for(self.service.receive_task, timeout=5.0)
+                except asyncio.TimeoutError:
+                    with log_step("SONIOX"):
+                        logger.warning(
+                            f"Timeout waiting for receive loop to finish ({self.language_code}). Force closing."
+                        )
+                except Exception as e:
+                    with log_step("SONIOX"):
+                        logger.error(
+                            f"Error awaiting receive loop ({self.language_code}): {e}"
+                        )
 
 
 async def handle_receiver_session(
@@ -310,11 +328,10 @@ async def handle_receiver_session(
             logger.debug("Closing all active Soniox streams...")
 
         async with handlers_lock:
-            for handler in active_handlers.values():
-                await handler.close()
+            close_tasks = [handler.close() for handler in active_handlers.values()]
+            if close_tasks:
+                await asyncio.gather(*close_tasks)
             active_handlers.clear()
-
-        await asyncio.sleep(0.1)
 
         if correction_service:
             with log_step("SESSION"):

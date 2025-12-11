@@ -5,16 +5,6 @@ const languages = [
   { code: "en", name: "English" },
   { code: "zh", name: "中文 (Chinese)" },
   { code: "es", name: "Español (Spanish)" },
-  { code: "hi", name: "हिन्दी (Hindi)" },
-  { code: "ar", name: "العربية (Arabic)" },
-  { code: "pt", name: "Português (Portuguese)" },
-  { code: "ru", name: "Русский (Russian)" },
-  { code: "ja", name: "日本語 (Japanese)" },
-  { code: "de", name: "Deutsch (German)" },
-  { code: "fr", name: "Français (French)" },
-  { code: "ko", name: "한국어 (Korean)" },
-  { code: "vi", name: "Tiếng Việt (Vietnamese)" },
-  { code: "it", name: "Italiano (Italian)" },
 ];
 
 export default function Language() {

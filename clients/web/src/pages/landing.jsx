@@ -85,7 +85,6 @@ export default function LandingPage() {
       }
 
       const data = await response.json();
-      console.log("Server response:", data);
       const sessionId = data.meetinguuid;
       const token = data.token;
 
@@ -129,7 +128,6 @@ export default function LandingPage() {
       }
 
       const data = await response.json();
-      console.log("Server response:", data);
       const returnedSessionId = data.meetinguuid;
       const token = data.token;
 

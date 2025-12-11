@@ -118,8 +118,6 @@ class ConnectionManager:
         session_token = session_id_var.set(session_id)
 
         try:
-            await websocket.accept()
-
             if session_id not in self.sessions:
                 self.sessions[session_id] = []
             self.sessions[session_id].append(websocket)

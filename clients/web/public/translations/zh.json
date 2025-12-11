@@ -204,6 +204,7 @@
   "auto_scroll_off": "自动滚动关闭",
   "access_denied_title": "访问被拒绝",
   "access_denied_default_message": "您没有权限执行此操作。",
+  "access_denied_session_message": "您无权查看此会话。您将被重定向到首页。",
   "tenant_create_title": "创建新租户",
   "org_name_placeholder": "组织名称",
   "domains_placeholder_hint": "域名（逗号分隔，例如 contoso.com, sub.contoso.com）",

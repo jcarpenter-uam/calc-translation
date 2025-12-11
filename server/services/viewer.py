@@ -27,7 +27,6 @@ async def handle_viewer_session(
                 logger.warning(
                     f"Viewer failed to connect: Session '{session_id}' not found."
                 )
-                await websocket.accept()
                 await websocket.close(code=4004, reason="Session not found")
                 return
 

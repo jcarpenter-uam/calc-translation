@@ -12,6 +12,7 @@ import Notification from "../components/misc/notification.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 import { useSmartScroll } from "../hooks/use-smart-scroll.js";
 import { useLanguage } from "../context/language.jsx";
+import { useTranslation } from "react-i18next";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -29,6 +30,7 @@ export default function SessionPage() {
   const [isAuthorized, setIsAuthorized] = useState(!!token);
   const [showUnauthorized, setShowUnauthorized] = useState(false);
   const { language } = useLanguage();
+  const { t } = useTranslation();
 
   const handleAuthFailure = useCallback(() => {
     setIsAuthorized(false);
@@ -62,9 +64,7 @@ export default function SessionPage() {
   const notification = useSmartScroll(transcripts, lastTopTextRef);
 
   if (showUnauthorized) {
-    return (
-      <Unauthorized message="You do not have permission to view this session. You will be redirected to the homepage." />
-    );
+    return <Unauthorized message={t("access_denied_session_message")} />;
   }
 
   if (!isAuthorized) {

@@ -26,6 +26,9 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
         token_payload: dict = Depends(validate_client_token),
         user_cookie: dict = Depends(get_current_user_payload),
     ):
+
+        await websocket.accept()
+
         token_user_id = token_payload.get("user_id") or token_payload.get("sub")
         cookie_user_id = user_cookie.get("sub")
         token_session_id = token_payload.get("session_id") or token_payload.get(

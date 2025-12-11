@@ -13,7 +13,6 @@ import { useState, useEffect, useRef } from "react";
 export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
   const [transcripts, setTranscripts] = useState([]);
   const [isDownloadable, setIsDownloadable] = useState(false);
-  const hideTimerRef = useRef(null);
 
   const ws = useRef(null);
 
@@ -34,10 +33,6 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
 
       setTranscripts([]);
       ws.current = new WebSocket(wsUrl);
-
-      ws.current.onopen = () => {
-        console.log(`WebSocket connected to ${wsUrl}`);
-      };
 
       ws.current.onclose = (event) => {
         const code = event.code;

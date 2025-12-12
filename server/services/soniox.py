@@ -119,7 +119,7 @@ class SonioxService:
             # Set language hints when possible to significantly improve accuracy.
             # See: soniox.com/docs/stt/concepts/language-hints
             # NOTE: I will need a way to add to this list during a meeting
-            "language_hints": ["en", "zh", "es", "fr", "de", "it", "pt", "ru"],
+            "language_hints": ["en", "zh"],
         }
 
     async def _receive_loop(self):

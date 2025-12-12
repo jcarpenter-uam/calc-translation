@@ -46,6 +46,7 @@ class StreamHandler:
         correction_service=None,
         active_correction_tasks=None,
         initial_utterance_count: int = 0,
+        skip_first_utterance: bool = False,
     ):
         self.language_code = language_code
         self.session_id = session_id
@@ -56,6 +57,7 @@ class StreamHandler:
 
         self.service: Optional[SonioxService] = None
         self.utterance_count = initial_utterance_count
+        self.skip_first_utterance = skip_first_utterance
         self.is_new_utterance = True
         self.current_speaker = "Unknown"
 
@@ -86,8 +88,18 @@ class StreamHandler:
         session_token = session_id_var.set(self.session_id)
         speaker_token = speaker_var.set(self.current_speaker)
         try:
+            if self.skip_first_utterance:
+                if result.is_final:
+                    speaker_var.set(None)
+                    with log_step("SESSION"):
+                        logger.debug(
+                            f"Skipped partial join fragment for {self.language_code}"
+                        )
+                    self.skip_first_utterance = False
+                    self.is_new_utterance = True
+                return
+
             if self.is_new_utterance and not result.is_final:
-                # BUG: If a new language starts mid sentence it will incremenent, even if its the same utterance
                 self.utterance_count += 1
                 self.current_message_id = f"{self.utterance_count}_{self.language_code}"
                 self.is_new_utterance = False
@@ -255,9 +267,14 @@ async def handle_receiver_session(
                     return
 
                 start_count = 0
+                skip_first = False
 
                 if "en" in active_handlers:
-                    start_count = active_handlers["en"].utterance_count
+                    english_handler = active_handlers["en"]
+                    start_count = english_handler.utterance_count
+
+                    if not english_handler.is_new_utterance:
+                        skip_first = True
 
                 with log_step("SESSION"):
                     logger.info(
@@ -273,6 +290,7 @@ async def handle_receiver_session(
                     correction_service=correction_service,
                     active_correction_tasks=active_correction_tasks,
                     initial_utterance_count=start_count,
+                    skip_first_utterance=skip_first,
                 )
 
                 try:

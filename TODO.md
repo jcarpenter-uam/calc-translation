@@ -1,0 +1,5 @@
+- Clean up logs
+- Backfill ordering fix
+- Settings model
+- desktop
+- move vtt download and use notification

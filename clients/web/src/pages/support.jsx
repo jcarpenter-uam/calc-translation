@@ -128,23 +128,115 @@ export default function Support() {
             </div>
 
             <h2>{t("getting_started_hosts_title")}</h2>
-            <p>{t("hosts_responsibility")}</p>
+
+            <h3>1. {t("host_add_title")}</h3>
+            <p>{t("host_add_desc")}</p>
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-4 dark:bg-yellow-900/20 dark:border-yellow-600">
+              <p className="text-sm text-yellow-700 dark:text-yellow-200">
+                <strong>{t("note_label")}</strong> {t("host_add_note_1")}{" "}
+                <strong>{t("host_add_note_bold")}</strong>
+                {t("host_add_note_2")}
+              </p>
+            </div>
+            <ol>
+              <li>
+                {t("host_add_step_1_text")}{" "}
+                <strong>{t("host_add_step_1_bold")}</strong>{" "}
+                {t("host_add_step_1_text_2")}
+              </li>
+              <li>{t("host_add_step_2")}</li>
+              <li>
+                {t("host_add_step_3_text")}{" "}
+                <strong>{t("host_add_step_3_bold")}</strong>
+              </li>
+              <li>{t("host_add_step_4")}</li>
+            </ol>
+            <p className="text-sm mt-2">
+              <em>
+                {t("host_install_trouble_1")}{" "}
+                <span className="font-semibold">{t("faq_title")}</span>{" "}
+                {t("host_install_trouble_2")}
+              </em>
+            </p>
+
+            <h3>2. {t("host_usage_title")}</h3>
+            <p>{t("host_usage_desc")}</p>
+            <p>
+              <span className="font-semibold">{t("prerequisites_label")}</span>{" "}
+              {t("host_usage_prereq")}
+            </p>
             <ul>
               <li>
-                <span className="font-semibold">{t("host_step_1_label")}</span>{" "}
-                {t("host_step_1_text")}
+                <span className="font-semibold">
+                  {t("host_usage_step_1_label")}
+                </span>{" "}
+                {t("host_usage_step_1_text")}
               </li>
               <li>
-                <span className="font-semibold">{t("host_step_2_label")}</span>{" "}
-                {t("host_step_2_text")}
+                <span className="font-semibold">
+                  {t("host_usage_step_2_label")}
+                </span>{" "}
+                {t("host_usage_step_2_text")}{" "}
+                <strong>{t("host_usage_step_2_bold_1")}</strong>
+                {t("host_usage_step_2_text_2")}{" "}
+                <strong>{t("host_usage_step_2_bold_2")}</strong>.
               </li>
               <li>
-                <span className="font-semibold">{t("host_step_3_label")}</span>{" "}
-                {t("host_step_3_text")}
+                <span className="font-semibold">
+                  {t("host_usage_step_3_label")}
+                </span>{" "}
+                {t("host_usage_step_3_text")}
               </li>
               <li>
-                <span className="font-semibold">{t("host_step_4_label")}</span>{" "}
-                {t("host_step_4_text")}
+                <span className="font-semibold">
+                  {t("host_usage_step_4_label")}
+                </span>{" "}
+                {t("host_usage_step_4_text")}
+              </li>
+            </ul>
+
+            <h3>3. {t("host_remove_title")}</h3>
+            <p>{t("host_remove_desc")}</p>
+            <ol>
+              <li>
+                {t("host_remove_step_1_text")}{" "}
+                <a
+                  href="https://marketplace.zoom.us/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  {t("zoom_marketplace_label")}
+                </a>
+                .
+              </li>
+              <li>
+                {t("host_remove_step_2_text")}{" "}
+                <strong>{t("host_remove_step_2_bold_1")}</strong> &gt;&gt;{" "}
+                <strong>{t("host_remove_step_2_bold_2")}</strong>{" "}
+                {t("host_remove_step_2_text_2")}
+              </li>
+              <li>{t("host_remove_step_3")}</li>
+              <li>
+                {t("host_remove_step_4_text")}{" "}
+                <strong>{t("host_remove_step_4_bold")}</strong>.
+              </li>
+            </ol>
+            <p className="font-semibold mt-4">
+              {t("host_remove_implications_title")}
+            </p>
+            <ul>
+              <li>
+                <strong>{t("host_remove_imp_1_bold")}</strong>{" "}
+                {t("host_remove_imp_1_text")}
+              </li>
+              <li>
+                <strong>{t("host_remove_imp_2_bold")}</strong>{" "}
+                {t("host_remove_imp_2_text")}
+              </li>
+              <li>
+                <strong>{t("host_remove_imp_3_bold")}</strong>{" "}
+                {t("host_remove_imp_3_text")}
               </li>
             </ul>
 

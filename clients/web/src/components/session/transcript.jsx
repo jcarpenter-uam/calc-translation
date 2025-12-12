@@ -49,20 +49,30 @@ export default function Transcript({
         <CorrectionStatusIndicator status={correctionStatus} />
       </div>
 
-      {/* TODO: Make this look better */}
-      <div className="col-start-2">
-        <p
-          ref={topTextRef}
-          className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}
-        >
-          {transcription}
-        </p>
-        <p
-          ref={topTextRef}
-          className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}
-        >
-          {translation}
-        </p>
+      <div className="col-start-2 flex flex-col gap-1">
+        {translation ? (
+          <>
+            <p
+              ref={topTextRef}
+              className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}
+            >
+              {translation}
+            </p>
+
+            <p
+              className={`m-0 leading-relaxed text-sm text-zinc-500 dark:text-zinc-400 ${textOpacity}`}
+            >
+              {transcription}
+            </p>
+          </>
+        ) : (
+          <p
+            ref={topTextRef}
+            className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}
+          >
+            {transcription}
+          </p>
+        )}
       </div>
     </div>
   );

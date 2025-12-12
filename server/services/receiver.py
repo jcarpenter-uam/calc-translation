@@ -91,10 +91,10 @@ class StreamHandler:
         try:
             if self.skip_first_utterance:
                 if result.is_final:
-                    speaker_var.set(None)
                     with log_step("SESSION"):
                         logger.debug(
-                            f"Skipped partial join fragment for {self.language_code}"
+                            f"Synced to stream end for {self.language_code}. "
+                            f"Skipping complete. Next utterance will be #{self.utterance_count + 1}."
                         )
                     self.skip_first_utterance = False
                     self.is_new_utterance = True
@@ -193,35 +193,20 @@ class StreamHandler:
             await self.loop.run_in_executor(None, self.service.send_chunk, audio_chunk)
 
     async def close(self):
-        """
-        Signals the service to finish and waits for the receive loop to complete
-        to ensure all final messages are processed and cached.
-        """
         if self.service:
             await self.loop.run_in_executor(None, self.service.finalize_stream)
-
             if self.service.receive_task:
                 try:
                     await asyncio.wait_for(self.service.receive_task, timeout=5.0)
                 except asyncio.TimeoutError:
-                    with log_step("SONIOX"):
-                        logger.warning(
-                            f"Timeout waiting for receive loop to finish ({self.language_code}). Force closing."
-                        )
-                except Exception as e:
-                    with log_step("SONIOX"):
-                        logger.error(
-                            f"Error awaiting receive loop ({self.language_code}): {e}"
-                        )
+                    pass
+                except Exception:
+                    pass
 
 
 async def handle_receiver_session(
     websocket: WebSocket, integration: str, session_id: str, viewer_manager
 ):
-    """
-    Contains all the business logic for handling a single
-    transcription/interpretation WebSocket session with multi-language support.
-    """
     session_token = session_id_var.set(session_id)
     active_handlers: Dict[str, StreamHandler] = {}
     handlers_lock = asyncio.Lock()
@@ -241,21 +226,10 @@ async def handle_receiver_session(
         )
 
         if not registration_success:
-            with log_step("SESSION"):
-                logger.warning(
-                    f"Duplicate session attempt for {session_id}. Rejecting connection."
-                )
-            await websocket.close(
-                code=1008,
-                reason="A transcription session is already active for this meeting.",
-            )
+            await websocket.close(code=1008)
             return
 
         session_log_handler = add_session_log_handler(session_id, integration)
-        with log_step("SESSION"):
-            logger.info(f"Client connected for integration: {integration}")
-
-        audio_processor = AudioProcessingService()
 
         if settings.OLLAMA_URL and settings.ALIBABA_API_KEY:
             correction_service = CorrectionService(
@@ -270,6 +244,7 @@ async def handle_receiver_session(
 
                 start_count = 0
                 skip_first = False
+                pending_gap_id = None
 
                 if "en" in active_handlers:
                     english_handler = active_handlers["en"]
@@ -277,13 +252,15 @@ async def handle_receiver_session(
 
                     if not english_handler.is_new_utterance:
                         skip_first = True
+                        pending_gap_id = start_count
 
                 with log_step("SESSION"):
                     logger.info(
-                        f"Starting stream for {language_code} at offset {start_count}"
+                        f"Starting stream for {language_code} at offset {start_count}. "
+                        f"Skip partial: {skip_first}"
                     )
 
-                if start_count > 0 and language_code != "en" and backfill_service:
+                if language_code != "en" and backfill_service:
                     asyncio.create_task(
                         backfill_service.run_session_backfill(
                             session_id=session_id,
@@ -291,6 +268,16 @@ async def handle_receiver_session(
                             viewer_manager=viewer_manager,
                         )
                     )
+
+                    if skip_first and pending_gap_id:
+                        asyncio.create_task(
+                            backfill_service.backfill_gap(
+                                session_id=session_id,
+                                target_lang=language_code,
+                                gap_utterance_count=pending_gap_id,
+                                viewer_manager=viewer_manager,
+                            )
+                        )
 
                 handler = StreamHandler(
                     language_code=language_code,
@@ -313,10 +300,6 @@ async def handle_receiver_session(
         async def remove_language_stream(language_code: str):
             async with handlers_lock:
                 if language_code in active_handlers:
-                    with log_step("SESSION"):
-                        logger.info(
-                            f"Stopping idle Soniox stream for language: {language_code}"
-                        )
                     handler = active_handlers.pop(language_code)
                     await handler.close()
 
@@ -343,30 +326,16 @@ async def handle_receiver_session(
                     handler.update_speaker(current_speaker)
                     await handler.send_audio(audio_chunk)
 
-        except WebSocketDisconnect as e:
-            speaker_var.set(None)
-            with log_step("SESSION"):
-                logger.info(f"Client disconnected (Code: {e.code})")
-        except asyncio.CancelledError:
-            speaker_var.set(None)
-            with log_step("SESSION"):
-                logger.info("Client disconnected (CancelledError).")
+        except WebSocketDisconnect:
+            pass
         except Exception as e:
-            with log_step("SESSION"):
-                logger.error(
-                    f"An unexpected error occurred in transcribe endpoint: {e}",
-                    exc_info=True,
-                )
+            logger.error(f"Error in transcribe endpoint: {e}", exc_info=True)
 
     finally:
         speaker_var.set(None)
-
         if not registration_success:
             session_id_var.reset(session_token)
             return
-
-        with log_step("SESSION"):
-            logger.debug("Closing all active Soniox streams...")
 
         async with handlers_lock:
             close_tasks = [handler.close() for handler in active_handlers.values()]
@@ -375,36 +344,18 @@ async def handle_receiver_session(
             active_handlers.clear()
 
         if correction_service:
-            with log_step("SESSION"):
-                logger.info("Running final correction check on remaining utterances.")
             await correction_service.finalize_session()
 
         if active_correction_tasks:
-            with log_step("SESSION"):
-                logger.debug(
-                    f"Waiting for {len(active_correction_tasks)} outstanding correction task(s)..."
-                )
             await asyncio.gather(*active_correction_tasks)
-            with log_step("SESSION"):
-                logger.debug("All correction tasks complete.")
 
         await viewer_manager.cache.save_history_and_clear(session_id, integration)
 
-        with log_step("SESSION"):
-            logger.info("Broadcasting session_end event to viewers.")
-        end_payload = {
-            "type": "session_end",
-            "message": "The transcription session has concluded.",
-        }
+        end_payload = {"type": "session_end", "message": "Session concluded."}
         await viewer_manager.broadcast_to_session(session_id, end_payload)
 
         viewer_manager.deregister_transcription_session(session_id)
-
         if session_log_handler:
-            with log_step("SESSION"):
-                logger.info(
-                    f"Stopping session file logging: {session_log_handler.baseFilename}"
-                )
             remove_session_log_handler(session_log_handler)
 
         session_id_var.reset(session_token)

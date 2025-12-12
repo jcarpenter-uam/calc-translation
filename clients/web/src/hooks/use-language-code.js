@@ -3,7 +3,7 @@ import { useAuth } from "../context/auth";
 import { useLanguage } from "../context/language";
 
 export function useLanguageCode() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const { language, setLanguage: setLocalLanguage } = useLanguage();
 
   useEffect(() => {
@@ -17,6 +17,8 @@ export function useLanguageCode() {
       setLocalLanguage(newLang);
 
       if (user) {
+        setUser({ ...user, language_code: newLang });
+
         fetch("/api/users/me/language", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -26,7 +28,7 @@ export function useLanguageCode() {
         });
       }
     },
-    [user, setLocalLanguage],
+    [user, setUser, setLocalLanguage],
   );
 
   return { language, setLanguage };

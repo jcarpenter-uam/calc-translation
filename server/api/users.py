@@ -97,7 +97,7 @@ def create_user_router() -> APIRouter:
                 )
 
             new_lang = language_update.language_code
-            logger.info(
+            logger.debug(
                 f"Request to update language for user {user_id} to '{new_lang}'"
             )
 
@@ -128,7 +128,7 @@ def create_user_router() -> APIRouter:
         Get a list of all users.
         """
         with log_step(LOG_STEP):
-            logger.info("Request to get all users.")
+            logger.debug("Request to get all users.")
             if not database.DB_POOL:
                 logger.error("Database not initialized during get_all_users.")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -152,7 +152,7 @@ def create_user_router() -> APIRouter:
         Get a specific user by their ID.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to get user by ID: {user_id}")
+            logger.debug(f"Request to get user by ID: {user_id}")
             if not database.DB_POOL:
                 logger.error(
                     f"Database not initialized during get_user_by_id: {user_id}"
@@ -184,7 +184,7 @@ def create_user_router() -> APIRouter:
         Uses UPSERT logic: will create if not present, or update if present.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to update/create user: {user_id}")
+            logger.debug(f"Request to update/create user: {user_id}")
             if not database.DB_POOL:
                 logger.error(f"Database not initialized during update_user: {user_id}")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -213,7 +213,7 @@ def create_user_router() -> APIRouter:
         Delete a user by their ID.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to delete user: {user_id}")
+            logger.debug(f"Request to delete user: {user_id}")
             if not database.DB_POOL:
                 logger.error(f"Database not initialized during delete_user: {user_id}")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -245,7 +245,7 @@ def create_user_router() -> APIRouter:
         Update a user's admin status. (Admin Only)
         """
         with log_step(LOG_STEP):
-            logger.info(
+            logger.debug(
                 f"Request to set admin status for user: {user_id} to {admin_update.is_admin}"
             )
             if not database.DB_POOL:

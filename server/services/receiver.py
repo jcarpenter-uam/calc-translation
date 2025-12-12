@@ -129,7 +129,7 @@ class StreamHandler:
 
             if result.is_final:
                 with log_step("UTTERANCE"):
-                    logger.info(
+                    logger.debug(
                         f"Finished pipeline for utterance ({self.language_code})."
                     )
 
@@ -301,15 +301,11 @@ async def handle_receiver_session(
                     await handler.send_audio(audio_chunk)
 
         except WebSocketDisconnect as e:
-            if e.code == 1000:
-                with log_step("SESSION"):
-                    logger.info(f"Client disconnected gracefully)")
-            else:
-                with log_step("SESSION"):
-                    logger.warning(
-                        f"Client disconnected abnormally. (Code: {e.code}, Reason: '{e.reason}')"
-                    )
+            speaker_var.set(None)
+            with log_step("SESSION"):
+                logger.info(f"Client disconnected (Code: {e.code})")
         except asyncio.CancelledError:
+            speaker_var.set(None)
             with log_step("SESSION"):
                 logger.info("Client disconnected (CancelledError).")
         except Exception as e:
@@ -320,6 +316,8 @@ async def handle_receiver_session(
                 )
 
     finally:
+        speaker_var.set(None)
+
         if not registration_success:
             session_id_var.reset(session_token)
             return

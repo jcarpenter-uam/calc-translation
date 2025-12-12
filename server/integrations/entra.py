@@ -121,7 +121,7 @@ async def handle_login(
     request: EntraLoginRequest, response: Response
 ) -> RedirectResponse:
     with log_step(LOG_STEP):
-        logger.info(f"Handling Entra login request for email: {request.email}")
+        logger.debug(f"Handling Entra login request for email: {request.email}")
         try:
             domain = request.email.split("@")[1]
         except IndexError:
@@ -156,7 +156,7 @@ async def handle_login(
             samesite="lax",
         )
         auth_url = _build_auth_url(tenant_config, state)
-        logger.info(f"Redirecting user from domain {domain} to auth URL.")
+        logger.debug(f"Redirecting user from domain {domain} to auth URL.")
         return {"login_url": auth_url}
 
 

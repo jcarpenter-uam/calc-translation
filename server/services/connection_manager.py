@@ -80,6 +80,13 @@ class ConnectionManager:
         try:
             await asyncio.sleep(20)
 
+            if not self.is_session_active(session_id):
+                with log_step("CONN-MANAGER"):
+                    logger.debug(
+                        f"Session '{session_id}' is no longer active. Skipping cleanup for '{language_code}'."
+                    )
+                return
+
             if self.get_viewer_count(session_id, language_code) == 0:
                 with log_step("CONN-MANAGER"):
                     logger.info(
@@ -181,6 +188,18 @@ class ConnectionManager:
                     self.sessions[session_id].remove(websocket)
                 if not self.sessions[session_id]:
                     del self.sessions[session_id]
+
+            total_count = len(self.sessions.get(session_id, []))
+            lang_count = 0
+            if language_code:
+                lang_count = self.get_viewer_count(session_id, language_code)
+
+            if not self.is_session_active(session_id):
+                with log_step("CONN-MANAGER"):
+                    logger.debug(
+                        f"Viewer disconnected from inactive session (Lang: {language_code})."
+                    )
+                return
 
             total_count = len(self.sessions.get(session_id, []))
             lang_count = 0

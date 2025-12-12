@@ -220,9 +220,7 @@ class TranscriptCache:
                 del self.sessions[session_id]
 
                 with log_step("CACHE"):
-                    logger.info(
-                        f"Cleared all language caches for session: {session_id}"
-                    )
+                    logger.info(f"Cleared all language caches for session")
             else:
                 with log_step("CACHE"):
                     logger.info(

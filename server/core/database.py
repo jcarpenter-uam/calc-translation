@@ -106,7 +106,7 @@ async def init_db():
                         """
                     )
 
-            logger.info("Database pool initialized successfully and schema verified.")
+            logger.debug("Database pool initialized successfully and schema verified.")
         except Exception as e:
             logger.error(f"Failed to initialize database pool: {e}", exc_info=True)
             DB_POOL = None

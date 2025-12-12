@@ -225,7 +225,7 @@ async def create_vtt_file(
                     await conn.execute(
                         SQL_INSERT_TRANSCRIPT, session_id, language_code, filename
                     )
-            logger.info(
+            logger.debug(
                 f"Saved transcript record to DB for meeting {session_id} (Lang: {language_code})."
             )
 

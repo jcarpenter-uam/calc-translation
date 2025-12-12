@@ -18,6 +18,7 @@ from core.logging_setup import (
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .audio_processing import AudioProcessingService
+from .backfill import BackfillService
 from .correction import CorrectionService
 from .soniox import (
     SonioxConnectionError,
@@ -232,6 +233,7 @@ async def handle_receiver_session(
     registration_success = False
 
     session_start_time = datetime.now()
+    backfill_service = BackfillService()
 
     try:
         registration_success = viewer_manager.register_transcription_session(
@@ -279,6 +281,15 @@ async def handle_receiver_session(
                 with log_step("SESSION"):
                     logger.info(
                         f"Starting stream for {language_code} at offset {start_count}"
+                    )
+
+                if start_count > 0 and language_code != "en" and backfill_service:
+                    asyncio.create_task(
+                        backfill_service.run_session_backfill(
+                            session_id=session_id,
+                            target_lang=language_code,
+                            viewer_manager=viewer_manager,
+                        )
                     )
 
                 handler = StreamHandler(

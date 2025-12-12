@@ -81,7 +81,8 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
           if (!data.message_id || !data.type) return;
 
           setTranscripts((prevTranscripts) => {
-            const existingIndex = prevTranscripts.findIndex(
+            let newTranscripts = [...prevTranscripts];
+            const existingIndex = newTranscripts.findIndex(
               (t) => t.id === data.message_id,
             );
 
@@ -97,49 +98,54 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
                 type: data.type,
                 correctionStatus: data.correction_status || null,
               };
-              return [...prevTranscripts, newTranscript];
+              newTranscripts.push(newTranscript);
+            } else {
+              const originalTranscript = newTranscripts[existingIndex];
+              let updatedTranscript;
+
+              switch (data.type) {
+                case "status_update":
+                  updatedTranscript = {
+                    ...originalTranscript,
+                    correctionStatus: data.correction_status,
+                  };
+                  break;
+
+                case "correction":
+                  updatedTranscript = {
+                    ...originalTranscript,
+                    original: {
+                      transcription: originalTranscript.transcription,
+                      translation: originalTranscript.translation,
+                    },
+                    transcription: data.transcription,
+                    translation: data.translation,
+                    type: "correction",
+                    correctionStatus: "corrected",
+                  };
+                  break;
+
+                default:
+                  updatedTranscript = {
+                    ...originalTranscript,
+                    transcription: data.transcription,
+                    translation: data.translation,
+                    source_language: data.source_language,
+                    target_language: data.target_language,
+                    isFinalized: data.isfinalize,
+                    type: data.type,
+                  };
+                  break;
+              }
+              newTranscripts[existingIndex] = updatedTranscript;
             }
 
-            const newTranscripts = [...prevTranscripts];
-            const originalTranscript = prevTranscripts[existingIndex];
-            let updatedTranscript;
+            newTranscripts.sort((a, b) => {
+              const numA = parseInt(a.id.split("_")[0], 10) || 0;
+              const numB = parseInt(b.id.split("_")[0], 10) || 0;
+              return numA - numB;
+            });
 
-            switch (data.type) {
-              case "status_update":
-                updatedTranscript = {
-                  ...originalTranscript,
-                  correctionStatus: data.correction_status,
-                };
-                break;
-
-              case "correction":
-                updatedTranscript = {
-                  ...originalTranscript,
-                  original: {
-                    transcription: originalTranscript.transcription,
-                    translation: originalTranscript.translation,
-                  },
-                  transcription: data.transcription,
-                  translation: data.translation,
-                  type: "correction",
-                  correctionStatus: "corrected",
-                };
-                break;
-
-              default:
-                updatedTranscript = {
-                  ...originalTranscript,
-                  transcription: data.transcription,
-                  translation: data.translation,
-                  source_language: data.source_language,
-                  target_language: data.target_language,
-                  isFinalized: data.isfinalize,
-                  type: data.type,
-                };
-                break;
-            }
-
-            newTranscripts[existingIndex] = updatedTranscript;
             return newTranscripts;
           });
         } catch (error) {

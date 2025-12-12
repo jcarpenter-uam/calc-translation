@@ -3,6 +3,7 @@ import base64
 import json
 import logging
 import uuid
+from datetime import datetime
 from typing import Dict, Optional
 
 from core.config import settings
@@ -41,6 +42,7 @@ class StreamHandler:
         session_id: str,
         viewer_manager,
         loop,
+        session_start_time: datetime,
         correction_service=None,
         active_correction_tasks=None,
         initial_utterance_count: int = 0,
@@ -57,7 +59,7 @@ class StreamHandler:
         self.is_new_utterance = True
         self.current_speaker = "Unknown"
 
-        self.timestamp_service = TimestampService()
+        self.timestamp_service = TimestampService(start_time=session_start_time)
 
     def update_speaker(self, speaker: str):
         self.current_speaker = speaker
@@ -85,6 +87,7 @@ class StreamHandler:
         speaker_token = speaker_var.set(self.current_speaker)
         try:
             if self.is_new_utterance and not result.is_final:
+                # BUG: If a new language starts mid sentence it will incremenent, even if its the same utterance
                 self.utterance_count += 1
                 self.current_message_id = f"{self.utterance_count}_{self.language_code}"
                 self.is_new_utterance = False
@@ -216,6 +219,8 @@ async def handle_receiver_session(
     session_log_handler = None
     registration_success = False
 
+    session_start_time = datetime.now()
+
     try:
         registration_success = viewer_manager.register_transcription_session(
             session_id, integration
@@ -264,6 +269,7 @@ async def handle_receiver_session(
                     session_id=session_id,
                     viewer_manager=viewer_manager,
                     loop=loop,
+                    session_start_time=session_start_time,
                     correction_service=correction_service,
                     active_correction_tasks=active_correction_tasks,
                     initial_utterance_count=start_count,

@@ -1,6 +1,5 @@
 import React from "react";
 import { HiOutlineSparkles, HiPencil } from "react-icons/hi";
-import { useLanguage } from "../../context/language.jsx";
 
 /**
  * A component to display a visual status if correction is needed.
@@ -35,13 +34,10 @@ export default function Transcript({
   speaker,
   translation,
   transcription,
-  source_language,
   isFinalized = false,
-  original,
   correctionStatus,
   topTextRef,
 }) {
-  const { language: selectedLanguage } = useLanguage();
   const textOpacity = isFinalized ? "opacity-100" : "opacity-60";
 
   return (
@@ -53,13 +49,19 @@ export default function Transcript({
         <CorrectionStatusIndicator status={correctionStatus} />
       </div>
 
+      {/* TODO: Make this look better */}
       <div className="col-start-2">
         <p
           ref={topTextRef}
           className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}
         >
-          {translation || transcription}{" "}
-          {/* BUG: There is a better solution to this */}
+          {transcription}
+        </p>
+        <p
+          ref={topTextRef}
+          className={`m-0 leading-relaxed text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100 ${textOpacity}`}
+        >
+          {translation}
         </p>
       </div>
     </div>

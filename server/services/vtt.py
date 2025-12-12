@@ -2,7 +2,7 @@ import logging
 import os
 import urllib.parse
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from core import database
 from core.database import SQL_INSERT_TRANSCRIPT
@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 class TimestampService:
-    def __init__(self):
+    def __init__(self, start_time: datetime | None = None):
         """
         Initializes the timestamp service, setting the session's "zero point"
         to the current time.
         """
-        self._session_start_time: datetime = datetime.now()
+        self._session_start_time: datetime = start_time or datetime.now()
         self._utterance_start_times: Dict[str, datetime] = {}
         with log_step("TIMESTAMP"):
             logger.debug(
@@ -212,11 +212,16 @@ async def create_vtt_file(
                     "vtt_timestamp", "00:00:00.000 --> 00:00:00.000"
                 )
 
-                primary_text = translation if translation else transcription
-
                 formatted_lines.append(f"{utterance_num}")
                 formatted_lines.append(f"{timestamp_str}")
-                formatted_lines.append(f"{speaker}: {primary_text}")
+
+                if translation and transcription and translation != transcription:
+                    formatted_lines.append(f"{speaker}: {translation}")
+                    formatted_lines.append(f"{transcription}")
+                else:
+                    primary_text = translation if translation else transcription
+                    formatted_lines.append(f"{speaker}: {primary_text}")
+
                 formatted_lines.append("")
 
             with open(vtt_filepath, "w", encoding="utf-8") as f:

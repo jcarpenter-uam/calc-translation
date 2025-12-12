@@ -190,10 +190,6 @@ class TranscriptCache:
             if session_id in self.sessions:
                 languages_map = self.sessions[session_id]
 
-                master_history = []
-                if "en" in languages_map:
-                    master_history = languages_map["en"].get_history()
-
                 for lang_code, cache in languages_map.items():
                     history = cache.get_history()
 
@@ -201,19 +197,7 @@ class TranscriptCache:
                         cache.clear()
                         continue
 
-                    final_history = history
-
-                    if lang_code != "en" and master_history:
-                        with log_step("CACHE"):
-                            logger.debug(
-                                f"Aligning '{lang_code}' VTT to English timestamps."
-                            )
-                        final_history = align_history(master_history, history)
-
-                    if final_history:
-                        await create_vtt_file(
-                            session_id, integration, lang_code, final_history
-                        )
+                    await create_vtt_file(session_id, integration, lang_code, history)
 
                     cache.clear()
 

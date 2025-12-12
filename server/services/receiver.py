@@ -43,6 +43,7 @@ class StreamHandler:
         loop,
         correction_service=None,
         active_correction_tasks=None,
+        initial_utterance_count: int = 0,
     ):
         self.language_code = language_code
         self.session_id = session_id
@@ -52,7 +53,7 @@ class StreamHandler:
         self.active_correction_tasks = active_correction_tasks or set()
 
         self.service: Optional[SonioxService] = None
-        self.current_message_id = None
+        self.utterance_count = initial_utterance_count
         self.is_new_utterance = True
         self.current_speaker = "Unknown"
 
@@ -84,7 +85,8 @@ class StreamHandler:
         speaker_token = speaker_var.set(self.current_speaker)
         try:
             if self.is_new_utterance and not result.is_final:
-                self.current_message_id = str(uuid.uuid4())
+                self.utterance_count += 1
+                self.current_message_id = f"{self.utterance_count}_{self.language_code}"
                 self.is_new_utterance = False
 
                 message_id_var.set(self.current_message_id)
@@ -247,9 +249,14 @@ async def handle_receiver_session(
                 if language_code in active_handlers:
                     return
 
+                start_count = 0
+
+                if "en" in active_handlers:
+                    start_count = active_handlers["en"].utterance_count
+
                 with log_step("SESSION"):
                     logger.info(
-                        f"Starting new Soniox stream for language: {language_code}"
+                        f"Starting stream for {language_code} at offset {start_count}"
                     )
 
                 handler = StreamHandler(
@@ -259,6 +266,7 @@ async def handle_receiver_session(
                     loop=loop,
                     correction_service=correction_service,
                     active_correction_tasks=active_correction_tasks,
+                    initial_utterance_count=start_count,
                 )
 
                 try:

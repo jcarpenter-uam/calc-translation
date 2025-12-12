@@ -198,7 +198,13 @@ async def create_vtt_file(
             formatted_lines = ["WEBVTT", ""]
 
             for i, entry in enumerate(history):
-                utterance_num = i + 1
+                message_id = entry.get("message_id", "")
+
+                try:
+                    utterance_num = int(message_id.split("_")[0])
+                except (ValueError, IndexError):
+                    utterance_num = i + 1
+
                 speaker = entry.get("speaker", "Unknown")
                 transcription = entry.get("transcription", "").strip()
                 translation = entry.get("translation", "").strip()

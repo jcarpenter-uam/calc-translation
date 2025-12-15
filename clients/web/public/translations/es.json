@@ -286,5 +286,7 @@
   "menu_settings": "Configuración",
   "menu_admin": "Admin",
   "menu_logout": "Cerrar sesión",
-  "user_menu_tooltip": "Iniciado sesión como {{name}}. Haga clic para opciones."
+  "user_menu_tooltip": "Iniciado sesión como {{name}}. Haga clic para opciones.",
+  "download_transcript": "La sesión ha finalizado. Descargar transcripción.",
+  "downloading": "Descargando..."
 }

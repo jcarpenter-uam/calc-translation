@@ -1,19 +1,15 @@
 import React, { useState } from "react";
-import { FileArrowDown } from "@phosphor-icons/react/dist/csr/FileArrowDown";
-import { SpinnerBall } from "@phosphor-icons/react/dist/csr/SpinnerBall";
 import { useLanguage } from "../../context/language.jsx";
-
-const DownloadIcon = () => <FileArrowDown size={23} />;
-
-const LoadingIcon = () => <SpinnerBall size={23} />;
+import { useTranslation } from "react-i18next";
 
 /**
- * An icon-button component to download a .vtt transcript file.
- * Becomes green and enabled when isDownloadable is true.
+ * A button component to download a .vtt transcript file.
+ * Renders as a green text button.
  */
 function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
   const [isLoading, setIsLoading] = useState(false);
   const { language } = useLanguage();
+  const { t } = useTranslation();
 
   const handleDownload = async () => {
     if (isLoading || !isDownloadable || !integration || !sessionId) return;
@@ -48,29 +44,22 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
     }
   };
 
-  const baseClasses =
-    "p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
-
-  const activeClasses =
-    "bg-green-200 text-green-800 dark:bg-green-700 dark:text-green-100 hover:bg-green-300 dark:hover:bg-green-600";
-
-  const inactiveClasses =
-    "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800";
-
   return (
     <button
       onClick={handleDownload}
       disabled={isLoading || !isDownloadable}
-      className={`${baseClasses} ${
-        isDownloadable ? activeClasses : inactiveClasses
-      }`}
-      aria-label={
-        isDownloadable
-          ? "Download transcript (available for a limited time)"
-          : "Download transcript (not yet available)"
-      }
+      className={`
+        px-5 py-2.5 text-sm font-semibold rounded-md shadow-sm 
+        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-zinc-900 
+        transition-colors cursor-pointer
+        ${
+          isLoading
+            ? "bg-green-500 text-white opacity-75 cursor-wait"
+            : "bg-green-600 text-white hover:bg-green-700"
+        }
+      `}
     >
-      {isLoading ? <LoadingIcon /> : <DownloadIcon />}
+      {isLoading ? t("downloading") : t("download_transcript")}
     </button>
   );
 }

@@ -1,6 +1,7 @@
 import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
+import DownloadVttButton from "../components/session/vtt-download.jsx";
 import Transcript from "../components/session/transcript.jsx";
 import Unauthorized from "../components/auth/unauthorized.jsx";
 import Notification from "../components/misc/notification.jsx";
@@ -78,6 +79,16 @@ export default function SessionPage() {
             }
           />
         ))}
+        {isDownloadable && (
+          <div className="mb-8 flex flex-col items-center justify-center">
+            <DownloadVttButton
+              isDownloadable={isDownloadable}
+              integration={integration}
+              sessionId={sessionId}
+              token={token}
+            />
+          </div>
+        )}
       </div>
       <Notification
         message={notification.message}

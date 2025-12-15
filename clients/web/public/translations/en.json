@@ -286,5 +286,7 @@
   "menu_settings": "Settings",
   "menu_admin": "Admin",
   "menu_logout": "Logout",
-  "user_menu_tooltip": "Logged in as {{name}}. Click for options."
+  "user_menu_tooltip": "Logged in as {{name}}. Click for options.",
+  "download_transcript": "Session ended. Download transcript",
+  "downloading": "Downloading..."
 }

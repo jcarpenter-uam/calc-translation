@@ -285,5 +285,7 @@
   "menu_settings": "设置",
   "menu_admin": "管理",
   "menu_logout": "退出登录",
-  "user_menu_tooltip": "已登录为 {{name}}。点击查看选项。"
+  "user_menu_tooltip": "已登录为 {{name}}。点击查看选项。",
+  "download_transcript": "会话已结束。下载文字记录",
+  "downloading": "正在下载..."
 }

@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Header from "../components/header/header";
 import Footer from "../components/misc/footer";
-import ThemeToggle from "../components/header/theme-toggle.jsx";
 import Language from "../components/header/language.jsx";
 
 export default function Terms() {
@@ -11,7 +10,6 @@ export default function Terms() {
   return (
     <div className="flex flex-col min-h-screen">
       <Header>
-        <ThemeToggle />
         <Language />
       </Header>
 

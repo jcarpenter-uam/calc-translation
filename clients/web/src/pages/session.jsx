@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import Header from "../components/header/header";
 import UserAvatar from "../components/header/user.jsx";
 import Transcript from "../components/session/transcript.jsx";
-import ThemeToggle from "../components/header/theme-toggle.jsx";
 import Language from "../components/header/language.jsx";
 import DownloadVttButton from "../components/header/vtt-download.jsx";
 import Unauthorized from "../components/auth/unauthorized.jsx";
@@ -75,7 +74,6 @@ export default function SessionPage() {
     <>
       <Header>
         <UserAvatar />
-        <ThemeToggle />
         <Language />
         <DownloadVttButton
           isDownloadable={isDownloadable}

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/header/header";
 import UserAvatar from "../components/header/user.jsx";
-import ThemeToggle from "../components/header/theme-toggle.jsx";
 import Language from "../components/header/language.jsx";
 import Footer from "../components/misc/footer.jsx";
 import UserManagement from "../components/admin/user-management.jsx";
@@ -183,7 +182,6 @@ export default function AdminPage() {
     <div className="flex flex-col min-h-screen">
       <Header>
         <UserAvatar />
-        <ThemeToggle />
         <Language />
       </Header>
 

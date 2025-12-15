@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/auth";
 import Header from "../components/header/header";
 import UserAvatar from "../components/header/user.jsx";
-import ThemeToggle from "../components/header/theme-toggle.jsx";
 import Language from "../components/header/language.jsx";
 import {
   IntegrationCard,
@@ -160,7 +159,6 @@ export default function LandingPage() {
     <div className="flex flex-col min-h-screen">
       <Header>
         <UserAvatar />
-        <ThemeToggle />
         <Language />
       </Header>
 

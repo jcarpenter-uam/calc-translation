@@ -180,6 +180,23 @@ class TranscriptCache:
         finally:
             session_id_var.reset(session_token)
 
+    def clear_language_cache(self, session_id: str, language_code: str):
+        """
+        Removes the cache for a specific language.
+        Used when a language stream is closed to ensure future joins trigger a fresh backfill.
+        """
+        session_token = session_id_var.set(session_id)
+        try:
+            if (
+                session_id in self.sessions
+                and language_code in self.sessions[session_id]
+            ):
+                del self.sessions[session_id][language_code]
+                with log_step("CACHE"):
+                    logger.info(f"Cleared cache for language: {language_code}")
+        finally:
+            session_id_var.reset(session_token)
+
     async def save_history_and_clear(self, session_id: str, integration: str):
         """
         Saves the history for ALL languages in a specific session

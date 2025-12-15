@@ -303,6 +303,9 @@ async def handle_receiver_session(
                     handler = active_handlers.pop(language_code)
                     await handler.close()
 
+            if language_code != "en":
+                viewer_manager.cache.clear_language_cache(session_id, language_code)
+
         viewer_manager.register_language_callback(session_id, add_language_stream)
         viewer_manager.register_language_removal_callback(
             session_id, remove_language_stream

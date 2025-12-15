@@ -1,3 +1,3 @@
 - Clean up logs
-- Backfill ordering fix
+- Backfill loading display on frontend
 - desktop

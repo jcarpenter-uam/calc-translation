@@ -152,43 +152,41 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <h2 className="text-xl font-semibold mb-4 text-center">
-              {t("choose_integration")}
-            </h2>
-            <div className="flex flex-wrap justify-center gap-4">
+    <div className="flex flex-col items-center justify-center w-full">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="text-xl font-semibold mb-4 text-center">
+            {t("choose_integration")}
+          </h2>
+          <div className="flex flex-wrap justify-center gap-4">
+            <IntegrationCard
+              id="zoom"
+              title={t("integration_zoom")}
+              icon={<BiLogoZoom className="h-7 w-7 text-blue-500" />}
+              selected={integration}
+              onSelect={setIntegration}
+            />
+            {user?.is_admin && (
               <IntegrationCard
-                id="zoom"
-                title={t("integration_zoom")}
-                icon={<BiLogoZoom className="h-7 w-7 text-blue-500" />}
+                id="test"
+                title={t("integration_test")}
+                icon={<BiSolidFlask className="h-7 w-7 text-green-500" />}
                 selected={integration}
                 onSelect={setIntegration}
               />
-              {user?.is_admin && (
-                <IntegrationCard
-                  id="test"
-                  title={t("integration_test")}
-                  icon={<BiSolidFlask className="h-7 w-7 text-green-500" />}
-                  selected={integration}
-                  onSelect={setIntegration}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="transition-all">
-            {renderForm()}
-            {error && (
-              <p className="mt-4 text-center text-sm font-medium text-red-600">
-                {error}
-              </p>
             )}
           </div>
         </div>
-      </main>
+
+        <div className="transition-all">
+          {renderForm()}
+          {error && (
+            <p className="mt-4 text-center text-sm font-medium text-red-600">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

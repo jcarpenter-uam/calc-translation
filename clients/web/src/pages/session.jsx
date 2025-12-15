@@ -80,7 +80,7 @@ export default function SessionPage() {
           />
         ))}
         {isDownloadable && (
-          <div className="mb-8 flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center justify-center">
             <DownloadVttButton
               isDownloadable={isDownloadable}
               integration={integration}

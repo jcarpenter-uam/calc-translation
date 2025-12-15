@@ -1,18 +1,26 @@
 import React from "react";
-import { useTheme } from "../../context/theme.jsx";
+import { useDisplayMode } from "../../context/display-mode";
+import { useTranslation } from "react-i18next";
 
-export default function Theme() {
-  const { darkMode, setDarkMode } = useTheme();
+export default function DisplayMode() {
+  const { t } = useTranslation();
+  const { displayMode, setDisplayMode } = useDisplayMode();
+
+  const modes = [
+    { id: "both", label: t("display_mode_both") },
+    { id: "transcript", label: t("display_mode_transcript") },
+    { id: "translation", label: t("display_mode_translation") },
+  ];
 
   return (
     <div className="relative">
-      <label htmlFor="theme-select" className="sr-only">
-        Select Theme
+      <label htmlFor="display-mode-select" className="sr-only">
+        {t("display_mode_label")}
       </label>
       <select
-        id="theme-select"
-        value={darkMode ? "Dark" : "Light"}
-        onChange={(e) => setDarkMode(e.target.value === "Dark")}
+        id="display-mode-select"
+        value={displayMode}
+        onChange={(e) => setDisplayMode(e.target.value)}
         className="
           appearance-none
           bg-zinc-50 dark:bg-zinc-800 
@@ -28,8 +36,11 @@ export default function Theme() {
           w-full
         "
       >
-        <option value="Light">Light</option>
-        <option value="Dark">Dark</option>
+        {modes.map((mode) => (
+          <option key={mode.id} value={mode.id}>
+            {mode.label}
+          </option>
+        ))}
       </select>
 
       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-500 dark:text-zinc-400">

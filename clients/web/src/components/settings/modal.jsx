@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import Theme from "./theme";
 import Language from "./language";
+import DisplayMode from "./display-mode";
 import { FiX } from "react-icons/fi";
 
 export default function SettingsModal({ isOpen, onClose }) {
@@ -107,6 +108,12 @@ export default function SettingsModal({ isOpen, onClose }) {
                   {t("language_label")}
                 </span>
                 <Language />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-700 dark:text-zinc-200">
+                  {t("display_mode_label")}
+                </span>
+                <DisplayMode />
               </div>
             </div>
           </div>

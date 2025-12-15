@@ -280,6 +280,8 @@
   "settings_title": "Settings",
   "appearance_title": "Appearance",
   "theme_label": "Theme",
+  "light_mode": "Light",
+  "dark_mode": "Dark",
   "preferences_title": "Preferences",
   "language_label": "Language",
   "display_mode_label": "Display Mode",

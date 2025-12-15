@@ -1,7 +1,9 @@
 import React from "react";
 import { useTheme } from "../../context/theme.jsx";
+import { useTranslation } from "react-i18next";
 
 export default function Theme() {
+  const { t } = useTranslation();
   const { darkMode, setDarkMode } = useTheme();
 
   return (
@@ -28,8 +30,8 @@ export default function Theme() {
           w-full
         "
       >
-        <option value="Light">Light</option>
-        <option value="Dark">Dark</option>
+        <option value="Light">{t("light_mode")}</option>
+        <option value="Dark">{t("dark_mode")}</option>
       </select>
 
       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-500 dark:text-zinc-400">

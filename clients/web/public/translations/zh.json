@@ -279,6 +279,8 @@
   "settings_title": "设置",
   "appearance_title": "外观",
   "theme_label": "主题",
+  "light_mode": "浅色",
+  "dark_mode": "深色",
   "preferences_title": "偏好设置",
   "language_label": "语言",
   "display_mode_label": "显示模式",

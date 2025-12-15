@@ -74,6 +74,10 @@ class BackfillService:
                     logger.debug("No English history found to backfill.")
                 return
 
+            await viewer_manager.broadcast_to_session(
+                session_id, {"type": "backfill_start", "target_language": target_lang}
+            )
+
             with log_step("BACKFILL"):
                 logger.info(
                     f"Starting backfill for language '{target_lang}'. "
@@ -84,6 +88,10 @@ class BackfillService:
                 await self._process_backfill_item(
                     item, session_id, target_lang, viewer_manager
                 )
+
+            await viewer_manager.broadcast_to_session(
+                session_id, {"type": "backfill_end", "target_language": target_lang}
+            )
 
             with log_step("BACKFILL"):
                 logger.info(f"Completed backfill for '{target_lang}'.")

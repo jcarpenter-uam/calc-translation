@@ -13,6 +13,7 @@ import { useState, useEffect, useRef } from "react";
 export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
   const [transcripts, setTranscripts] = useState([]);
   const [isDownloadable, setIsDownloadable] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
 
   const ws = useRef(null);
 
@@ -75,6 +76,15 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
 
           if (data.type === "session_end") {
             setIsDownloadable(true);
+            return;
+          }
+
+          if (data.type === "backfill_start") {
+            setIsBackfilling(true);
+            return;
+          }
+          if (data.type === "backfill_end") {
+            setIsBackfilling(false);
             return;
           }
 
@@ -165,5 +175,5 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
     };
   }, [wsUrl, sessionId, onUnauthorized]);
 
-  return { transcripts, isDownloadable };
+  return { transcripts, isDownloadable, isBackfilling };
 }

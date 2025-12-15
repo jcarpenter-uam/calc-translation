@@ -1,3 +1,4 @@
 - Clean up logs
 - Backfill loading display on frontend
+- Issue where backfill can skip some utterances
 - desktop

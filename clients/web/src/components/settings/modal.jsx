@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import Theme from "./theme";
 import Language from "./language";
 import { FiX } from "react-icons/fi";
 
 export default function SettingsModal({ isOpen, onClose }) {
+  const { t } = useTranslation();
   const modalRef = useRef(null);
 
   useEffect(() => {
@@ -36,7 +38,6 @@ export default function SettingsModal({ isOpen, onClose }) {
     };
   }, [isOpen, onClose]);
 
-  // Prevent background scrolling
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -63,7 +64,7 @@ export default function SettingsModal({ isOpen, onClose }) {
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Settings
+            {t("settings_title")}
           </h2>
           <button
             onClick={onClose}
@@ -84,11 +85,13 @@ export default function SettingsModal({ isOpen, onClose }) {
         <div className="p-6 space-y-6">
           <div>
             <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-3">
-              Appearance
+              {t("appearance_title")}
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-zinc-700 dark:text-zinc-200">Theme</span>
+                <span className="text-zinc-700 dark:text-zinc-200">
+                  {t("theme_label")}
+                </span>
                 <Theme />
               </div>
             </div>
@@ -96,12 +99,12 @@ export default function SettingsModal({ isOpen, onClose }) {
 
           <div>
             <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-3">
-              Preferences
+              {t("preferences_title")}
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-zinc-700 dark:text-zinc-200">
-                  Language
+                  {t("language_label")}
                 </span>
                 <Language />
               </div>

@@ -275,5 +275,10 @@
   "user_mgmt_title": "用户管理",
   "no_users_found": "未找到用户。",
   "not_found_title": "404 - 页面未找到",
-  "not_found_description": "此页面不存在。让我们带您回到首页。"
+  "not_found_description": "此页面不存在。让我们带您回到首页。",
+  "settings_title": "设置",
+  "appearance_title": "外观",
+  "theme_label": "主题",
+  "preferences_title": "偏好设置",
+  "language_label": "语言"
 }

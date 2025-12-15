@@ -276,5 +276,10 @@
   "user_mgmt_title": "Gestión de usuarios",
   "no_users_found": "No se encontraron usuarios.",
   "not_found_title": "404 - Página no encontrada",
-  "not_found_description": "Esta página no existe. Vamos a llevarte de vuelta a casa."
+  "not_found_description": "Esta página no existe. Vamos a llevarte de vuelta a casa.",
+  "settings_title": "Configuración",
+  "appearance_title": "Apariencia",
+  "theme_label": "Tema",
+  "preferences_title": "Preferencias",
+  "language_label": "Idioma"
 }

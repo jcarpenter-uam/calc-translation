@@ -276,5 +276,10 @@
   "user_mgmt_title": "User Management",
   "no_users_found": "No users found.",
   "not_found_title": "404 - Page Not Found",
-  "not_found_description": "This page does not exist. Let's get you back home."
+  "not_found_description": "This page does not exist. Let's get you back home.",
+  "settings_title": "Settings",
+  "appearance_title": "Appearance",
+  "theme_label": "Theme",
+  "preferences_title": "Preferences",
+  "language_label": "Language"
 }

@@ -188,6 +188,15 @@ async def create_vtt_file(
                 )
                 return
 
+            def get_sort_key(item):
+                msg_id = item.get("message_id", "")
+                try:
+                    return int(msg_id.split("_")[0])
+                except (ValueError, IndexError, AttributeError):
+                    return 0
+
+            history.sort(key=get_sort_key)
+
             safe_session_id = urllib.parse.quote(session_id, safe="")
             output_dir = os.path.join("output", integration, safe_session_id)
             os.makedirs(output_dir, exist_ok=True)

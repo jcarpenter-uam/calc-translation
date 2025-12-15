@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import Theme from "./theme";
+import Language from "./language";
 
 export default function SettingsModal({ isOpen, onClose }) {
   const modalRef = useRef(null);
@@ -88,24 +89,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                 <span className="text-zinc-700 dark:text-zinc-200">
                   Language
                 </span>
-                <select className="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm rounded-md px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none">
-                  <option>English</option>
-                  <option>Spanish</option>
-                  <option>Chinese</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-700 dark:text-zinc-200">
-                  Notifications
-                </span>
-                <button
-                  className="
-                    relative inline-flex h-6 w-11 items-center rounded-full 
-                    bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                  "
-                >
-                  <span className="translate-x-6 inline-block h-4 w-4 transform rounded-full bg-white transition" />
-                </button>
+                <Language />
               </div>
             </div>
           </div>

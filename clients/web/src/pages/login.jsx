@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Header from "../components/header/header";
 import Footer from "../components/misc/footer";
-import Language from "../components/header/language.jsx";
 import { useLanguage } from "../context/language.jsx";
 
 export default function Login() {
@@ -59,9 +58,7 @@ export default function Login() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header>
-        <Language />
-      </Header>
+      <Header></Header>
 
       <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-md w-full">

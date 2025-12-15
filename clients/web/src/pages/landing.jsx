@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/auth";
 import Header from "../components/header/header";
 import UserAvatar from "../components/header/user.jsx";
-import Language from "../components/header/language.jsx";
 import {
   IntegrationCard,
   ZoomForm,
@@ -159,7 +158,6 @@ export default function LandingPage() {
     <div className="flex flex-col min-h-screen">
       <Header>
         <UserAvatar />
-        <Language />
       </Header>
 
       <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">

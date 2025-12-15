@@ -21,9 +21,9 @@ export default function Language() {
         onChange={(e) => setLanguage(e.target.value)}
         className="
           appearance-none
-          bg-white dark:bg-zinc-800 
+          bg-zinc-50 dark:bg-zinc-800 
           text-zinc-700 dark:text-zinc-200
-          pl-3 pr-8 py-2
+          pl-3 pr-8 py-1.5
           border border-zinc-200 dark:border-zinc-700
           rounded-md
           shadow-sm

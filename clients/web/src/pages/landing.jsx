@@ -2,14 +2,11 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/auth";
-import Header from "../components/header/header";
-import UserAvatar from "../components/header/user.jsx";
 import {
   IntegrationCard,
   ZoomForm,
   TestForm,
 } from "../components/auth/integration-card.jsx";
-import Footer from "../components/misc/footer.jsx";
 
 import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
 
@@ -156,10 +153,6 @@ export default function LandingPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header>
-        <UserAvatar />
-      </Header>
-
       <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-md w-full space-y-8">
           <div>
@@ -196,8 +189,6 @@ export default function LandingPage() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }

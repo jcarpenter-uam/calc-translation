@@ -1,10 +1,7 @@
 import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
-import Header from "../components/header/header";
-import UserAvatar from "../components/header/user.jsx";
 import Transcript from "../components/session/transcript.jsx";
-import DownloadVttButton from "../components/header/vtt-download.jsx";
 import Unauthorized from "../components/auth/unauthorized.jsx";
 import Notification from "../components/misc/notification.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
@@ -71,16 +68,6 @@ export default function SessionPage() {
 
   return (
     <>
-      <Header>
-        <UserAvatar />
-        <DownloadVttButton
-          isDownloadable={isDownloadable}
-          integration={integration}
-          sessionId={sessionId}
-          token={token}
-        />
-      </Header>
-
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-3xl mx-auto">
           {transcripts.map((t, index) => (

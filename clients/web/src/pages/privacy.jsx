@@ -1,15 +1,11 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import Header from "../components/header/header";
-import Footer from "../components/misc/footer";
 
 export default function Privacy() {
   const { t } = useTranslation();
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header></Header>
-
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-3xl mx-auto">
           <Link
@@ -159,8 +155,6 @@ export default function Privacy() {
           </article>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }

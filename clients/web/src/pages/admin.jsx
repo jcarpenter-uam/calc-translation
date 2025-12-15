@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from "react";
-import Header from "../components/header/header";
-import UserAvatar from "../components/header/user.jsx";
-import Footer from "../components/misc/footer.jsx";
 import UserManagement from "../components/admin/user-management.jsx";
 import TenantManagement from "../components/admin/tenant-management.jsx";
 
@@ -179,15 +176,9 @@ export default function AdminPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header>
-        <UserAvatar />
-      </Header>
-
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
         {renderContent()}
       </main>
-
-      <Footer />
     </div>
   );
 }

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import Header from "../components/header/header";
-import Footer from "../components/misc/footer";
 import { useLanguage } from "../context/language.jsx";
 
 export default function Login() {
@@ -58,8 +56,6 @@ export default function Login() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header></Header>
-
       <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-md w-full">
           <div className="bg-white dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 shadow-lg rounded-lg p-6 sm:p-8">
@@ -110,8 +106,6 @@ export default function Login() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }

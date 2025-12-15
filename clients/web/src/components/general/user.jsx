@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "../../context/auth";
 import SettingsModal from "../settings/modal";
+import { useTranslation } from "react-i18next";
 
 /**
  * Generates initials from a full name.
@@ -21,6 +22,7 @@ const getInitials = (name) => {
 };
 
 export default function UserAvatar() {
+  const { t } = useTranslation();
   const { user, isLoading, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -50,7 +52,7 @@ export default function UserAvatar() {
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          title={`Logged in as ${name}. Click for options.`}
+          title={t("user_menu_tooltip", { name })}
           className="
             flex 
             items-center 
@@ -112,7 +114,7 @@ export default function UserAvatar() {
                     transition-colors
                   "
                 >
-                  Home
+                  {t("menu_home")}
                 </a>
               </li>
 
@@ -136,7 +138,7 @@ export default function UserAvatar() {
                     cursor-pointer
                   "
                 >
-                  Settings
+                  {t("menu_settings")}
                 </button>
               </li>
 
@@ -155,7 +157,7 @@ export default function UserAvatar() {
                       transition-colors
                     "
                   >
-                    Admin
+                    {t("menu_admin")}
                   </a>
                 </li>
               )}
@@ -180,7 +182,7 @@ export default function UserAvatar() {
                     cursor-pointer
                   "
                 >
-                  Logout
+                  {t("menu_logout")}
                 </button>
               </li>
             </ul>

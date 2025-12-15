@@ -281,5 +281,10 @@
   "appearance_title": "Appearance",
   "theme_label": "Theme",
   "preferences_title": "Preferences",
-  "language_label": "Language"
+  "language_label": "Language",
+  "menu_home": "Home",
+  "menu_settings": "Settings",
+  "menu_admin": "Admin",
+  "menu_logout": "Logout",
+  "user_menu_tooltip": "Logged in as {{name}}. Click for options."
 }

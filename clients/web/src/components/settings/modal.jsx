@@ -74,6 +74,7 @@ export default function SettingsModal({ isOpen, onClose }) {
               hover:bg-red-100 hover:text-red-700 
               dark:hover:bg-red-900 dark:hover:text-red-200 
               transition-colors
+              cursor-pointer
             "
           >
             <FiX className="w-5 h-5" />

@@ -84,7 +84,7 @@ export function ZoomForm({ onSubmit }) {
       </div>
       <button
         type="submit"
-        className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+        className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
       >
         {t("join_zoom_btn")}
       </button>
@@ -118,12 +118,12 @@ export function TestForm({ onSubmit }) {
           onChange={(e) => setSessionId(e.target.value)}
           placeholder={t("session_id_placeholder")}
           required
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600"
+          className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
         />
       </div>
       <button
         type="submit"
-        className="w-full justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
       >
         {t("join_test_btn")}
       </button>

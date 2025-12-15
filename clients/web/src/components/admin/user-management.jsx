@@ -52,7 +52,7 @@ function UserRow({ user, onToggleAdmin, onDelete }) {
                 type="checkbox"
                 checked={isAdmin}
                 onChange={(e) => setIsAdmin(e.target.checked)}
-                className="h-5 w-5 rounded text-blue-600 focus:ring-blue-500"
+                className="h-5 w-5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
               />
               <span className="text-zinc-900 dark:text-zinc-100">
                 {t("set_admin_label")}
@@ -64,14 +64,14 @@ function UserRow({ user, onToggleAdmin, onDelete }) {
             <button
               onClick={handleSave}
               title={t("save_btn")}
-              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
+              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <FaSave /> {t("save_btn")}
             </button>
             <button
               onClick={handleCancel}
               title={t("cancel_btn")}
-              className="px-3 py-1 bg-zinc-500 text-white rounded-md hover:bg-zinc-600 transition-colors flex items-center gap-1"
+              className="px-3 py-1 bg-zinc-500 text-white rounded-md hover:bg-zinc-600 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <FaTimes /> {t("cancel_btn")}
             </button>
@@ -101,14 +101,14 @@ function UserRow({ user, onToggleAdmin, onDelete }) {
           <button
             onClick={() => setIsEditing(true)}
             title={t("edit_admin_status_title")}
-            className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors cursor-pointer"
           >
             <FaEdit />
           </button>
           <button
             onClick={handleDelete}
             title={t("delete_btn_title")}
-            className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+            className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors cursor-pointer"
           >
             <FaTrash />
           </button>

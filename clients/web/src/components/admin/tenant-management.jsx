@@ -93,7 +93,7 @@ function CreateTenantForm({ onCreate }) {
       />
       <button
         type="submit"
-        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 cursor-pointer"
       >
         <FaPlus /> {t("create_tenant_btn")}
       </button>
@@ -222,14 +222,14 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
           <button
             onClick={handleSave}
             title={t("save_btn")}
-            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
+            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1 cursor-pointer"
           >
             <FaSave /> {t("save_btn")}
           </button>
           <button
             onClick={handleCancel}
             title={t("cancel_btn")}
-            className="px-3 py-1 bg-zinc-500 text-white rounded-md hover:bg-zinc-600 transition-colors flex items-center gap-1"
+            className="px-3 py-1 bg-zinc-500 text-white rounded-md hover:bg-zinc-600 transition-colors flex items-center gap-1 cursor-pointer"
           >
             <FaTimes /> {t("cancel_btn")}
           </button>
@@ -266,14 +266,14 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
           <button
             onClick={() => setIsEditing(true)}
             title={t("edit_btn_title")}
-            className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors cursor-pointer"
           >
             <FaEdit />
           </button>
           <button
             onClick={handleDelete}
             title={t("delete_btn_title")}
-            className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+            className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors cursor-pointer"
           >
             <FaTrash />
           </button>

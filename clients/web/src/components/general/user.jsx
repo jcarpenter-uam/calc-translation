@@ -133,6 +133,7 @@ export default function UserAvatar() {
                     hover:bg-zinc-100 
                     dark:hover:bg-zinc-700
                     transition-colors
+                    cursor-pointer
                   "
                 >
                   Settings
@@ -176,6 +177,7 @@ export default function UserAvatar() {
                     hover:bg-zinc-100 
                     dark:hover:bg-zinc-700
                     transition-colors
+                    cursor-pointer
                   "
                 >
                   Logout

@@ -35,6 +35,7 @@ export default function Header() {
                         focus:ring-blue-500 
                         focus:ring-offset-2 
                         dark:focus:ring-offset-zinc-900
+                        cursor-pointer
                       "
                     >
                       <FiSettings className="w-5 h-5" />

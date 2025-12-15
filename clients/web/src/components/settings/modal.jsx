@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Theme from "./theme";
 import Language from "./language";
+import { FiX } from "react-icons/fi";
 
 export default function SettingsModal({ isOpen, onClose }) {
   const modalRef = useRef(null);
@@ -66,21 +67,16 @@ export default function SettingsModal({ isOpen, onClose }) {
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="
+              p-1 
+              rounded-md 
+              text-zinc-500 
+              hover:bg-red-100 hover:text-red-700 
+              dark:hover:bg-red-900 dark:hover:text-red-200 
+              transition-colors
+            "
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <FiX className="w-5 h-5" />
           </button>
         </div>
 

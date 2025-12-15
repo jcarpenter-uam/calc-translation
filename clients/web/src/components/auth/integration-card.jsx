@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { BiLogoZoom } from "react-icons/bi";
 
 export function IntegrationCard({ id, title, icon, selected, onSelect }) {
   const baseClasses =
@@ -88,6 +89,20 @@ export function ZoomForm({ onSubmit }) {
       >
         {t("join_zoom_btn")}
       </button>
+      <div className="pt-6 border-t border-zinc-200 dark:border-zinc-700 text-center">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+          {t("add_to_zoom")}
+        </p>
+        <a
+          href="https://zoom.us/oauth/authorize?response_type=code&client_id=LvEJnDi1TtGpWjUba7xxfg&redirect_uri=https://translator.my-uam.com/api/auth/zoom/callback"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center justify-center w-full px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 font-medium rounded-lg text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+        >
+          <BiLogoZoom className="mr-2 h-4 w-4 text-blue-500" />
+          {t("add_to_zoom_btn")}
+        </a>
+      </div>
     </form>
   );
 }

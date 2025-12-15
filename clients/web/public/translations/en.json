@@ -15,6 +15,8 @@
   "passcode_label": "Passcode",
   "passcode_placeholder": "e.g., a1B2c3",
   "join_zoom_btn": "Join Zoom Session",
+  "add_to_zoom": "Haven't added our app to your Zoom account yet?",
+  "add_to_zoom_btn": "Add App to Zoom",
   "session_id_label": "Session ID",
   "session_id_placeholder": "e.g., 'test'",
   "join_test_btn": "Join Test Session",

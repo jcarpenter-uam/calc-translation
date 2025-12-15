@@ -15,6 +15,8 @@
   "passcode_label": "密码",
   "passcode_placeholder": "例如：a1B2c3",
   "join_zoom_btn": "加入 Zoom 会议",
+  "add_to_zoom": "尚未将我们的应用添加到您的 Zoom 账户？",
+  "add_to_zoom_btn": "添加应用到 Zoom",
   "session_id_label": "会话 ID",
   "session_id_placeholder": "例如：'test'",
   "join_test_btn": "加入测试会话",

@@ -5,10 +5,8 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    let timeoutId;
     const fetchUser = async () => {
       try {
         const response = await fetch("/api/users/me");
@@ -21,25 +19,12 @@ export function AuthProvider({ children }) {
         setUser(userData);
       } catch (error) {
         setUser(null);
-
-        const isLoginPage = window.location.pathname === "/login";
-
-        if (!isLoginPage) {
-          setError("Not authenticated. Redirecting to login...");
-
-          timeoutId = setTimeout(() => {
-            window.location.href = "/login";
-          }, 3000);
-        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUser();
-    return () => {
-      clearTimeout(timeoutId);
-    };
   }, []);
 
   const logout = async () => {
@@ -59,7 +44,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const value = { user, setUser, isLoading, error, logout };
+  const value = { user, setUser, isLoading, logout };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

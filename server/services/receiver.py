@@ -91,14 +91,27 @@ class StreamHandler:
         try:
             if self.skip_first_utterance:
                 if result.is_final:
-                    with log_step("SESSION"):
-                        logger.debug(
-                            f"Synced to stream end for {self.language_code}. "
-                            f"Skipping complete. Next utterance will be #{self.utterance_count + 1}."
-                        )
-                    self.skip_first_utterance = False
-                    self.is_new_utterance = True
-                return
+                    time_since_connect = (
+                        datetime.now() - self.connect_time
+                    ).total_seconds()
+
+                    if time_since_connect > 5.0:
+                        with log_step("SESSION"):
+                            logger.info(
+                                f"First result for {self.language_code} arrived after {time_since_connect:.1f}s. "
+                                "Assuming new utterance and NOT skipping."
+                            )
+                        self.skip_first_utterance = False
+
+                    else:
+                        with log_step("SESSION"):
+                            logger.debug(
+                                f"Synced to stream end for {self.language_code}. "
+                                f"Skipping complete. Next utterance will be #{self.utterance_count + 1}."
+                            )
+                        self.skip_first_utterance = False
+                        self.is_new_utterance = True
+                        return
 
             if self.is_new_utterance and not result.is_final:
                 self.utterance_count += 1
@@ -186,6 +199,7 @@ class StreamHandler:
             loop=self.loop,
             target_language=self.language_code,
         )
+        self.connect_time = datetime.now()
         await self.loop.run_in_executor(None, self.service.connect)
 
     async def send_audio(self, audio_chunk: bytes):

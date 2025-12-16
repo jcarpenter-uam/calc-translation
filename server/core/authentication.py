@@ -45,11 +45,6 @@ def generate_jwt_token(user_id: str, session_id: str | None = None) -> str:
         "aud": "web-desktop-client",
     }
 
-    with log_step(LOG_STEP):
-        logger.info(
-            f"Generating JWT for user_id={user_id} (Type: {'Session' if session_id else 'User'})"
-        )
-
     token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
     return token
 
@@ -230,8 +225,5 @@ async def get_admin_user_payload(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Forbidden: Requires admin privileges",
         )
-
-    with log_step(LOG_STEP):
-        logger.debug(f"Admin access granted for user {user_id}.")
 
     return payload

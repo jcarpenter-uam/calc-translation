@@ -58,6 +58,8 @@ class StreamHandler:
 
     def update_speaker(self, speaker: str):
         self.current_speaker = speaker
+        if self.service:
+            self.service.current_speaker = speaker
 
     async def _on_service_error(self, error: SonioxError):
         if isinstance(error, SonioxFatalError):
@@ -171,6 +173,7 @@ class StreamHandler:
             on_close_callback=self._on_service_close,
             loop=self.loop,
             target_language=self.language_code,
+            session_id=self.session_id,
         )
         self.connect_time = datetime.now()
         await self.loop.run_in_executor(None, self.service.connect)

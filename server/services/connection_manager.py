@@ -163,12 +163,19 @@ class ConnectionManager:
                     await websocket.send_json(payload)
 
             total_count = len(self.sessions[session_id])
-            lang_count = self.get_viewer_count(session_id, language_code)
+            language_counts = {}
+            for ws in self.sessions.get(session_id, []):
+                lang = self.socket_languages.get(ws, "unknown")
+                language_counts[lang] = language_counts.get(lang, 0) + 1
+
+            breakdown = ", ".join(
+                [f"{l}={c}" for l, c in sorted(language_counts.items())]
+            )
 
             with log_step("CONN-MANAGER"):
                 logger.info(
                     f"Viewer connected (Lang: {language_code}). "
-                    f"Active Viewers: Total={total_count}, {language_code}={lang_count}"
+                    f"Active Viewers: Total={total_count} [{breakdown}]"
                 )
         finally:
             session_id_var.reset(session_token)

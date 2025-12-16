@@ -3,7 +3,7 @@ from collections import deque
 from typing import Any, Deque, Dict, List
 
 from core.config import settings
-from core.logging_setup import log_step, message_id_var, session_id_var
+from core.logging_setup import log_step, message_id_var, session_id_var, speaker_var
 from pympler.asizeof import asizeof
 
 from .vtt import align_history, create_vtt_file
@@ -49,6 +49,13 @@ class _SessionCache:
         message_id = payload.get("message_id")
         if not message_id:
             return
+
+        speaker = payload.get("speaker")
+        if not speaker:
+            speaker = "Backfill"
+            payload["speaker"] = speaker
+
+        spk_token = speaker_var.set(speaker)
 
         msg_id_token = message_id_var.set(message_id)
 
@@ -101,6 +108,7 @@ class _SessionCache:
                         f"Total cache size: {self._current_size_bytes} bytes."
                     )
         finally:
+            speaker_var.reset(spk_token)
             message_id_var.reset(msg_id_token)
 
     def get_history(self) -> List[Dict[str, Any]]:

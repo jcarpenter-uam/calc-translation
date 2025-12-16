@@ -2,11 +2,9 @@ import asyncio
 import base64
 import json
 import logging
-import uuid
 from datetime import datetime
 from typing import Dict, Optional
 
-from core.config import settings
 from core.logging_setup import (
     add_session_log_handler,
     log_step,
@@ -17,9 +15,7 @@ from core.logging_setup import (
 )
 from fastapi import WebSocket, WebSocketDisconnect
 
-from .audio_processing import AudioProcessingService
 from .backfill import BackfillService
-from .correction import CorrectionService
 from .soniox import (
     SonioxConnectionError,
     SonioxError,
@@ -44,8 +40,6 @@ class StreamHandler:
         viewer_manager,
         loop,
         session_start_time: datetime,
-        correction_service=None,
-        active_correction_tasks=None,
         initial_utterance_count: int = 0,
         skip_first_utterance: bool = False,
     ):
@@ -53,8 +47,6 @@ class StreamHandler:
         self.session_id = session_id
         self.viewer_manager = viewer_manager
         self.loop = loop
-        self.correction_service = correction_service
-        self.active_correction_tasks = active_correction_tasks or set()
 
         self.service: Optional[SonioxService] = None
         self.utterance_count = initial_utterance_count
@@ -164,25 +156,6 @@ class StreamHandler:
                         f"Finished pipeline for utterance ({self.language_code})."
                     )
 
-                if (
-                    self.correction_service
-                    and result.transcription
-                    and result.transcription.strip()
-                    and result.source_language == "zh"
-                ):
-                    utterance_to_store = {
-                        "message_id": self.current_message_id,
-                        "speaker": self.current_speaker,
-                        "transcription": result.transcription,
-                    }
-                    task = asyncio.create_task(
-                        self.correction_service.process_final_utterance(
-                            utterance_to_store
-                        )
-                    )
-                    self.active_correction_tasks.add(task)
-                    task.add_done_callback(self.active_correction_tasks.discard)
-
                 self.is_new_utterance = True
                 self.current_message_id = None
                 message_id_var.set(None)
@@ -225,8 +198,6 @@ async def handle_receiver_session(
     active_handlers: Dict[str, StreamHandler] = {}
     handlers_lock = asyncio.Lock()
 
-    correction_service = None
-    active_correction_tasks = set()
     active_backfill_tasks = set()
     loop = asyncio.get_running_loop()
     session_log_handler = None
@@ -246,12 +217,6 @@ async def handle_receiver_session(
 
         session_log_handler = add_session_log_handler(session_id, integration)
 
-        if settings.OLLAMA_URL and settings.ALIBABA_API_KEY:
-            correction_service = CorrectionService(
-                viewer_manager=viewer_manager,
-                session_id=session_id,
-            )
-
         async def add_language_stream(language_code: str):
             if language_code in active_handlers:
                 return
@@ -262,8 +227,6 @@ async def handle_receiver_session(
                 viewer_manager=viewer_manager,
                 loop=loop,
                 session_start_time=session_start_time,
-                correction_service=correction_service,
-                active_correction_tasks=active_correction_tasks,
                 initial_utterance_count=0,
                 skip_first_utterance=False,
             )
@@ -374,12 +337,6 @@ async def handle_receiver_session(
             if close_tasks:
                 await asyncio.gather(*close_tasks)
             active_handlers.clear()
-
-        if correction_service:
-            await correction_service.finalize_session()
-
-        if active_correction_tasks:
-            await asyncio.gather(*active_correction_tasks)
 
         if active_backfill_tasks:
             for task in active_backfill_tasks:

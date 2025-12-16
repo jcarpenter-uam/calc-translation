@@ -49,7 +49,6 @@ services:
       - APP_BASE_URL=${APP_BASE_URL}
       - SONIOX_API_KEY=${SONIOX_API_KEY}
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
-      - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
       - DATABASE_URL=${DATABASE_URL}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
@@ -148,19 +147,7 @@ LOGGING_LEVEL=INFO # Default if not set
 # The max size (in MB) for each session's in-memory transcript cache.
 # Once exceeded, the oldest entries are evicted.
 MAX_CACHE_MB=10 # Default if not set
-
-## Optional: Transcription Correction & Retranslation
 #
-# This feature enables real-time correction of transcripts using a local
-# Ollama model, followed by re-translation of the corrected text using
-# Alibaba Qwen-MT.
-#
-# This entire feature is DISABLED unless BOTH of the following variables
-# are set.
-#
-# URL for your local Ollama instance (e.g., http://localhost:11434)
-OLLAMA_URL=
-#
-# API Key for Alibaba DashScope (for Qwen-MT retranslation)
+# API Key for Alibaba DashScope (for Qwen-MT-Turbo Backfill)
 ALIBABA_API_KEY=
 ```

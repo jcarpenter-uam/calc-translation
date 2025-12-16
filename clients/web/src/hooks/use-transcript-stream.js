@@ -106,48 +106,20 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
                 target_language: data.target_language,
                 isFinalized: data.isfinalize,
                 type: data.type,
-                correctionStatus: data.correction_status || null,
                 isBackfill: data.is_backfill || false,
               };
               newTranscripts.push(newTranscript);
             } else {
               const originalTranscript = newTranscripts[existingIndex];
-              let updatedTranscript;
-
-              switch (data.type) {
-                case "status_update":
-                  updatedTranscript = {
-                    ...originalTranscript,
-                    correctionStatus: data.correction_status,
-                  };
-                  break;
-
-                case "correction":
-                  updatedTranscript = {
-                    ...originalTranscript,
-                    original: {
-                      transcription: originalTranscript.transcription,
-                      translation: originalTranscript.translation,
-                    },
-                    transcription: data.transcription,
-                    translation: data.translation,
-                    type: "correction",
-                    correctionStatus: "corrected",
-                  };
-                  break;
-
-                default:
-                  updatedTranscript = {
-                    ...originalTranscript,
-                    transcription: data.transcription,
-                    translation: data.translation,
-                    source_language: data.source_language,
-                    target_language: data.target_language,
-                    isFinalized: data.isfinalize,
-                    type: data.type,
-                  };
-                  break;
-              }
+              const updatedTranscript = {
+                ...originalTranscript,
+                transcription: data.transcription,
+                translation: data.translation,
+                source_language: data.source_language,
+                target_language: data.target_language,
+                isFinalized: data.isfinalize,
+                type: data.type,
+              };
               newTranscripts[existingIndex] = updatedTranscript;
             }
 

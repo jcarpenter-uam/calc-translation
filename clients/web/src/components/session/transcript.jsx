@@ -1,32 +1,5 @@
 import React from "react";
-import { HiOutlineSparkles, HiPencil } from "react-icons/hi";
 import { useDisplayMode } from "../../context/display-mode";
-
-/**
- * A component to display a visual status if correction is needed.
- */
-const CorrectionStatusIndicator = ({ status }) => {
-  if (!status) return null;
-
-  switch (status) {
-    case "correcting":
-      return (
-        <HiPencil
-          className="h-5 w-5 text-amber-500"
-          title="Correction in progress..."
-        />
-      );
-    case "corrected":
-      return (
-        <HiOutlineSparkles
-          className="h-5 w-5 text-purple-500"
-          title="This transcript has been contextually corrected."
-        />
-      );
-    default:
-      return null;
-  }
-};
 
 /**
  * A component to display a single sentence, respecting the user's display mode preference.
@@ -36,7 +9,6 @@ export default function Transcript({
   translation,
   transcription,
   isFinalized = false,
-  correctionStatus,
   topTextRef,
 }) {
   const { displayMode } = useDisplayMode();
@@ -86,7 +58,6 @@ export default function Transcript({
         <div className="font-semibold text-zinc-900 dark:text-zinc-100 text-right text-base sm:text-lg">
           {speaker}:
         </div>
-        <CorrectionStatusIndicator status={correctionStatus} />
       </div>
 
       <div className="col-start-2 flex flex-col gap-1">{renderContent()}</div>

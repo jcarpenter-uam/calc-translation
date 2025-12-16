@@ -107,6 +107,7 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
                 isFinalized: data.isfinalize,
                 type: data.type,
                 correctionStatus: data.correction_status || null,
+                isBackfill: data.is_backfill || false,
               };
               newTranscripts.push(newTranscript);
             } else {

@@ -14,17 +14,23 @@ export function AuthProvider({ children }) {
         const response = await fetch("/api/users/me");
 
         if (!response.ok) {
-          throw new Error("Not authenticated. Redirecting to login...");
+          throw new Error("Not authenticated");
         }
 
         const userData = await response.json();
         setUser(userData);
       } catch (error) {
         setUser(null);
-        setError(error.message);
-        timeoutId = setTimeout(() => {
-          window.location.href = "/login";
-        }, 3000);
+
+        const isLoginPage = window.location.pathname === "/login";
+
+        if (!isLoginPage) {
+          setError("Not authenticated. Redirecting to login...");
+
+          timeoutId = setTimeout(() => {
+            window.location.href = "/login";
+          }, 3000);
+        }
       } finally {
         setIsLoading(false);
       }

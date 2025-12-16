@@ -198,6 +198,7 @@ class BackfillService:
             "type": "final",
             "isfinalize": True,
             "vtt_timestamp": item.get("vtt_timestamp"),
+            "is_backfill": True,
         }
 
         await viewer_manager.broadcast_to_session(session_id, payload)

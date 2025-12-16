@@ -296,5 +296,6 @@
   "menu_logout": "Logout",
   "user_menu_tooltip": "Logged in as {{name}}. Click for options.",
   "download_transcript": "Session ended. Download transcript",
-  "downloading": "Downloading..."
+  "downloading": "Downloading...",
+  "loading_history": "Translating conversation history..."
 }

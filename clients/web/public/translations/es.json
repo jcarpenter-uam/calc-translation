@@ -296,5 +296,6 @@
   "menu_logout": "Cerrar sesión",
   "user_menu_tooltip": "Iniciado sesión como {{name}}. Haga clic para opciones.",
   "download_transcript": "La sesión ha finalizado. Descargar transcripción.",
-  "downloading": "Descargando..."
+  "downloading": "Descargando...",
+  "loading_history": "Traduciendo el historial de conversaciones..."
 }

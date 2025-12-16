@@ -213,6 +213,7 @@ async def handle_receiver_session(
 
     correction_service = None
     active_correction_tasks = set()
+    active_backfill_tasks = set()
     loop = asyncio.get_running_loop()
     session_log_handler = None
     registration_success = False
@@ -238,64 +239,78 @@ async def handle_receiver_session(
             )
 
         async def add_language_stream(language_code: str):
-            async with handlers_lock:
-                if language_code in active_handlers:
-                    return
+            if language_code in active_handlers:
+                return
 
-                start_count = 0
-                skip_first = False
-                pending_gap_id = None
+            handler = StreamHandler(
+                language_code=language_code,
+                session_id=session_id,
+                viewer_manager=viewer_manager,
+                loop=loop,
+                session_start_time=session_start_time,
+                correction_service=correction_service,
+                active_correction_tasks=active_correction_tasks,
+                initial_utterance_count=0,
+                skip_first_utterance=False,
+            )
 
-                if "en" in active_handlers:
-                    english_handler = active_handlers["en"]
-                    start_count = english_handler.utterance_count
+            try:
+                await handler.connect()
 
-                    if not english_handler.is_new_utterance:
-                        skip_first = True
-                        pending_gap_id = start_count
+                async with handlers_lock:
+                    if language_code in active_handlers:
+                        await handler.close()
+                        return
 
-                with log_step("SESSION"):
-                    logger.info(
-                        f"Starting stream for {language_code} at offset {start_count}. "
-                        f"Skip partial: {skip_first}"
-                    )
+                    start_count = 0
+                    skip_first = False
+                    pending_gap_id = None
 
-                if language_code != "en" and backfill_service:
-                    asyncio.create_task(
-                        backfill_service.run_session_backfill(
-                            session_id=session_id,
-                            target_lang=language_code,
-                            viewer_manager=viewer_manager,
+                    if "en" in active_handlers:
+                        english_handler = active_handlers["en"]
+                        start_count = english_handler.utterance_count
+
+                        if not english_handler.is_new_utterance:
+                            skip_first = True
+                            pending_gap_id = start_count
+
+                    handler.utterance_count = start_count
+                    handler.skip_first_utterance = skip_first
+
+                    with log_step("SESSION"):
+                        logger.info(
+                            f"Starting stream for {language_code} at offset {start_count}. "
+                            f"Skip partial: {skip_first}"
                         )
-                    )
 
-                    if skip_first and pending_gap_id:
-                        asyncio.create_task(
-                            backfill_service.backfill_gap(
+                    if language_code != "en" and backfill_service:
+                        bf_task = asyncio.create_task(
+                            backfill_service.run_session_backfill(
                                 session_id=session_id,
                                 target_lang=language_code,
-                                gap_utterance_count=pending_gap_id,
                                 viewer_manager=viewer_manager,
                             )
                         )
+                        active_backfill_tasks.add(bf_task)
+                        bf_task.add_done_callback(active_backfill_tasks.discard)
 
-                handler = StreamHandler(
-                    language_code=language_code,
-                    session_id=session_id,
-                    viewer_manager=viewer_manager,
-                    loop=loop,
-                    session_start_time=session_start_time,
-                    correction_service=correction_service,
-                    active_correction_tasks=active_correction_tasks,
-                    initial_utterance_count=start_count,
-                    skip_first_utterance=skip_first,
-                )
+                        if skip_first and pending_gap_id:
+                            gap_task = asyncio.create_task(
+                                backfill_service.backfill_gap(
+                                    session_id=session_id,
+                                    target_lang=language_code,
+                                    gap_utterance_count=pending_gap_id,
+                                    viewer_manager=viewer_manager,
+                                )
+                            )
+                            active_backfill_tasks.add(gap_task)
+                            gap_task.add_done_callback(active_backfill_tasks.discard)
 
-                try:
-                    await handler.connect()
                     active_handlers[language_code] = handler
-                except Exception as e:
-                    logger.error(f"Failed to start stream for {language_code}: {e}")
+
+            except Exception as e:
+                logger.error(f"Failed to start stream for {language_code}: {e}")
+                await handler.close()
 
         async def remove_language_stream(language_code: str):
             async with handlers_lock:
@@ -351,6 +366,10 @@ async def handle_receiver_session(
 
         if active_correction_tasks:
             await asyncio.gather(*active_correction_tasks)
+
+        if active_backfill_tasks:
+            for task in active_backfill_tasks:
+                task.cancel()
 
         await viewer_manager.cache.save_history_and_clear(session_id, integration)
 

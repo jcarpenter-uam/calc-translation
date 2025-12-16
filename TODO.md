@@ -2,4 +2,3 @@
 - Backfill loading display on frontend
 - Issue where backfill can skip some utterances
 - desktop
-- Not auth error should redirect to "/login"

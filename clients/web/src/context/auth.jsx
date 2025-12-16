@@ -5,26 +5,35 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    let timeoutId;
     const fetchUser = async () => {
       try {
         const response = await fetch("/api/users/me");
 
         if (!response.ok) {
-          throw new Error("Not authenticated");
+          throw new Error("Not authenticated. Redirecting to login...");
         }
 
         const userData = await response.json();
         setUser(userData);
       } catch (error) {
         setUser(null);
+        setError(error.message);
+        timeoutId = setTimeout(() => {
+          window.location.href = "/login";
+        }, 3000);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUser();
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   const logout = async () => {
@@ -44,7 +53,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const value = { user, setUser, isLoading, logout };
+  const value = { user, setUser, isLoading, error, logout };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

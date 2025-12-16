@@ -4,27 +4,20 @@
 
 ## About This Project
 
-This project develops a real-time translation pipeline that integrates directly with Zoom meetings using its RTMS functionality. It captures live audio and processes it through an automated workflow that transcribes, translates, and corrects the content in real time. The final output is displayed on an intuitive frontend where visual indicators clearly highlight any corrections, ensuring participants can follow the conversation accurately and seamlessly.
+This project develops a real-time translation pipeline that integrates directly with Zoom meetings using its RTMS functionality. It captures live audio and processes it through an automated workflow that transcribes and translates the content in real time. The final output is displayed on an intuitive frontend, ensuring participants can follow the conversation accurately and seamlessly.
 
 ## How It Works
 
 ```mermaid
 graph TD
     A["Zoom RTMS WebSocket<br>(raw 16-bit PCM chunks)"] --> B["RTMS Receiver (WS server)<br>- accept websocket frames<br>- speaker-id"];
-    B --> C["Audio Preprocessing<br>- Noise suppression<br>- Volume Normalize"];
-    C --> D["Soniox WS Connection"];
+    B --> D["Soniox WS Connection"];
 
     D --> E["Immediate (low-lat) pipeline<br>- Produce initial translation"];
-    D --> F["Correction pipeline (future context)<br>- rolling context window<br>- disambiguate tone-based confusions<br>- output: correction_needed: true or false "];
 
     E --> G["Publish (low-latency)"];
-    F --> H["Re-translate corrected text<br>- Qwen-MT-Turbo"];
-    H --> I["Publish correction event to frontend<br>(edit/update message)"];
 
-    G --> J["Frontend (web/desktop)<br>- display live transcription/translation<br>- apply inline replacements"];
-    I -- "WebSocket updates" --> J;
-
-    J --> K["( User sees immediate translation → then corrected revision )"];
+    G --> J["Frontend (web/desktop)<br>- display live transcription/translation"];
 ```
 
 ## Prerequisites

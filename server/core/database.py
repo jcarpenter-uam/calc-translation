@@ -3,8 +3,11 @@ import logging
 
 import asyncpg
 from core.config import settings
+from core.logging_setup import log_step
 
 logger = logging.getLogger(__name__)
+
+LOG_STEP = "DATABASE"
 
 POSTGRES_DSN = settings.DATABASE_URL
 DB_POOL = None
@@ -18,8 +21,9 @@ async def init_db():
     global DB_POOL
     async with db_lock:
         if DB_POOL:
-            logger.info("Database pool already initialized.")
-            return
+            with log_step(LOG_STEP):
+                logger.info("Database pool already initialized.")
+                return
 
         try:
             DB_POOL = await asyncpg.create_pool(dsn=POSTGRES_DSN)
@@ -106,9 +110,13 @@ async def init_db():
                         """
                     )
 
-            logger.debug("Database pool initialized successfully and schema verified.")
+            with log_step(LOG_STEP):
+                logger.info(
+                    "Database pool initialized successfully and schema verified."
+                )
         except Exception as e:
-            logger.error(f"Failed to initialize database pool: {e}", exc_info=True)
+            with log_step(LOG_STEP):
+                logger.error(f"Failed to initialize database pool: {e}", exc_info=True)
             DB_POOL = None
             raise
 

@@ -35,9 +35,7 @@ async def startup_event():
     On application startup, initialize the database.
     This ensures the DB file and tables are ready before handling requests.
     """
-    logger.info("Running startup tasks...")
     await database.init_db()
-    logger.info("Startup tasks completed.")
 
 
 transcript_cache = TranscriptCache()

@@ -13,6 +13,8 @@ from starlette.requests import HTTPConnection
 
 logger = logging.getLogger(__name__)
 
+LOG_STEP = "AUTHENTICATION"
+
 
 class TokenPayload(BaseModel):
     """Pydantic model for your JWT payload"""
@@ -43,6 +45,11 @@ def generate_jwt_token(user_id: str, session_id: str | None = None) -> str:
         "aud": "web-desktop-client",
     }
 
+    with log_step(LOG_STEP):
+        logger.info(
+            f"Generating JWT for user_id={user_id} (Type: {'Session' if session_id else 'User'})"
+        )
+
     token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
     return token
 
@@ -51,8 +58,10 @@ async def get_token_from_cookie(request: HTTPConnection) -> str:
     """Extracts the auth token from the 'app_auth_token' cookie."""
     token = request.cookies.get("app_auth_token")
     if not token:
-        with log_step("SESSION"):
-            logger.debug("Auth failed: No 'app_auth_token' cookie.")
+        with log_step(LOG_STEP):
+            logger.debug(
+                "Client Auth failed: No 'app_auth_token' cookie found in request."
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -78,8 +87,8 @@ def get_current_user_payload(
         TokenPayload(**payload)
         return payload
     except jwt.ExpiredSignatureError:
-        with log_step("SESSION"):
-            logger.warning("Auth failed: Token has expired.")
+        with log_step(LOG_STEP):
+            logger.warning("Client Auth failed: Token has expired.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
         )
@@ -89,8 +98,8 @@ def get_current_user_payload(
         jwt.InvalidTokenError,
         ValidationError,
     ) as e:
-        with log_step("SESSION"):
-            logger.warning(f"Auth failed: Invalid token. {e}")
+        with log_step(LOG_STEP):
+            logger.warning(f"Client Auth failed: Invalid token. {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )
@@ -114,33 +123,36 @@ def validate_client_token(token: str = Query()) -> dict:
             audience="web-desktop-client",
         )
         if not payload.get("resource"):
-            logger.warning("Auth failed: WebSocket token is missing 'resource' claim.")
+            with log_step(LOG_STEP):
+                logger.warning(
+                    "Client Auth failed: WebSocket token is missing 'resource' claim."
+                )
             raise WebSocketException(
                 code=status.WS_1008_POLICY_VIOLATION, reason="Invalid session token"
             )
 
         return payload
     except jwt.ExpiredSignatureError:
-        with log_step("SESSION"):
-            logger.warning("Auth failed: Token has expired.")
+        with log_step(LOG_STEP):
+            logger.warning("Client Auth failed: Token has expired.")
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason="Token has expired"
         )
     except jwt.InvalidIssuerError:
-        with log_step("SESSION"):
-            logger.warning("Auth failed: Invalid token issuer.")
+        with log_step(LOG_STEP):
+            logger.warning("Client Auth failed: Invalid token issuer.")
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token issuer"
         )
     except jwt.InvalidAudienceError:
-        with log_step("SESSION"):
-            logger.warning("Auth failed: Invalid token audience.")
+        with log_step(LOG_STEP):
+            logger.warning("Client Auth failed: Invalid token audience.")
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token audience"
         )
     except jwt.InvalidTokenError as e:
-        with log_step("SESSION"):
-            logger.warning(f"Auth failed: Invalid token. {e}")
+        with log_step(LOG_STEP):
+            logger.warning(f"Client Auth failed: Invalid token. {e}")
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
         )
@@ -149,8 +161,11 @@ def validate_client_token(token: str = Query()) -> dict:
 try:
     _cipher_suite = Fernet(settings.ENCRYPTION_KEY.encode())
 except Exception as e:
-    logger.error(f"Failed to initialize Fernet cipher: {e}. Is ENCRYPTION_KEY valid?")
-    raise
+    with log_step(LOG_STEP):
+        logger.error(
+            f"Failed to initialize Fernet cipher: {e}. Is ENCRYPTION_KEY valid?"
+        )
+        raise
 
 
 def encrypt(plaintext: str) -> str:
@@ -161,8 +176,9 @@ def encrypt(plaintext: str) -> str:
         token = _cipher_suite.encrypt(plaintext.encode())
         return token.decode()
     except Exception as e:
-        logger.error(f"Encryption failed: {e}")
-        raise
+        with log_step(LOG_STEP):
+            logger.error(f"Encryption failed: {e}")
+            raise
 
 
 def decrypt(ciphertext: str) -> str:
@@ -173,11 +189,13 @@ def decrypt(ciphertext: str) -> str:
         decrypted_bytes = _cipher_suite.decrypt(ciphertext.encode())
         return decrypted_bytes.decode()
     except InvalidToken:
-        logger.error("Decryption failed: Invalid token or key.")
-        raise HTTPException(status_code=500, detail="Internal configuration error.")
+        with log_step(LOG_STEP):
+            logger.error("Decryption failed: Invalid token or key.")
+            raise HTTPException(status_code=500, detail="Internal configuration error.")
     except Exception as e:
-        logger.error(f"Decryption failed: {e}")
-        raise
+        with log_step(LOG_STEP):
+            logger.error(f"Decryption failed: {e}")
+            raise
 
 
 async def get_admin_user_payload(
@@ -193,21 +211,27 @@ async def get_admin_user_payload(
         raise HTTPException(status_code=401, detail="Invalid auth token payload")
 
     if not database.DB_POOL:
-        logger.error("Admin check failed: Database not initialized.")
-        raise HTTPException(status_code=503, detail="Database not initialized.")
+        with log_step(LOG_STEP):
+            logger.error("Admin check failed: Database not initialized.")
+            raise HTTPException(status_code=503, detail="Database not initialized.")
 
     async with database.DB_POOL.acquire() as conn:
         user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
 
     if not user_row:
-        logger.error(f"Authenticated admin user {user_id} not found in DB.")
-        raise HTTPException(status_code=401, detail="User not found.")
+        with log_step(LOG_STEP):
+            logger.error(f"Authenticated admin user {user_id} not found in DB.")
+            raise HTTPException(status_code=401, detail="User not found.")
 
     if not user_row.get("is_admin"):
-        logger.warning(f"User {user_id} attempted unauthorized admin access.")
+        with log_step(LOG_STEP):
+            logger.warning(f"User {user_id} attempted unauthorized admin access.")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Forbidden: Requires admin privileges",
         )
+
+    with log_step(LOG_STEP):
+        logger.debug(f"Admin access granted for user {user_id}.")
 
     return payload

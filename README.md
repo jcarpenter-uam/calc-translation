@@ -29,9 +29,8 @@ graph TD
 
 ## Prerequisites
 
-- **Ollama:** Used to handle the text correction logic. To enable this feature, you must train a model using the colab notebook and dataset [here](https://github.com/jcarpenter-uam/zoom-translation/tree/master/extras/ollama/correction)
 - **Soniox:** Used as the current transcription/translation model. An API key can be obtained [here](https://soniox.com/docs/)
-- **Qwen-MT-Turbo:** Used as the current retranslation model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
+- **Qwen-MT-Turbo:** Used as the current backfill model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
 
 ## Installation
 

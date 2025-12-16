@@ -59,6 +59,8 @@ class _SessionCache:
 
         msg_id_token = message_id_var.set(message_id)
 
+        is_backfill_override = payload.get("is_backfill", False)
+
         try:
             is_new_and_finalized = (
                 message_id not in self._cache_dict and payload.get("isfinalize") is True
@@ -67,28 +69,20 @@ class _SessionCache:
             if is_new_and_finalized:
                 new_item_size = asizeof(payload)
                 self._evict_until_space(required_space=new_item_size)
-
                 self._order_queue.append(message_id)
                 self._cache_dict[message_id] = payload
                 self._current_size_bytes += new_item_size
 
-                with log_step("CACHE"):
-                    logger.debug(
-                        f"Added new final utterance. Size: {new_item_size} bytes. "
-                        f"Total cache size: {self._current_size_bytes} bytes. "
-                        f"Limit: {self._max_size_bytes} bytes."
-                    )
-
             elif message_id in self._cache_dict:
                 message_type = payload.get("type")
-                old_item_size = asizeof(self._cache_dict[message_id])
-                new_item_size = old_item_size
-                log_msg = ""
 
-                if message_type == "correction":
+                old_item_size = asizeof(self._cache_dict[message_id])
+
+                if message_type == "correction" or is_backfill_override:
                     self._cache_dict[message_id] = payload
                     new_item_size = asizeof(payload)
-                    log_msg = f"Applied correction. New size: {new_item_size} bytes."
+                    log_msg = f"Applied {'backfill override' if is_backfill_override else 'correction'}. New size: {new_item_size} bytes."
+
                 elif message_type == "status_update":
                     self._cache_dict[message_id].update(payload)
                     new_item_size = asizeof(self._cache_dict[message_id])

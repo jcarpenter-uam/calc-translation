@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List, Optional
 
 from core.config import settings
 from core.logging_setup import log_step, session_id_var
@@ -60,34 +60,40 @@ class BackfillService:
         session_id: str,
         target_lang: str,
         viewer_manager,
+        upto_count: int,
     ):
         """
-        Retrieves the 'en' history, translates it to target_lang,
-        and broadcasts the result to the session.
+        Retrieves the 'en' history and translates items up to 'upto_count'.
+        Ensures strict completeness by waiting for missing items if necessary.
         """
         session_token = session_id_var.set(session_id)
         try:
-            master_history = viewer_manager.cache.get_history(session_id, "en")
-
-            if not master_history:
-                with log_step("BACKFILL"):
-                    logger.debug("No English history found to backfill.")
-                return
-
             await viewer_manager.broadcast_to_session(
                 session_id, {"type": "backfill_start", "target_language": target_lang}
             )
 
             with log_step("BACKFILL"):
                 logger.info(
-                    f"Starting backfill for language '{target_lang}'. "
-                    f"Items to process: {len(master_history)}"
+                    f"Starting deterministic backfill for '{target_lang}' "
+                    f"covering utterances 1 to {upto_count}."
                 )
 
-            for item in master_history:
-                await self._process_backfill_item(
-                    item, session_id, target_lang, viewer_manager
+            for i in range(1, upto_count + 1):
+                target_msg_id = f"{i}_en"
+                item = await self._fetch_or_wait_for_item(
+                    session_id, target_msg_id, viewer_manager
                 )
+
+                if item:
+                    await self._process_backfill_item(
+                        item, session_id, target_lang, viewer_manager
+                    )
+                else:
+                    with log_step("BACKFILL"):
+                        logger.warning(
+                            f"Backfill skipped missing utterance {target_msg_id} "
+                            "after waiting."
+                        )
 
             await viewer_manager.broadcast_to_session(
                 session_id, {"type": "backfill_end", "target_language": target_lang}
@@ -105,6 +111,25 @@ class BackfillService:
         finally:
             session_id_var.reset(session_token)
 
+    async def _fetch_or_wait_for_item(self, session_id, message_id, viewer_manager):
+        """
+        Helper to find a specific message ID in history.
+        If not found immediately, waits briefly (handling the race condition).
+        """
+        history = viewer_manager.cache.get_history(session_id, "en")
+        item = next((x for x in history if x.get("message_id") == message_id), None)
+        if item:
+            return item
+
+        for _ in range(10):
+            await asyncio.sleep(0.25)
+            history = viewer_manager.cache.get_history(session_id, "en")
+            item = next((x for x in history if x.get("message_id") == message_id), None)
+            if item:
+                return item
+
+        return None
+
     async def backfill_gap(
         self,
         session_id: str,
@@ -114,8 +139,7 @@ class BackfillService:
     ):
         """
         Waits for a specific English utterance (the 'gap') to appear in history,
-        then translates and broadcasts it. This covers the 'in-flight' utterance
-        skipped by the live stream.
+        then translates and broadcasts it.
         """
         session_token = session_id_var.set(session_id)
         gap_message_id = f"{gap_utterance_count}_en"

@@ -41,7 +41,6 @@ class StreamHandler:
         loop,
         session_start_time: datetime,
         initial_utterance_count: int = 0,
-        skip_first_utterance: bool = False,
     ):
         self.language_code = language_code
         self.session_id = session_id
@@ -50,11 +49,17 @@ class StreamHandler:
 
         self.service: Optional[SonioxService] = None
         self.utterance_count = initial_utterance_count
-        self.skip_first_utterance = skip_first_utterance
+
         self.is_new_utterance = True
+        self.await_next_utterance = False
+
         self.current_speaker = "Unknown"
+        self.current_message_id = None
 
         self.timestamp_service = TimestampService(start_time=session_start_time)
+        self.connect_time = None
+
+        self.stream_ready = asyncio.Event()
 
     def update_speaker(self, speaker: str):
         self.current_speaker = speaker
@@ -80,32 +85,22 @@ class StreamHandler:
             )
 
     async def _on_transcription_message(self, result: SonioxResult):
+        await self.stream_ready.wait()
+
         session_token = session_id_var.set(self.session_id)
         speaker_token = speaker_var.set(self.current_speaker)
+
         try:
-            if self.skip_first_utterance:
+            if self.await_next_utterance:
                 if result.is_final:
-                    time_since_connect = (
-                        datetime.now() - self.connect_time
-                    ).total_seconds()
-
-                    if time_since_connect > 5.0:
-                        with log_step("SESSION"):
-                            logger.info(
-                                f"First result for {self.language_code} arrived after {time_since_connect:.1f}s. "
-                                "Assuming new utterance and NOT skipping."
-                            )
-                        self.skip_first_utterance = False
-
-                    else:
-                        with log_step("SESSION"):
-                            logger.debug(
-                                f"Synced to stream end for {self.language_code}. "
-                                f"Skipping complete. Next utterance will be #{self.utterance_count + 1}."
-                            )
-                        self.skip_first_utterance = False
-                        self.is_new_utterance = True
-                        return
+                    with log_step("SESSION"):
+                        logger.debug(
+                            f"Stream {self.language_code} finished skipping mid-utterance. "
+                            f"Now synced. Next ID will be #{self.utterance_count + 1}."
+                        )
+                    self.await_next_utterance = False
+                    self.is_new_utterance = True
+                return
 
             if self.is_new_utterance and not result.is_final:
                 self.utterance_count += 1
@@ -231,7 +226,6 @@ async def handle_receiver_session(
                 loop=loop,
                 session_start_time=session_start_time,
                 initial_utterance_count=0,
-                skip_first_utterance=False,
             )
 
             try:
@@ -243,50 +237,72 @@ async def handle_receiver_session(
                         return
 
                     start_count = 0
-                    skip_first = False
-                    pending_gap_id = None
+                    backfill_target_id = None
+                    should_wait_for_next = False
+
+                    history_cutoff = 0
 
                     if "en" in active_handlers:
                         english_handler = active_handlers["en"]
-                        start_count = english_handler.utterance_count
+                        current_en_count = english_handler.utterance_count
+                        en_is_mid_utterance = not english_handler.is_new_utterance
 
-                        if not english_handler.is_new_utterance:
-                            skip_first = True
-                            pending_gap_id = start_count
+                        if en_is_mid_utterance:
+                            start_count = current_en_count
+                            should_wait_for_next = True
+
+                            backfill_target_id = current_en_count
+                            history_cutoff = current_en_count - 1
+
+                            with log_step("SESSION"):
+                                logger.info(
+                                    f"New stream {language_code} joining MID-UTTERANCE #{current_en_count}. "
+                                    "Setting Standby Mode. Gap backfill scheduled."
+                                )
+                        else:
+                            start_count = current_en_count
+                            should_wait_for_next = False
+
+                            backfill_target_id = None
+                            history_cutoff = current_en_count
+
+                            with log_step("SESSION"):
+                                logger.info(
+                                    f"New stream {language_code} joining at IDLE state (Last: #{current_en_count}). "
+                                    f"History expected up to #{history_cutoff}."
+                                )
 
                     handler.utterance_count = start_count
-                    handler.skip_first_utterance = skip_first
+                    handler.await_next_utterance = should_wait_for_next
+                    handler.stream_ready.set()
 
-                    with log_step("SESSION"):
-                        logger.info(
-                            f"Starting stream for {language_code} at offset {start_count}. "
-                            f"Skip partial: {skip_first}"
-                        )
+                    active_handlers[language_code] = handler
 
                     if language_code != "en" and backfill_service:
-                        bf_task = asyncio.create_task(
-                            backfill_service.run_session_backfill(
-                                session_id=session_id,
-                                target_lang=language_code,
-                                viewer_manager=viewer_manager,
-                            )
-                        )
-                        active_backfill_tasks.add(bf_task)
-                        bf_task.add_done_callback(active_backfill_tasks.discard)
 
-                        if skip_first and pending_gap_id:
+                        if history_cutoff > 0:
+                            bf_task = asyncio.create_task(
+                                backfill_service.run_session_backfill(
+                                    session_id=session_id,
+                                    target_lang=language_code,
+                                    viewer_manager=viewer_manager,
+                                    upto_count=history_cutoff,
+                                )
+                            )
+                            active_backfill_tasks.add(bf_task)
+                            bf_task.add_done_callback(active_backfill_tasks.discard)
+
+                        if backfill_target_id is not None:
                             gap_task = asyncio.create_task(
                                 backfill_service.backfill_gap(
                                     session_id=session_id,
                                     target_lang=language_code,
-                                    gap_utterance_count=pending_gap_id,
+                                    gap_utterance_count=backfill_target_id,
                                     viewer_manager=viewer_manager,
                                 )
                             )
                             active_backfill_tasks.add(gap_task)
                             gap_task.add_done_callback(active_backfill_tasks.discard)
-
-                    active_handlers[language_code] = handler
 
             except Exception as e:
                 logger.error(f"Failed to start stream for {language_code}: {e}")

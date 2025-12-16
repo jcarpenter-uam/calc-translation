@@ -1,5 +1,4 @@
 - Clean up logs
-- Backfill loading display on frontend
 - New language streams should not start mid utterance, and should wait for the next start of utterance and allow backfill to handle any missing
 - desktop
 - Fix WS connection speed

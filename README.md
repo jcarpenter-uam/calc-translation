@@ -115,6 +115,9 @@ APP_BASE_URL="http://localhost:8000" # Default if not set
 # Get this from your Soniox account dashboard.
 SONIOX_API_KEY=
 #
+# API Key for Alibaba DashScope (for Qwen-MT-Turbo Backfill)
+ALIBABA_API_KEY=
+#
 # Encryption key for storing secrets
 # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENCRYPTION_KEY=""
@@ -139,7 +142,4 @@ LOGGING_LEVEL=INFO # Default if not set
 # The max size (in MB) for each session's in-memory transcript cache.
 # Once exceeded, the oldest entries are evicted.
 MAX_CACHE_MB=10 # Default if not set
-#
-# API Key for Alibaba DashScope (for Qwen-MT-Turbo Backfill)
-ALIBABA_API_KEY=
 ```

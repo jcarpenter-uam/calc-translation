@@ -1,3 +1,2 @@
-- desktop
 - Fix WS connection speed (could be due to this specific meeting used for testing)
 - There is still an edge case where a utterance can go missing depending on when the new connection is started. This is usually only for shorter sentences

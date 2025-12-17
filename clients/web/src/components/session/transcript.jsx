@@ -54,8 +54,8 @@ export default function Transcript({
 
   return (
     <div className="grid grid-cols-[auto_1fr] gap-x-2 mb-6 pb-6 border-b border-zinc-200 dark:border-zinc-800 last:border-b-0 last:mb-0 last:pb-0">
-      <div className="flex items-center justify-end gap-2">
-        <div className="font-semibold text-zinc-900 dark:text-zinc-100 text-right text-base sm:text-lg">
+      <div className="flex items-center justify-start gap-2">
+        <div className="font-semibold text-zinc-900 dark:text-zinc-100 text-left text-base sm:text-lg">
           {speaker}:
         </div>
       </div>

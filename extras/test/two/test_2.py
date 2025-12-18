@@ -153,7 +153,7 @@ async def send_audio_from_media_file(ws, file_path: str, stop_event: asyncio.Eve
         print("Sender task finished.")
 
 
-async def main(file_path: str):
+async def main(file_path: str, session_id: str):
     """Main function to set up WebSocket communication and send file."""
     stop_event = asyncio.Event()
     receiver_task = None
@@ -164,7 +164,7 @@ async def main(file_path: str):
         auth_header = {"Authorization": f"Bearer {token}"}
 
         async with aiohttp.ClientSession(headers=auth_header) as session:
-            full_url = f"{WEBSOCKET_URL.rstrip('/')}/test/test2"
+            full_url = f"{WEBSOCKET_URL.rstrip('/')}/test/{session_id}"
             async with session.ws_connect(full_url) as ws:
                 print(f"\nConnected to {full_url}")
 
@@ -217,7 +217,9 @@ if __name__ == "__main__":
                 file=sys.stderr,
             )
 
-        asyncio.run(main(file_path=file_path))
+        session_id = sys.argv[1]
+
+        asyncio.run(main(file_path=file_path, session_id=session_id))
 
     except KeyboardInterrupt:
         print("\n--- Shutting down gracefully ---")

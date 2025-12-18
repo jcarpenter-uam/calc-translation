@@ -1,12 +1,15 @@
 import asyncio
 import logging
+import random
 from typing import AsyncGenerator, List, Optional
 
 from core.config import settings
 from core.logging_setup import log_step, session_id_var
-from openai import AsyncOpenAI
+from openai import APIStatusError, APITimeoutError, AsyncOpenAI
 
 logger = logging.getLogger(__name__)
+
+GLOBAL_REQUEST_SEMAPHORE = asyncio.Semaphore(2)
 
 
 class BackfillService:
@@ -19,6 +22,7 @@ class BackfillService:
         self.client = AsyncOpenAI(
             api_key=settings.ALIBABA_API_KEY,
             base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            max_retries=0,
         )
         with log_step("BACKFILL"):
             logger.debug("Initialized BackfillService with Qwen client.")
@@ -27,32 +31,72 @@ class BackfillService:
         self, text: str, source_lang: str, target_lang: str
     ) -> str:
         """
-        Translates a single string using Qwen-MT-Turbo.
+        Translates a single string using Qwen-MT-Turbo with robust rate limiting.
         """
-        try:
-            response = await self.client.chat.completions.create(
-                model="qwen-mt-turbo",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Translate this {source_lang} text to {target_lang}. "
-                            "Output ONLY the translation, no other text:\n\n"
-                            f"{text}"
-                        ),
-                    }
-                ],
-                extra_body={
-                    "translation_options": {
-                        "source_lang": source_lang,
-                        "target_lang": target_lang,
-                    }
-                },
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            with log_step("BACKFILL"):
-                logger.error(f"Translation failed for text '{text[:20]}...': {e}")
+        max_retries = 8
+        base_delay = 2.0
+
+        async with GLOBAL_REQUEST_SEMAPHORE:
+            for attempt in range(1, max_retries + 1):
+                try:
+                    response = await self.client.chat.completions.create(
+                        model="qwen-mt-turbo",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": (
+                                    f"Translate this {source_lang} text to {target_lang}. "
+                                    "Output ONLY the translation, no other text:\n\n"
+                                    f"{text}"
+                                ),
+                            }
+                        ],
+                        extra_body={
+                            "translation_options": {
+                                "source_lang": source_lang,
+                                "target_lang": target_lang,
+                            }
+                        },
+                    )
+                    return response.choices[0].message.content.strip()
+
+                except (APIStatusError, APITimeoutError) as e:
+                    is_rate_limit = (
+                        isinstance(e, APIStatusError) and e.status_code == 429
+                    )
+                    is_server_error = (
+                        isinstance(e, APIStatusError) and e.status_code >= 500
+                    )
+                    is_timeout = isinstance(e, APITimeoutError)
+
+                    if (
+                        is_rate_limit or is_server_error or is_timeout
+                    ) and attempt < max_retries:
+                        jitter = random.uniform(0, 0.5)
+                        sleep_time = (base_delay * (2 ** (attempt - 1))) + jitter
+
+                        error_type = "Rate Limit" if is_rate_limit else "Server Error"
+                        with log_step("BACKFILL"):
+                            logger.warning(
+                                f"{error_type} hit for text '{text[:15]}...'. "
+                                f"Retrying in {sleep_time:.2f}s (Attempt {attempt}/{max_retries})."
+                            )
+
+                        await asyncio.sleep(sleep_time)
+                        continue
+
+                    with log_step("BACKFILL"):
+                        logger.error(
+                            f"Translation permanently failed for text '{text[:20]}...' "
+                            f"after {attempt} attempts. Error: {e}"
+                        )
+                    return ""
+
+                except Exception as e:
+                    with log_step("BACKFILL"):
+                        logger.error(f"Unexpected error for text '{text[:20]}...': {e}")
+                    return ""
+
             return ""
 
     async def run_session_backfill(

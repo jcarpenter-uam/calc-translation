@@ -2,4 +2,3 @@
 - There is still an edge case where a utterance can go missing depending on when the new connection is started. This is usually only for shorter sentences
 - only fetch meeting info from api if !database
 - duplicate logs for each language
-- Backfill rate limiting

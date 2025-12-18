@@ -20,8 +20,6 @@ class Settings(BaseSettings):
 
     ALIBABA_API_KEY: str = ""
 
-    OLLAMA_URL: str = ""
-
     MAX_CACHE_MB: int = 10
 
     DATABASE_URL: str

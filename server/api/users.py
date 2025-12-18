@@ -8,6 +8,7 @@ from core.database import (
     SQL_GET_ALL_USERS,
     SQL_GET_USER_BY_ID,
     SQL_SET_USER_ADMIN_STATUS,
+    SQL_UPDATE_USER_LANGUAGE,
     SQL_UPSERT_USER,
 )
 from core.logging_setup import log_step
@@ -22,6 +23,7 @@ class UserResponse(BaseModel):
     name: str | None
     email: str | None
     is_admin: bool
+    language_code: str | None
 
 
 class UserUpdate(BaseModel):
@@ -31,6 +33,10 @@ class UserUpdate(BaseModel):
 
 class UserAdminUpdate(BaseModel):
     is_admin: bool
+
+
+class UserLanguageUpdate(BaseModel):
+    language_code: str
 
 
 def create_user_router() -> APIRouter:
@@ -73,6 +79,44 @@ def create_user_router() -> APIRouter:
             logger.debug(f"Successfully retrieved profile for user: {user_id}")
             return UserResponse(**dict(user_row))
 
+    # NOTE: Requires User Auth
+    @router.put("/me/language", response_model=UserResponse)
+    async def update_my_language(
+        language_update: UserLanguageUpdate,
+        payload: dict = Depends(get_current_user_payload),
+    ):
+        """
+        Updates the preferred language for the currently authenticated user.
+        """
+        with log_step(LOG_STEP):
+            user_id = payload.get("sub")
+            if not user_id:
+                logger.warning("Auth token missing 'sub' (user_id) claim.")
+                raise HTTPException(
+                    status_code=401, detail="Invalid auth token payload"
+                )
+
+            new_lang = language_update.language_code
+            logger.debug(
+                f"Request to update language for user {user_id} to '{new_lang}'"
+            )
+
+            if not database.DB_POOL:
+                logger.error("Database not initialized during language update.")
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            async with database.DB_POOL.acquire() as conn:
+                await conn.execute(SQL_UPDATE_USER_LANGUAGE, new_lang, user_id)
+
+                user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+
+            if not user_row:
+                logger.error(f"User {user_id} not found after language update.")
+                raise HTTPException(status_code=404, detail="User not found.")
+
+            logger.info(f"Successfully updated language for user: {user_id}")
+            return UserResponse(**dict(user_row))
+
     # NOTE: Admin only
     @router.get(
         "/",
@@ -84,7 +128,7 @@ def create_user_router() -> APIRouter:
         Get a list of all users.
         """
         with log_step(LOG_STEP):
-            logger.info("Request to get all users.")
+            logger.debug("Request to get all users.")
             if not database.DB_POOL:
                 logger.error("Database not initialized during get_all_users.")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -108,7 +152,7 @@ def create_user_router() -> APIRouter:
         Get a specific user by their ID.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to get user by ID: {user_id}")
+            logger.debug(f"Request to get user by ID: {user_id}")
             if not database.DB_POOL:
                 logger.error(
                     f"Database not initialized during get_user_by_id: {user_id}"
@@ -140,7 +184,7 @@ def create_user_router() -> APIRouter:
         Uses UPSERT logic: will create if not present, or update if present.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to update/create user: {user_id}")
+            logger.debug(f"Request to update/create user: {user_id}")
             if not database.DB_POOL:
                 logger.error(f"Database not initialized during update_user: {user_id}")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -169,7 +213,7 @@ def create_user_router() -> APIRouter:
         Delete a user by their ID.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to delete user: {user_id}")
+            logger.debug(f"Request to delete user: {user_id}")
             if not database.DB_POOL:
                 logger.error(f"Database not initialized during delete_user: {user_id}")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -201,7 +245,7 @@ def create_user_router() -> APIRouter:
         Update a user's admin status. (Admin Only)
         """
         with log_step(LOG_STEP):
-            logger.info(
+            logger.debug(
                 f"Request to set admin status for user: {user_id} to {admin_update.is_admin}"
             )
             if not database.DB_POOL:

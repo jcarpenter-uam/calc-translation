@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation, Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "../context/auth";
+import { useAuth } from "../../context/auth";
 
 export default function ProtectedRoute({ adminOnly = false }) {
   const { user, isLoading } = useAuth();

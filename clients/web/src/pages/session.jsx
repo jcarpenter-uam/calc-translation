@@ -1,16 +1,15 @@
 import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
-import Header from "../components/header";
-import UserAvatar from "../components/user.jsx";
-import Transcript from "../components/transcript.jsx";
-import ThemeToggle from "../components/theme-toggle.jsx";
-import LanguageToggle from "../components/language-toggle.jsx";
-import DownloadVttButton from "../components/vtt-download.jsx";
-import Unauthorized from "../components/unauthorized.jsx";
-import Notification from "../components/notification.jsx";
+import DownloadVttButton from "../components/session/vtt-download.jsx";
+import Transcript from "../components/session/transcript.jsx";
+import Unauthorized from "../components/auth/unauthorized.jsx";
+import Notification from "../components/misc/notification.jsx";
+import BackfillLoading from "../components/session/backfill-loading.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 import { useSmartScroll } from "../hooks/use-smart-scroll.js";
+import { useLanguage } from "../context/language.jsx";
+import { useTranslation } from "react-i18next";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -27,6 +26,8 @@ export default function SessionPage() {
 
   const [isAuthorized, setIsAuthorized] = useState(!!token);
   const [showUnauthorized, setShowUnauthorized] = useState(false);
+  const { language } = useLanguage();
+  const { t } = useTranslation();
 
   const handleAuthFailure = useCallback(() => {
     setIsAuthorized(false);
@@ -47,10 +48,10 @@ export default function SessionPage() {
   const encodedSessionId = isAuthorized ? encodeURIComponent(sessionId) : null;
 
   const wsUrl = isAuthorized
-    ? `/ws/view/${integration}/${encodedSessionId}?token=${token}`
+    ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${language}`
     : null;
 
-  const { transcripts, isDownloadable } = useTranscriptStream(
+  const { transcripts, isDownloadable, isBackfilling } = useTranscriptStream(
     wsUrl,
     sessionId,
     handleAuthFailure,
@@ -60,9 +61,7 @@ export default function SessionPage() {
   const notification = useSmartScroll(transcripts, lastTopTextRef);
 
   if (showUnauthorized) {
-    return (
-      <Unauthorized message="You do not have permission to view this session. You will be redirected to the homepage." />
-    );
+    return <Unauthorized message={t("access_denied_session_message")} />;
   }
 
   if (!isAuthorized) {
@@ -71,31 +70,28 @@ export default function SessionPage() {
 
   return (
     <>
-      <Header>
-        <UserAvatar />
-        <ThemeToggle />
-        <LanguageToggle />
-        <DownloadVttButton
-          isDownloadable={isDownloadable}
-          integration={integration}
-          sessionId={sessionId}
-          token={token}
-        />
-      </Header>
-
-      <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="max-w-3xl mx-auto">
-          {transcripts.map((t, index) => (
+      <div className="max-w-3xl mx-auto w-full">
+        {isBackfilling && <BackfillLoading />}
+        {transcripts
+          .filter((t) => !isBackfilling || !t.isBackfill)
+          .map((t, index, array) => (
             <Transcript
               key={t.id}
               {...t}
-              topTextRef={
-                index === transcripts.length - 1 ? lastTopTextRef : null
-              }
+              topTextRef={index === array.length - 1 ? lastTopTextRef : null}
             />
           ))}
-        </div>
-      </main>
+        {isDownloadable && (
+          <div className="flex flex-col items-center justify-center">
+            <DownloadVttButton
+              isDownloadable={isDownloadable}
+              integration={integration}
+              sessionId={sessionId}
+              token={token}
+            />
+          </div>
+        )}
+      </div>
       <Notification
         message={notification.message}
         visible={notification.visible}

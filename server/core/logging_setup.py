@@ -61,12 +61,12 @@ class PlainFormatter(logging.Formatter):
             f"[{record.step}]",
         ]
 
+        if session_id := session_id_var.get():
+            log_parts.append(f" [session={session_id}]")
         if speaker := speaker_var.get():
             log_parts.append(f" [speaker={speaker}]")
         if message_id := message_id_var.get():
             log_parts.append(f" [message_id={message_id}]")
-        if session_id := session_id_var.get():
-            log_parts.append(f" [session={session_id}]")
 
         record.message = record.getMessage()
 
@@ -120,6 +120,10 @@ class CustomFormatter(logging.Formatter):
             f"{self.COLORS['step']}[{record.step}]{self.COLORS['reset']}",
         ]
 
+        if session_id := session_id_var.get():
+            log_parts.append(
+                f"{self.COLORS['session']} [session={session_id}]{self.COLORS['reset']}"
+            )
         if speaker := speaker_var.get():
             log_parts.append(
                 f"{self.COLORS['speaker']} [speaker={speaker}]{self.COLORS['reset']}"
@@ -127,10 +131,6 @@ class CustomFormatter(logging.Formatter):
         if message_id := message_id_var.get():
             log_parts.append(
                 f"{self.COLORS['message_id']} [message_id={message_id}]{self.COLORS['reset']}"
-            )
-        if session_id := session_id_var.get():
-            log_parts.append(
-                f"{self.COLORS['session']} [session={session_id}]{self.COLORS['reset']}"
             )
 
         record.message = record.getMessage()
@@ -177,7 +177,7 @@ def setup_logging():
     root_logger.addHandler(stderr_handler)
 
     logging.getLogger("websockets").setLevel(logging.INFO)
-    logging.getLogger("httpx").setLevel(logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.INFO)
     logging.getLogger("openai").setLevel(logging.INFO)
     logging.getLogger("ollama").setLevel(logging.INFO)

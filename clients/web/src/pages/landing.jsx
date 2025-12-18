@@ -1,20 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/auth";
-import Header from "../components/header";
-import UserAvatar from "../components/user.jsx";
-import ThemeToggle from "../components/theme-toggle.jsx";
-import LanguageToggle from "../components/language-toggle.jsx";
 import {
   IntegrationCard,
   ZoomForm,
   TestForm,
-} from "../components/integration-card.jsx";
-import Footer from "../components/footer.jsx";
+} from "../components/auth/integration-card.jsx";
 
 import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
 
 export default function LandingPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [integration, setIntegration] = useState("zoom");
   const [error, setError] = useState(null);
@@ -27,7 +24,7 @@ export default function LandingPage() {
       if (needsLink === "true") {
         try {
           console.log("Found pending Zoom link, attempting to link account...");
-          alert("Finishing Zoom account setup...");
+          alert(t("finishing_zoom_setup"));
 
           const response = await fetch("/api/auth/zoom/link-pending", {
             method: "POST",
@@ -39,12 +36,10 @@ export default function LandingPage() {
           }
 
           console.log("Zoom account linked successfully!");
-          alert("Zoom account linked successfully!");
+          alert(t("zoom_linked_success"));
         } catch (error) {
           console.error("Zoom link error:", error);
-          alert(
-            `Failed to link Zoom: ${error.message}. Please try reconnecting from your profile.`,
-          );
+          alert(t("zoom_link_failed", { error: error.message }));
         } finally {
           sessionStorage.removeItem("zoom_link_pending");
         }
@@ -52,7 +47,7 @@ export default function LandingPage() {
     };
 
     checkPendingZoomLink();
-  }, []);
+  }, [t]);
 
   const handleJoin = (type, sessionId, token) => {
     navigate(`/sessions/${type}/${sessionId}?token=${token}`);
@@ -62,7 +57,7 @@ export default function LandingPage() {
     setError(null);
 
     if (!joinUrl && !meetingId) {
-      setError("Please provide either a Join URL or a Meeting ID.");
+      setError(t("error_missing_zoom_input"));
       return;
     }
 
@@ -81,23 +76,19 @@ export default function LandingPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.detail ||
-            "Authentication failed. Please check your inputs.",
-        );
+        throw new Error(errorData.detail || t("error_auth_failed"));
       }
 
       const data = await response.json();
-      console.log("Server response:", data);
       const sessionId = data.meetinguuid;
       const token = data.token;
 
       if (!sessionId) {
-        throw new Error("Server did not return a session ID.");
+        throw new Error(t("error_no_session_id"));
       }
 
       if (!token) {
-        throw new Error("Server did not return an auth token.");
+        throw new Error(t("error_no_token"));
       }
 
       handleJoin("zoom", sessionId, token);
@@ -111,7 +102,7 @@ export default function LandingPage() {
     setError(null);
 
     if (!sessionId) {
-      setError("Please provide a Session ID.");
+      setError(t("error_missing_session_id"));
       return;
     }
 
@@ -128,23 +119,19 @@ export default function LandingPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.detail ||
-            "Test authentication failed. Please check your session ID.",
-        );
+        throw new Error(errorData.detail || t("error_test_auth_failed"));
       }
 
       const data = await response.json();
-      console.log("Server response:", data);
       const returnedSessionId = data.meetinguuid;
       const token = data.token;
 
       if (!returnedSessionId) {
-        throw new Error("Server did not return a session ID.");
+        throw new Error(t("error_no_session_id"));
       }
 
       if (!token) {
-        throw new Error("Server did not return an auth token.");
+        throw new Error(t("error_no_token"));
       }
 
       handleJoin("test", returnedSessionId, token);
@@ -165,51 +152,41 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header>
-        <UserAvatar />
-        <ThemeToggle />
-        <LanguageToggle />
-      </Header>
-
-      <main className="flex-grow flex items-center justify-center container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <h2 className="text-xl font-semibold mb-4 text-center">
-              Choose your integration
-            </h2>
-            <div className="flex flex-wrap justify-center gap-4">
+    <div className="flex flex-col items-center justify-center w-full">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="text-xl font-semibold mb-4 text-center">
+            {t("choose_integration")}
+          </h2>
+          <div className="flex flex-wrap justify-center gap-4">
+            <IntegrationCard
+              id="zoom"
+              title={t("integration_zoom")}
+              icon={<BiLogoZoom className="h-7 w-7 text-blue-500" />}
+              selected={integration}
+              onSelect={setIntegration}
+            />
+            {user?.is_admin && (
               <IntegrationCard
-                id="zoom"
-                title="Zoom"
-                icon={<BiLogoZoom className="h-7 w-7 text-blue-500" />}
+                id="test"
+                title={t("integration_test")}
+                icon={<BiSolidFlask className="h-7 w-7 text-green-500" />}
                 selected={integration}
                 onSelect={setIntegration}
               />
-              {user?.is_admin && (
-                <IntegrationCard
-                  id="test"
-                  title="Test"
-                  icon={<BiSolidFlask className="h-7 w-7 text-green-500" />}
-                  selected={integration}
-                  onSelect={setIntegration}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="transition-all">
-            {renderForm()}
-            {error && (
-              <p className="mt-4 text-center text-sm font-medium text-red-600">
-                {error}
-              </p>
             )}
           </div>
         </div>
-      </main>
 
-      <Footer />
+        <div className="transition-all">
+          {renderForm()}
+          {error && (
+            <p className="mt-4 text-center text-sm font-medium text-red-600">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

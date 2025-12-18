@@ -1,45 +1,49 @@
 import subprocess
 import sys
-import time
 
 
 def run_simultaneously():
     """
-    Runs both test scripts as separate processes.
+    Runs multiple test scripts as separate processes based on user input.
+    Odd # streams -> test_1.py
+    Even # streams -> test_2.py
     """
-    command_1 = [sys.executable, "./one/test_1.py"]
-    command_2 = [sys.executable, "./two/test_2.py"]
-    command_3 = [sys.executable, "./three/test_3.py"]
-    command_4 = [sys.executable, "./four/test_4.py"]
+    try:
+        count_str = input("How many streams to open? ")
+        num_streams = int(count_str)
+    except ValueError:
+        print("Invalid input. Please enter an integer.")
+        return
 
-    print(f"--- Starting: {' '.join(command_1)} ---")
-    proc_1 = subprocess.Popen(command_1)
+    processes = []
 
-    print(f"--- Starting: {' '.join(command_2)} ---")
-    proc_2 = subprocess.Popen(command_2)
+    print(f"--- Starting {num_streams} streams ---")
 
-    print(f"--- Starting: {' '.join(command_3)} ---")
-    proc_3 = subprocess.Popen(command_3)
+    for i in range(1, num_streams + 1):
+        session_id = f"{i}"
+        if i % 2 != 0:
+            script_path = "./one/test_1.py"
+        else:
+            script_path = "./two/test_2.py"
 
-    print(f"--- Starting: {' '.join(command_4)} ---")
-    proc_4 = subprocess.Popen(command_4)
+        command = [sys.executable, script_path, session_id]
+        print(f"[{i}/{num_streams}] Starting: {' '.join(command)}")
+
+        proc = subprocess.Popen(command)
+        processes.append(proc)
 
     print("--- All processes are running ---")
     print("Press Ctrl+C to stop...")
 
     try:
-        proc_1.wait()
-        proc_2.wait()
-        proc_3.wait()
-        proc_4.wait()
+        for p in processes:
+            p.wait()
     except KeyboardInterrupt:
         print("\n--- Stopping processes ---")
-        proc_1.terminate()
-        proc_2.terminate()
-        proc_3.terminate()
-        proc_4.terminate()
+        for p in processes:
+            p.terminate()
 
-    print("--- Both processes have finished ---")
+    print("--- All processes have finished ---")
 
 
 if __name__ == "__main__":

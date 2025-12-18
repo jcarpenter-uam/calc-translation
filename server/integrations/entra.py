@@ -23,6 +23,7 @@ LOG_STEP = "INT-ENTRA"
 
 class EntraLoginRequest(BaseModel):
     email: str
+    language: str
 
 
 REDIRECT_PATH = "/api/auth/entra/callback"
@@ -120,7 +121,7 @@ async def handle_login(
     request: EntraLoginRequest, response: Response
 ) -> RedirectResponse:
     with log_step(LOG_STEP):
-        logger.info(f"Handling Entra login request for email: {request.email}")
+        logger.debug(f"Handling Entra login request for email: {request.email}")
         try:
             domain = request.email.split("@")[1]
         except IndexError:
@@ -140,7 +141,11 @@ async def handle_login(
             )
 
         state = str(uuid.uuid4())
-        auth_data = {"state": state, "tenant_id": tenant_config["tenant_id"]}
+        auth_data = {
+            "state": state,
+            "tenant_id": tenant_config["tenant_id"],
+            "language": request.language,
+        }
 
         response.set_cookie(
             key="entra_auth_state",
@@ -151,7 +156,7 @@ async def handle_login(
             samesite="lax",
         )
         auth_url = _build_auth_url(tenant_config, state)
-        logger.info(f"Redirecting user from domain {domain} to auth URL.")
+        logger.debug(f"Redirecting user from domain {domain} to auth URL.")
         return {"login_url": auth_url}
 
 
@@ -206,9 +211,13 @@ async def handle_callback(request: Request) -> RedirectResponse:
             logger.error("Database pool not available to save user.")
             raise HTTPException(status_code=503, detail="Database not initialized.")
 
+        user_language = cookie_data.get("language")
+
         try:
             async with database.DB_POOL.acquire() as conn:
-                await conn.execute(SQL_UPSERT_USER, user_id, user_name, user_email)
+                await conn.execute(
+                    SQL_UPSERT_USER, user_id, user_name, user_email, user_language
+                )
             logger.debug(f"Upserted user: {user_email} (OID: {user_id})")
         except Exception as e:
             logger.error(f"Failed to upsert user {user_id}: {e}", exc_info=True)
@@ -217,13 +226,18 @@ async def handle_callback(request: Request) -> RedirectResponse:
 
         redirect_response = RedirectResponse(url="/")
 
+        is_production_ssl = settings.APP_BASE_URL.startswith("https")
+
+        samesite_policy = "none" if is_production_ssl else "lax"
+        secure_policy = is_production_ssl
+
         redirect_response.set_cookie(
             key="app_auth_token",
             value=app_token,
             max_age=60 * 60,
             httponly=True,
-            secure=settings.APP_BASE_URL.startswith("https"),
-            samesite="none",
+            secure=secure_policy,
+            samesite=samesite_policy,
         )
 
         redirect_response.delete_cookie("entra_auth_state")

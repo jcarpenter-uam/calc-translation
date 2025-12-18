@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { FaEdit, FaTrash, FaSave, FaTimes, FaPlus } from "react-icons/fa";
+import { useTranslation } from "react-i18next";
 
 /**
  * Form to create a new tenant.
  */
 function CreateTenantForm({ onCreate }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     tenant_id: "",
     domains: "",
@@ -46,13 +48,13 @@ function CreateTenantForm({ onCreate }) {
       className="p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm mb-6 grid grid-cols-1 md:grid-cols-2 gap-4"
     >
       <h3 className="text-lg font-semibold col-span-1 md:col-span-2">
-        Create New Tenant
+        {t("tenant_create_title")}
       </h3>
       <input
         name="organization_name"
         value={formData.organization_name}
         onChange={handleChange}
-        placeholder="Organization Name"
+        placeholder={t("org_name_placeholder")}
         required
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
@@ -60,7 +62,7 @@ function CreateTenantForm({ onCreate }) {
         name="domains"
         value={formData.domains}
         onChange={handleChange}
-        placeholder="Domains (comma separated, e.g., contoso.com, sub.contoso.com)"
+        placeholder={t("domains_placeholder_hint")}
         required
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
@@ -68,7 +70,7 @@ function CreateTenantForm({ onCreate }) {
         name="tenant_id"
         value={formData.tenant_id}
         onChange={handleChange}
-        placeholder="Tenant ID"
+        placeholder={t("tenant_id_placeholder")}
         required
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
@@ -76,7 +78,7 @@ function CreateTenantForm({ onCreate }) {
         name="client_id"
         value={formData.client_id}
         onChange={handleChange}
-        placeholder="Client ID"
+        placeholder={t("client_id_placeholder")}
         required
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
@@ -85,15 +87,15 @@ function CreateTenantForm({ onCreate }) {
         type="password"
         value={formData.client_secret}
         onChange={handleChange}
-        placeholder="Client Secret"
+        placeholder={t("client_secret_placeholder")}
         required
         className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
       <button
         type="submit"
-        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 cursor-pointer"
       >
-        <FaPlus /> Create Tenant
+        <FaPlus /> {t("create_tenant_btn")}
       </button>
     </form>
   );
@@ -103,6 +105,7 @@ function CreateTenantForm({ onCreate }) {
  * A single row in the tenant list, handling its own edit state.
  */
 function TenantRow({ tenant, onUpdate, onDelete }) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
 
   const initialDomains = (tenant.domains || []).join(", ");
@@ -157,7 +160,7 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
   const handleDelete = () => {
     if (
       window.confirm(
-        `Are you sure you want to delete ${tenant.organization_name}?`,
+        t("delete_confirm_tenant", { name: tenant.organization_name }),
       )
     ) {
       onDelete(tenant.tenant_id);
@@ -190,21 +193,21 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
           name="organization_name"
           value={formData.organization_name}
           onChange={handleChange}
-          placeholder="Organization Name"
+          placeholder={t("org_name_placeholder")}
           className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
           name="domains"
           value={formData.domains}
           onChange={handleChange}
-          placeholder="Domains (comma separated)"
+          placeholder={t("domains_placeholder_simple")}
           className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
           name="client_id"
           value={formData.client_id}
           onChange={handleChange}
-          placeholder="Client ID"
+          placeholder={t("client_id_placeholder")}
           className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
@@ -212,23 +215,23 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
           type="password"
           value={formData.client_secret}
           onChange={handleChange}
-          placeholder="New Client Secret (optional)"
+          placeholder={t("client_secret_new_placeholder")}
           className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <div className="flex gap-2 justify-end mt-2">
           <button
             onClick={handleSave}
-            title="Save"
-            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
+            title={t("save_btn")}
+            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1 cursor-pointer"
           >
-            <FaSave /> Save
+            <FaSave /> {t("save_btn")}
           </button>
           <button
             onClick={handleCancel}
-            title="Cancel"
-            className="px-3 py-1 bg-zinc-500 text-white rounded-md hover:bg-zinc-600 transition-colors flex items-center gap-1"
+            title={t("cancel_btn")}
+            className="px-3 py-1 bg-zinc-500 text-white rounded-md hover:bg-zinc-600 transition-colors flex items-center gap-1 cursor-pointer"
           >
-            <FaTimes /> Cancel
+            <FaTimes /> {t("cancel_btn")}
           </button>
         </div>
       </div>
@@ -243,34 +246,34 @@ function TenantRow({ tenant, onUpdate, onDelete }) {
         </p>
         {renderDomains()}
         <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-          Client ID: {tenant.client_id}
+          {t("client_id_label")} {tenant.client_id}
         </p>
         <p className="text-xs text-zinc-400 dark:text-zinc-500">
-          Tenant ID: {tenant.tenant_id}
+          {t("tenant_id_label")} {tenant.tenant_id}
         </p>
       </div>
       <div className="flex flex-col items-end gap-2">
         {tenant.has_secret ? (
           <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-            Secret Set
+            {t("secret_set_badge")}
           </span>
         ) : (
           <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-            No Secret
+            {t("no_secret_badge")}
           </span>
         )}
         <div className="flex gap-2">
           <button
             onClick={() => setIsEditing(true)}
-            title="Edit"
-            className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            title={t("edit_btn_title")}
+            className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors cursor-pointer"
           >
             <FaEdit />
           </button>
           <button
             onClick={handleDelete}
-            title="Delete"
-            className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+            title={t("delete_btn_title")}
+            className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors cursor-pointer"
           >
             <FaTrash />
           </button>
@@ -289,10 +292,11 @@ export default function TenantManagement({
   onUpdateTenant,
   onDeleteTenant,
 }) {
+  const { t } = useTranslation();
   return (
     <div className="w-full max-w-4xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">
-        Tenant Management
+        {t("tenant_mgmt_title")}
       </h2>
       <CreateTenantForm onCreate={onCreateTenant} />
       <div className="space-y-4">
@@ -307,7 +311,7 @@ export default function TenantManagement({
           ))
         ) : (
           <p className="text-center text-zinc-500 dark:text-zinc-400">
-            No tenants found.
+            {t("no_tenants_found")}
           </p>
         )}
       </div>

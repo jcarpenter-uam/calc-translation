@@ -76,7 +76,7 @@ def create_tenant_router() -> APIRouter:
         it will be updated (UPSERT).
         """
         with log_step(LOG_STEP):
-            logger.info(f"Attempting to create/update tenant: {tenant.tenant_id}")
+            logger.debug(f"Attempting to create/update tenant: {tenant.tenant_id}")
             if not database.DB_POOL:
                 logger.error("Database not initialized during tenant creation.")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -134,7 +134,7 @@ def create_tenant_router() -> APIRouter:
         Retrieve a list of all configured tenants.
         """
         with log_step(LOG_STEP):
-            logger.info("Request to get all tenants.")
+            logger.debug("Request to get all tenants.")
             if not database.DB_POOL:
                 logger.error("Database not initialized during get tenants.")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -156,7 +156,7 @@ def create_tenant_router() -> APIRouter:
         Retrieve a specific tenant configuration by its Tenant ID.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to get tenant: {tenant_id}")
+            logger.debug(f"Request to get tenant: {tenant_id}")
             if not database.DB_POOL:
                 logger.error(f"Database not initialized during get tenant: {tenant_id}")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -185,7 +185,7 @@ def create_tenant_router() -> APIRouter:
         Only fields provided in the request body will be updated.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to update tenant: {tenant_id}")
+            logger.debug(f"Request to update tenant: {tenant_id}")
             if not database.DB_POOL:
                 logger.error(
                     f"Database not initialized during patch tenant: {tenant_id}"
@@ -281,7 +281,7 @@ def create_tenant_router() -> APIRouter:
         Delete a tenant configuration by its Tenant ID.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Request to delete tenant: {tenant_id}")
+            logger.debug(f"Request to delete tenant: {tenant_id}")
             if not database.DB_POOL:
                 logger.error(
                     f"Database not initialized during delete tenant: {tenant_id}"

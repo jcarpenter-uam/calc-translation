@@ -13,7 +13,7 @@ import { useState, useEffect, useRef } from "react";
 export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
   const [transcripts, setTranscripts] = useState([]);
   const [isDownloadable, setIsDownloadable] = useState(false);
-  const hideTimerRef = useRef(null);
+  const [isBackfilling, setIsBackfilling] = useState(false);
 
   const ws = useRef(null);
 
@@ -29,20 +29,17 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
         return;
       }
       if (ws.current && ws.current.readyState !== WebSocket.CLOSED) {
+        ws.current.onclose = null;
         ws.current.close();
       }
 
       setTranscripts([]);
       ws.current = new WebSocket(wsUrl);
 
-      ws.current.onopen = () => {
-        console.log(`WebSocket connected to ${wsUrl}`);
-      };
-
       ws.current.onclose = (event) => {
         const code = event.code;
 
-        if (code === 1008 || code === 1006 || code === 403) {
+        if (code === 1008 || code === 403) {
           console.warn("WebSocket authorization failed.");
           if (onUnauthorized) {
             onUnauthorized();
@@ -82,10 +79,20 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
             return;
           }
 
+          if (data.type === "backfill_start") {
+            setIsBackfilling(true);
+            return;
+          }
+          if (data.type === "backfill_end") {
+            setIsBackfilling(false);
+            return;
+          }
+
           if (!data.message_id || !data.type) return;
 
           setTranscripts((prevTranscripts) => {
-            const existingIndex = prevTranscripts.findIndex(
+            let newTranscripts = [...prevTranscripts];
+            const existingIndex = newTranscripts.findIndex(
               (t) => t.id === data.message_id,
             );
 
@@ -99,51 +106,29 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
                 target_language: data.target_language,
                 isFinalized: data.isfinalize,
                 type: data.type,
-                correctionStatus: data.correction_status || null,
+                isBackfill: data.is_backfill || false,
               };
-              return [...prevTranscripts, newTranscript];
+              newTranscripts.push(newTranscript);
+            } else {
+              const originalTranscript = newTranscripts[existingIndex];
+              const updatedTranscript = {
+                ...originalTranscript,
+                transcription: data.transcription,
+                translation: data.translation,
+                source_language: data.source_language,
+                target_language: data.target_language,
+                isFinalized: data.isfinalize,
+                type: data.type,
+              };
+              newTranscripts[existingIndex] = updatedTranscript;
             }
 
-            const newTranscripts = [...prevTranscripts];
-            const originalTranscript = prevTranscripts[existingIndex];
-            let updatedTranscript;
+            newTranscripts.sort((a, b) => {
+              const numA = parseInt(a.id.split("_")[0], 10) || 0;
+              const numB = parseInt(b.id.split("_")[0], 10) || 0;
+              return numA - numB;
+            });
 
-            switch (data.type) {
-              case "status_update":
-                updatedTranscript = {
-                  ...originalTranscript,
-                  correctionStatus: data.correction_status,
-                };
-                break;
-
-              case "correction":
-                updatedTranscript = {
-                  ...originalTranscript,
-                  original: {
-                    transcription: originalTranscript.transcription,
-                    translation: originalTranscript.translation,
-                  },
-                  transcription: data.transcription,
-                  translation: data.translation,
-                  type: "correction",
-                  correctionStatus: "corrected",
-                };
-                break;
-
-              default:
-                updatedTranscript = {
-                  ...originalTranscript,
-                  transcription: data.transcription,
-                  translation: data.translation,
-                  source_language: data.source_language,
-                  target_language: data.target_language,
-                  isFinalized: data.isfinalize,
-                  type: data.type,
-                };
-                break;
-            }
-
-            newTranscripts[existingIndex] = updatedTranscript;
             return newTranscripts;
           });
         } catch (error) {
@@ -163,5 +148,5 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
     };
   }, [wsUrl, sessionId, onUnauthorized]);
 
-  return { transcripts, isDownloadable };
+  return { transcripts, isDownloadable, isBackfilling };
 }

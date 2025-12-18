@@ -3,17 +3,17 @@ from collections import deque
 from typing import Any, Deque, Dict, List
 
 from core.config import settings
-from core.logging_setup import log_step, message_id_var, session_id_var
+from core.logging_setup import log_step, message_id_var, session_id_var, speaker_var
 from pympler.asizeof import asizeof
 
-from .vtt import create_vtt_file
+from .vtt import align_history, create_vtt_file
 
 logger = logging.getLogger(__name__)
 
 
 class _SessionCache:
     """
-    Manages a bounded history cache for a *single* transcript session,
+    Manages a bounded history cache for a *single* transcript session (specific language),
     limited by total size in megabytes.
     """
 
@@ -50,7 +50,16 @@ class _SessionCache:
         if not message_id:
             return
 
+        speaker = payload.get("speaker")
+        if not speaker:
+            speaker = "Backfill"
+            payload["speaker"] = speaker
+
+        spk_token = speaker_var.set(speaker)
+
         msg_id_token = message_id_var.set(message_id)
+
+        is_backfill_override = payload.get("is_backfill", False)
 
         try:
             is_new_and_finalized = (
@@ -60,28 +69,20 @@ class _SessionCache:
             if is_new_and_finalized:
                 new_item_size = asizeof(payload)
                 self._evict_until_space(required_space=new_item_size)
-
                 self._order_queue.append(message_id)
                 self._cache_dict[message_id] = payload
                 self._current_size_bytes += new_item_size
 
-                with log_step("CACHE"):
-                    logger.debug(
-                        f"Added new final utterance. Size: {new_item_size} bytes. "
-                        f"Total cache size: {self._current_size_bytes} bytes. "
-                        f"Limit: {self._max_size_bytes} bytes."
-                    )
-
             elif message_id in self._cache_dict:
                 message_type = payload.get("type")
-                old_item_size = asizeof(self._cache_dict[message_id])
-                new_item_size = old_item_size
-                log_msg = ""
 
-                if message_type == "correction":
+                old_item_size = asizeof(self._cache_dict[message_id])
+
+                if message_type == "correction" or is_backfill_override:
                     self._cache_dict[message_id] = payload
                     new_item_size = asizeof(payload)
-                    log_msg = f"Applied correction. New size: {new_item_size} bytes."
+                    log_msg = f"Applied {'backfill override' if is_backfill_override else 'correction'}. New size: {new_item_size} bytes."
+
                 elif message_type == "status_update":
                     self._cache_dict[message_id].update(payload)
                     new_item_size = asizeof(self._cache_dict[message_id])
@@ -101,6 +102,7 @@ class _SessionCache:
                         f"Total cache size: {self._current_size_bytes} bytes."
                     )
         finally:
+            speaker_var.reset(spk_token)
             message_id_var.reset(msg_id_token)
 
     def get_history(self) -> List[Dict[str, Any]]:
@@ -116,71 +118,112 @@ class _SessionCache:
 
 class TranscriptCache:
     """
-    Manages multiple independent _SessionCache instances, one for each session_id.
+    Manages multiple independent _SessionCache instances.
+    Structure: self.sessions[session_id][language_code] = _SessionCache
     """
 
     def __init__(self, max_size_mb: int = settings.MAX_CACHE_MB):
         self._default_max_size_bytes = max_size_mb * 1024 * 1024
-        self.sessions: Dict[str, _SessionCache] = {}
+        self.sessions: Dict[str, Dict[str, _SessionCache]] = {}
 
         with log_step("CACHE"):
             logger.debug(
-                f"TranscriptCache Manager initialized. Per-session limit: {max_size_mb}MB."
+                f"TranscriptCache Manager initialized. Per-session-language limit: {max_size_mb}MB."
             )
 
-    def _get_or_create_session(self, session_id: str) -> _SessionCache:
+    def _get_or_create_session_cache(
+        self, session_id: str, language_code: str
+    ) -> _SessionCache:
         """
-        Retrieves or creates a _SessionCache instance for a given session_id.
-        Assumes session_id_var is set by the caller.
+        Retrieves or creates a _SessionCache instance for a given session_id AND language.
         """
         if session_id not in self.sessions:
+            self.sessions[session_id] = {}
+
+        if language_code not in self.sessions[session_id]:
             with log_step("CACHE"):
-                logger.debug("Creating new session cache.")
-            self.sessions[session_id] = _SessionCache(
+                logger.debug(
+                    f"Creating new session cache for {session_id} (Lang: {language_code})."
+                )
+            self.sessions[session_id][language_code] = _SessionCache(
                 max_size_bytes=self._default_max_size_bytes
             )
-        return self.sessions[session_id]
 
-    def process_message(self, session_id: str, payload: Dict[str, Any]):
+        return self.sessions[session_id][language_code]
+
+    def process_message(
+        self, session_id: str, language_code: str, payload: Dict[str, Any]
+    ):
         """
-        Processes an incoming message for a specific session.
+        Processes an incoming message for a specific session and language.
         """
+        if not language_code:
+            return
+
         session_token = session_id_var.set(session_id)
         try:
-            session_cache = self._get_or_create_session(session_id)
+            session_cache = self._get_or_create_session_cache(session_id, language_code)
             session_cache.process_message(payload)
         finally:
             session_id_var.reset(session_token)
 
-    def get_history(self, session_id: str) -> List[Dict[str, Any]]:
+    def get_history(self, session_id: str, language_code: str) -> List[Dict[str, Any]]:
         """
-        Retrieves the entire history for a specific session.
+        Retrieves the history for a specific session and language.
         """
         session_token = session_id_var.set(session_id)
         try:
-            session_cache = self._get_or_create_session(session_id)
-            return session_cache.get_history()
+            if (
+                session_id in self.sessions
+                and language_code in self.sessions[session_id]
+            ):
+                return self.sessions[session_id][language_code].get_history()
+            return []
+        finally:
+            session_id_var.reset(session_token)
+
+    def clear_language_cache(self, session_id: str, language_code: str):
+        """
+        Removes the cache for a specific language.
+        Used when a language stream is closed to ensure future joins trigger a fresh backfill.
+        """
+        session_token = session_id_var.set(session_id)
+        try:
+            if (
+                session_id in self.sessions
+                and language_code in self.sessions[session_id]
+            ):
+                del self.sessions[session_id][language_code]
+                with log_step("CACHE"):
+                    logger.info(f"Cleared cache for language: {language_code}")
         finally:
             session_id_var.reset(session_token)
 
     async def save_history_and_clear(self, session_id: str, integration: str):
         """
-        Saves the history for a specific session (by calling the VTT service)
+        Saves the history for ALL languages in a specific session
         and then clears that session from the manager.
         """
         session_token = session_id_var.set(session_id)
         try:
             if session_id in self.sessions:
-                session_cache = self.sessions[session_id]
-                history = session_cache.get_history()
+                languages_map = self.sessions[session_id]
 
-                await create_vtt_file(session_id, integration, history)
+                for lang_code, cache in languages_map.items():
+                    history = cache.get_history()
 
-                session_cache.clear()
+                    if not history:
+                        cache.clear()
+                        continue
+
+                    await create_vtt_file(session_id, integration, lang_code, history)
+
+                    cache.clear()
+
                 del self.sessions[session_id]
 
                 with log_step("CACHE"):
-                    logger.info(f"Cleared cache for session: {session_id}")
+                    logger.info(f"Cleared all language caches for session")
             else:
                 with log_step("CACHE"):
                     logger.info(

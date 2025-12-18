@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from "react";
-import Header from "../components/header";
-import UserAvatar from "../components/user.jsx";
-import ThemeToggle from "../components/theme-toggle.jsx";
-import LanguageToggle from "../components/language-toggle.jsx";
-import Footer from "../components/footer.jsx";
-import UserManagement from "../components/user-management.jsx";
-import TenantManagement from "../components/tenant-management.jsx";
-
-// TODO: Make this look better later
+import UserManagement from "../components/admin/user-management.jsx";
+import TenantManagement from "../components/admin/tenant-management.jsx";
 
 export default function AdminPage() {
   const [users, setUsers] = useState([]);
@@ -50,20 +43,14 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_admin: isAdmin }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to update admin status");
-      }
-
+      if (!response.ok) throw new Error("Failed to update admin status");
       const updatedUser = await response.json();
-
       setUsers((prevUsers) =>
         prevUsers.map((user) =>
           user.id === userId ? { ...user, ...updatedUser } : user,
         ),
       );
     } catch (err) {
-      console.error("Admin toggle error:", err);
       setError(err.message);
     }
   };
@@ -73,11 +60,7 @@ export default function AdminPage() {
       const response = await fetch(`/api/users/${userId}`, {
         method: "DELETE",
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete user");
-      }
-
+      if (!response.ok) throw new Error("Failed to delete user");
       setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
     } catch (err) {
       console.error("Delete error:", err);
@@ -91,16 +74,13 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(createData),
       });
-
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.detail || "Failed to create tenant");
       }
-
       const newTenant = await response.json();
       setTenants((prevTenants) => [...prevTenants, newTenant]);
     } catch (err) {
-      console.error("Create tenant error:", err);
       setError(err.message);
     }
   };
@@ -112,18 +92,15 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updateData),
       });
-
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.detail || "Failed to update tenant");
       }
-
       const updatedTenant = await response.json();
       setTenants((prevTenants) =>
         prevTenants.map((t) => (t.tenant_id === tenantId ? updatedTenant : t)),
       );
     } catch (err) {
-      console.error("Update tenant error:", err);
       setError(err.message);
     }
   };
@@ -133,65 +110,42 @@ export default function AdminPage() {
       const response = await fetch(`/api/tenant/${tenantId}`, {
         method: "DELETE",
       });
-
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.detail || "Failed to delete tenant");
       }
-
       setTenants((prevTenants) =>
         prevTenants.filter((t) => t.tenant_id !== tenantId),
       );
     } catch (err) {
-      console.error("Delete tenant error:", err);
       setError(err.message);
     }
   };
 
-  const renderContent = () => {
-    if (isLoading) {
-      return (
+  return (
+    <div className="w-full">
+      {isLoading ? (
         <div className="text-center text-zinc-500 dark:text-zinc-400">
           Loading admin data...
         </div>
-      );
-    }
-    if (error) {
-      return <div className="text-center text-red-500">Error: {error}</div>;
-    }
-    return (
-      <div className="space-y-12">
-        <UserManagement
-          users={users}
-          onToggleAdmin={handleToggleUserAdmin}
-          onDeleteUser={handleDeleteUser}
-        />
-
-        <hr className="border-zinc-200 dark:border-zinc-700" />
-
-        <TenantManagement
-          tenants={tenants}
-          onCreateTenant={handleCreateTenant}
-          onUpdateTenant={handleUpdateTenant}
-          onDeleteTenant={handleDeleteTenant}
-        />
-      </div>
-    );
-  };
-
-  return (
-    <div className="flex flex-col min-h-screen">
-      <Header>
-        <UserAvatar />
-        <ThemeToggle />
-        <LanguageToggle />
-      </Header>
-
-      <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
-        {renderContent()}
-      </main>
-
-      <Footer />
+      ) : error ? (
+        <div className="text-center text-red-500">Error: {error}</div>
+      ) : (
+        <div className="space-y-12">
+          <UserManagement
+            users={users}
+            onToggleAdmin={handleToggleUserAdmin}
+            onDeleteUser={handleDeleteUser}
+          />
+          <hr className="border-zinc-200 dark:border-zinc-700" />
+          <TenantManagement
+            tenants={tenants}
+            onCreateTenant={handleCreateTenant}
+            onUpdateTenant={handleUpdateTenant}
+            onDeleteTenant={handleDeleteTenant}
+          />
+        </div>
+      )}
     </div>
   );
 }

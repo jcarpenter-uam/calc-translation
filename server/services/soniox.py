@@ -4,10 +4,10 @@ import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
+import websockets
 from core.config import settings
-from core.logging_setup import log_step
+from core.logging_setup import log_step, session_id_var, speaker_var
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
-from websockets.sync.client import connect
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,8 @@ class SonioxService:
         on_error_callback: Callable[[SonioxError], Awaitable[None]],
         on_close_callback: Callable[[int, str], Awaitable[None]],
         loop: asyncio.AbstractEventLoop,
+        target_language: str = "en",
+        session_id: Optional[str] = None,
     ):
         self.api_key = settings.SONIOX_API_KEY
 
@@ -68,6 +70,9 @@ class SonioxService:
         self.on_error_callback = on_error_callback
         self.on_close_callback = on_close_callback
         self.loop = loop
+        self.target_language = target_language
+        self.session_id = session_id
+        self.current_speaker: Optional[str] = "Unknown"
         self.ws = None
         self.receive_task = None
         self._is_connected = False
@@ -110,14 +115,13 @@ class SonioxService:
             # Translation options.
             # See: soniox.com/docs/stt/rt/real-time-translation#translation-modes
             "translation": {
-                # Translates ZH -> EN and EN -> ZH
-                "type": "two_way",
-                "language_a": "zh",
-                "language_b": "en",
+                "type": "one_way",
+                "target_language": self.target_language,
             },
             #
             # Set language hints when possible to significantly improve accuracy.
             # See: soniox.com/docs/stt/concepts/language-hints
+            # NOTE: I will need a way to add to this list during a meeting
             "language_hints": ["en", "zh"],
         }
 
@@ -126,128 +130,149 @@ class SonioxService:
         Runs in a separate task to receive and process messages from Soniox.
         """
         try:
-            while True:
-                message = await self.loop.run_in_executor(None, self.ws.recv)
-                res = json.loads(message)
+            async for message in self.ws:
+                spk_token = None
+                if self.current_speaker:
+                    spk_token = speaker_var.set(self.current_speaker)
 
-                if res.get("error_code") is not None:
-                    error_msg = f"{res['error_code']} - {res['error_message']}"
-                    with log_step("TRANSCRIPTION"):
-                        logger.error(error_msg)
+                try:
+                    res = json.loads(message)
 
-                    if "Cannot continue request" in error_msg:
-                        await self.on_error_callback(SonioxConnectionError(error_msg))
-                    else:
-                        await self.on_error_callback(SonioxFatalError(error_msg))
-                    break
+                    if res.get("error_code") is not None:
+                        error_msg = f"{res['error_code']} - {res['error_message']}"
+                        with log_step("TRANSCRIPTION"):
+                            logger.error(error_msg)
 
-                non_final_transcription_tokens = []
-                non_final_translation_tokens = []
-                is_end_token = False
-
-                non_final_source_lang: Optional[str] = None
-                non_final_target_lang: Optional[str] = None
-
-                for token in res.get("tokens", []):
-                    text = token.get("text")
-                    if not text:
-                        continue
-
-                    if text == "<end>" and token.get("is_final"):
-                        is_end_token = True
-                        continue
-
-                    is_translation = token.get("translation_status") == "translation"
-                    lang = token.get("language")
-
-                    if token.get("is_final"):
-                        if is_translation:
-                            self.final_translation_tokens.append(text)
-                            if not self.final_translation_language and lang:
-                                self.final_translation_language = lang
+                        if "Cannot continue request" in error_msg:
+                            await self.on_error_callback(
+                                SonioxConnectionError(error_msg)
+                            )
                         else:
-                            self.final_transcription_tokens.append(text)
-                            if not self.final_source_language and lang:
-                                self.final_source_language = lang
-                    else:
-                        if is_translation:
-                            non_final_translation_tokens.append(text)
-                            if not non_final_target_lang and lang:
-                                non_final_target_lang = lang
-                        else:
-                            non_final_transcription_tokens.append(text)
-                            if not non_final_source_lang and lang:
-                                non_final_source_lang = lang
+                            await self.on_error_callback(SonioxFatalError(error_msg))
+                        break
 
-                final_transcription = "".join(self.final_transcription_tokens)
-                non_final_transcription = "".join(non_final_transcription_tokens)
-                full_transcription = (
-                    f"{final_transcription} {non_final_transcription}".strip()
-                )
+                    non_final_transcription_tokens = []
+                    non_final_translation_tokens = []
+                    is_end_token = False
 
-                final_translation = "".join(self.final_translation_tokens)
-                non_final_translation = "".join(non_final_translation_tokens)
-                full_translation = (
-                    f"{final_translation} {non_final_translation}".strip()
-                )
+                    non_final_source_lang: Optional[str] = None
+                    non_final_target_lang: Optional[str] = None
 
-                source_lang_to_send = (
-                    self.final_source_language or non_final_source_lang
-                )
-                target_lang_to_send = (
-                    self.final_translation_language or non_final_target_lang
-                )
+                    for token in res.get("tokens", []):
+                        text = token.get("text")
+                        if not text:
+                            continue
 
-                await self.on_message_callback(
-                    SonioxResult(
-                        transcription=full_transcription,
-                        translation=full_translation,
-                        is_final=False,
-                        source_language=source_lang_to_send,
-                        target_language=target_lang_to_send,
-                    )
-                )
+                        if text == "<end>" and token.get("is_final"):
+                            is_end_token = True
+                            continue
 
-                if is_end_token:
-                    with log_step("SONIOX"):
-                        logger.debug(
-                            "Received <end> token, sending final utterance result."
+                        is_translation = (
+                            token.get("translation_status") == "translation"
                         )
+                        lang = token.get("language")
 
-                    final_source_lang = self.final_source_language
-                    final_target_lang = self.final_translation_language
+                        if token.get("is_final"):
+                            if is_translation:
+                                self.final_translation_tokens.append(text)
+                                if not self.final_translation_language and lang:
+                                    self.final_translation_language = lang
+                            else:
+                                self.final_transcription_tokens.append(text)
+                                if not self.final_source_language and lang:
+                                    self.final_source_language = lang
+                        else:
+                            if is_translation:
+                                non_final_translation_tokens.append(text)
+                                if not non_final_target_lang and lang:
+                                    non_final_target_lang = lang
+                            else:
+                                non_final_transcription_tokens.append(text)
+                                if not non_final_source_lang and lang:
+                                    non_final_source_lang = lang
+
+                    final_transcription = "".join(self.final_transcription_tokens)
+                    non_final_transcription = "".join(non_final_transcription_tokens)
+                    full_transcription = (
+                        f"{final_transcription} {non_final_transcription}".strip()
+                    )
+
+                    final_translation = "".join(self.final_translation_tokens)
+                    non_final_translation = "".join(non_final_translation_tokens)
+                    full_translation = (
+                        f"{final_translation} {non_final_translation}".strip()
+                    )
+
+                    source_lang_to_send = (
+                        self.final_source_language or non_final_source_lang
+                    )
+                    target_lang_to_send = (
+                        self.final_translation_language or non_final_target_lang
+                    )
+
+                    if not target_lang_to_send:
+                        target_lang_to_send = self.target_language
 
                     await self.on_message_callback(
                         SonioxResult(
-                            transcription="".join(
-                                self.final_transcription_tokens
-                            ).strip(),
-                            translation="".join(self.final_translation_tokens).strip(),
-                            is_final=True,
-                            source_language=final_source_lang,
-                            target_language=final_target_lang,
+                            transcription=full_transcription,
+                            translation=full_translation,
+                            is_final=False,
+                            source_language=source_lang_to_send,
+                            target_language=target_lang_to_send,
                         )
                     )
-                    self.final_transcription_tokens = []
-                    self.final_translation_tokens = []
-                    self.final_source_language = None
-                    self.final_translation_language = None
 
-                if res.get("finished"):
-                    with log_step("SONIOX"):
-                        logger.debug("Soniox signaled session finished.")
-                    await self.on_message_callback(
-                        SonioxResult(
-                            transcription="".join(
-                                self.final_transcription_tokens
-                            ).strip(),
-                            translation="".join(self.final_translation_tokens).strip(),
-                            is_final=True,
-                            source_language=self.final_source_language,
-                            target_language=self.final_translation_language,
+                    if is_end_token:
+                        with log_step("SONIOX"):
+                            logger.debug(
+                                "Received <end> token, sending final utterance result."
+                            )
+
+                        final_source_lang = self.final_source_language
+                        final_target_lang = (
+                            self.final_translation_language or self.target_language
                         )
-                    )
-                    break
+
+                        await self.on_message_callback(
+                            SonioxResult(
+                                transcription="".join(
+                                    self.final_transcription_tokens
+                                ).strip(),
+                                translation="".join(
+                                    self.final_translation_tokens
+                                ).strip(),
+                                is_final=True,
+                                source_language=final_source_lang,
+                                target_language=final_target_lang,
+                            )
+                        )
+                        self.final_transcription_tokens = []
+                        self.final_translation_tokens = []
+                        self.final_source_language = None
+                        self.final_translation_language = None
+
+                    if res.get("finished"):
+                        with log_step("SONIOX"):
+                            logger.debug("Soniox signaled session finished.")
+                        await self.on_message_callback(
+                            SonioxResult(
+                                transcription="".join(
+                                    self.final_transcription_tokens
+                                ).strip(),
+                                translation="".join(
+                                    self.final_translation_tokens
+                                ).strip(),
+                                is_final=True,
+                                source_language=self.final_source_language,
+                                target_language=self.final_translation_language
+                                or self.target_language,
+                            )
+                        )
+                        break
+                finally:
+                    if spk_token:
+                        speaker_var.reset(spk_token)
 
         except ConnectionClosedOK:
             with log_step("SONIOX"):
@@ -258,7 +283,8 @@ class SonioxService:
                     translation="".join(self.final_translation_tokens).strip(),
                     is_final=True,
                     source_language=self.final_source_language,
-                    target_language=self.final_translation_language,
+                    target_language=self.final_translation_language
+                    or self.target_language,
                 )
             )
             await self.on_close_callback(1000, "Normal closure")
@@ -283,52 +309,59 @@ class SonioxService:
         finally:
             self._is_connected = False
             if self.ws:
-                self.ws.close()
+                await self.ws.close()
 
-    def connect(self):
+    async def connect(self):
         """
         Connects to the websocket and starts the receive loop.
-        This is synchronous, but it starts an async task.
         """
+        token = None
+        if self.session_id:
+            token = session_id_var.set(self.session_id)
         try:
             config = self._get_config()
-            self.ws = connect(
+            self.ws = await websockets.connect(
                 self.SONIOX_WEBSOCKET_URL,
                 ping_interval=20,
                 ping_timeout=10,
             )
-            self.ws.send(json.dumps(config))
+            await self.ws.send(json.dumps(config))
             self._is_connected = True
             self.receive_task = self.loop.create_task(self._receive_loop())
             with log_step("SONIOX"):
-                logger.debug("Soniox service connected.")
+                logger.debug(
+                    f"Soniox service connected (Target: {self.target_language})."
+                )
         except Exception as e:
             self._is_connected = False
             with log_step("SONIOX"):
                 logger.error(f"Soniox connection error: {e}", exc_info=True)
             raise
+        finally:
+            if token:
+                session_id_var.reset(token)
 
-    def send_chunk(self, chunk: bytes):
+    async def send_chunk(self, chunk: bytes):
         """
         * Sends a chunk of audio data to the websocket.
-        * This is run in an executor by the caller.
+        * This is an async method to be awaited by the caller.
         """
         if self.ws and self._is_connected:
             try:
-                self.ws.send(chunk)
+                await self.ws.send(chunk)
             except Exception as e:
                 with log_step("SONIOX"):
                     logger.error(f"Send chunk error: {e}")
                 self._is_connected = False
 
-    def finalize_stream(self):
+    async def finalize_stream(self):
         """
         * Signals the end of the *entire* audio stream (session end).
-        * This is run in an executor by the caller.
+        * This is an async method to be awaited by the caller.
         """
         if self.ws and self._is_connected:
             try:
-                self.ws.send("")
+                await self.ws.send("")
                 with log_step("SONIOX"):
                     logger.debug("Soniox stream finalized (session end).")
             except Exception as e:

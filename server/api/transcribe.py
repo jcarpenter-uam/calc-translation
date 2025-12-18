@@ -4,6 +4,7 @@ import logging
 from core.logging_setup import log_step
 from core.security import validate_server_token
 from fastapi import APIRouter, Depends, HTTPException, Path, WebSocket
+from integrations.test import ensure_test_meeting
 from integrations.zoom import get_meeting_data
 from services.receiver import handle_receiver_session
 
@@ -64,6 +65,9 @@ def create_transcribe_router(viewer_manager):
                             reason="Invalid authentication: missing required identifiers.",
                         )
                         return
+
+                elif integration == "test":
+                    await ensure_test_meeting(session_id)
 
                 logger.info(f"Handing off session {session_id} to receiver.")
                 await handle_receiver_session(

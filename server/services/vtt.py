@@ -1,10 +1,8 @@
-# BUG: Terminating the session before responses from the SONIOX API might result in 0'd timestamps
-
 import logging
 import os
 import urllib.parse
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from core import database
 from core.database import SQL_INSERT_TRANSCRIPT
@@ -14,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 class TimestampService:
-    def __init__(self):
+    def __init__(self, start_time: datetime | None = None):
         """
         Initializes the timestamp service, setting the session's "zero point"
         to the current time.
         """
-        self._session_start_time: datetime = datetime.now()
+        self._session_start_time: datetime = start_time or datetime.now()
         self._utterance_start_times: Dict[str, datetime] = {}
         with log_step("TIMESTAMP"):
             logger.debug(
@@ -96,31 +94,126 @@ class TimestampService:
             message_id_var.reset(token)
 
 
+def _parse_timestamp_seconds(ts_str: str) -> float:
+    """Parses HH:MM:SS.mmm into total seconds."""
+    try:
+        parts = ts_str.split(":")
+        hours = int(parts[0])
+        minutes = int(parts[1])
+        seconds = float(parts[2])
+        return hours * 3600 + minutes * 60 + seconds
+    except (ValueError, IndexError, AttributeError):
+        return 0.0
+
+
+def _parse_vtt_range(vtt_str: str) -> tuple[float, float]:
+    """Parses 'HH:MM:SS.mmm --> HH:MM:SS.mmm' into (start_seconds, end_seconds)."""
+    try:
+        start_str, end_str = vtt_str.split(" --> ")
+        return _parse_timestamp_seconds(start_str), _parse_timestamp_seconds(end_str)
+    except (ValueError, AttributeError):
+        return 0.0, 0.0
+
+
+def align_history(
+    master_history: List[Dict[str, Any]], target_history: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Aligns the target_history to the structure of master_history based on timestamp overlaps.
+    Assigns each target utterance to the master utterance it overlaps the most.
+    Returns a new list with master's timestamps/speakers but target's text as translation.
+    """
+    if not master_history:
+        return []
+
+    if not target_history:
+        return [{**item, "translation": ""} for item in master_history]
+
+    master_intervals = []
+    for idx, item in enumerate(master_history):
+        s, e = _parse_vtt_range(item.get("vtt_timestamp", ""))
+        master_intervals.append({"start": s, "end": e, "index": idx})
+
+    buckets = [[] for _ in master_history]
+
+    for item in target_history:
+        t_s, t_e = _parse_vtt_range(item.get("vtt_timestamp", ""))
+        text = item.get("translation", "") or item.get("transcription", "")
+
+        if not text:
+            continue
+
+        best_m_idx = -1
+        max_overlap = -1.0
+
+        for m in master_intervals:
+            if t_e <= m["start"] or t_s >= m["end"]:
+                continue
+
+            overlap_start = max(t_s, m["start"])
+            overlap_end = min(t_e, m["end"])
+            overlap = max(0, overlap_end - overlap_start)
+
+            if overlap > max_overlap:
+                max_overlap = overlap
+                best_m_idx = m["index"]
+
+        if best_m_idx != -1 and max_overlap > 0:
+            buckets[best_m_idx].append(text)
+
+    aligned = []
+    for idx, m_item in enumerate(master_history):
+        new_item = m_item.copy()
+        new_item["translation"] = " ".join(buckets[idx])
+        aligned.append(new_item)
+
+    return aligned
+
+
 async def create_vtt_file(
-    session_id: str, integration: str, history: List[Dict[str, Any]]
+    session_id: str,
+    integration: str,
+    language_code: str,
+    history: List[Dict[str, Any]],
 ):
     """
-    Saves a session's transcript history to a .vtt file.
+    Saves a session's transcript history for a specific language to a .vtt file.
     """
     session_token = session_id_var.set(session_id)
     with log_step("VTT"):
         try:
             if not history:
                 logger.info(
-                    f"No history to save for integration '{integration}', list is empty."
+                    f"No history to save for integration '{integration}' (Language: {language_code}), list is empty."
                 )
                 return
+
+            def get_sort_key(item):
+                msg_id = item.get("message_id", "")
+                try:
+                    return int(msg_id.split("_")[0])
+                except (ValueError, IndexError, AttributeError):
+                    return 0
+
+            history.sort(key=get_sort_key)
 
             safe_session_id = urllib.parse.quote(session_id, safe="")
             output_dir = os.path.join("output", integration, safe_session_id)
             os.makedirs(output_dir, exist_ok=True)
 
-            vtt_filepath = os.path.join(output_dir, "transcript.vtt")
+            filename = f"transcript_{language_code}.vtt"
+            vtt_filepath = os.path.join(output_dir, filename)
 
             formatted_lines = ["WEBVTT", ""]
 
             for i, entry in enumerate(history):
-                utterance_num = i + 1
+                message_id = entry.get("message_id", "")
+
+                try:
+                    utterance_num = int(message_id.split("_")[0])
+                except (ValueError, IndexError):
+                    utterance_num = i + 1
+
                 speaker = entry.get("speaker", "Unknown")
                 transcription = entry.get("transcription", "").strip()
                 translation = entry.get("translation", "").strip()
@@ -130,9 +223,14 @@ async def create_vtt_file(
 
                 formatted_lines.append(f"{utterance_num}")
                 formatted_lines.append(f"{timestamp_str}")
-                formatted_lines.append(f"{speaker}: {transcription}")
-                if translation:
-                    formatted_lines.append(f"{translation}")
+
+                if translation and transcription and translation != transcription:
+                    formatted_lines.append(f"{speaker}: {translation}")
+                    formatted_lines.append(f"{transcription}")
+                else:
+                    primary_text = translation if translation else transcription
+                    formatted_lines.append(f"{speaker}: {primary_text}")
+
                 formatted_lines.append("")
 
             with open(vtt_filepath, "w", encoding="utf-8") as f:
@@ -145,14 +243,16 @@ async def create_vtt_file(
             async with database.DB_POOL.acquire() as conn:
                 async with conn.transaction():
                     await conn.execute(
-                        SQL_INSERT_TRANSCRIPT, session_id, "transcript.vtt"
+                        SQL_INSERT_TRANSCRIPT, session_id, language_code, filename
                     )
-            logger.info(f"Saved transcript record to DB for meeting {session_id}.")
+            logger.debug(
+                f"Saved transcript record to DB for meeting {session_id} (Lang: {language_code})."
+            )
 
         except Exception as e:
             if "UNIQUE constraint failed" in str(e) or "unique_violation" in str(e):
                 logger.warning(
-                    f"Transcript record already exists in DB for meeting {session_id}. Skipping insert."
+                    f"Transcript record already exists in DB for meeting {session_id} (Lang: {language_code}). Skipping insert."
                 )
             else:
                 logger.error(

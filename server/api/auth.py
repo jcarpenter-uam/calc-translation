@@ -7,7 +7,7 @@ from core.authentication import (
     get_current_user_payload,
 )
 from core.config import settings
-from core.logging_setup import log_step
+from core.logging_setup import log_step, session_id_var
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from integrations.test import TestAuthRequest, authenticate_test_session
@@ -46,7 +46,7 @@ def create_auth_router() -> APIRouter:
         Expects an email and returns a redirect to Microsoft.
         """
         with log_step(LOG_STEP):
-            logger.info(f"Handling Entra login request for email: {request.email}")
+            logger.debug(f"Handling Entra login request for email: {request.email}")
             return await entra.handle_login(request, response)
 
     @router.get("/entra/callback")
@@ -85,29 +85,29 @@ def create_auth_router() -> APIRouter:
         Generates a token for a dynamic test session ID provided
         in the request body.
         """
-        try:
-            user_id = admin_payload.get("sub")
+        with log_step(LOG_STEP):
+            try:
+                user_id = admin_payload.get("sub")
 
-            session_id = await authenticate_test_session(request)
+                session_id = await authenticate_test_session(request)
 
-            logger.info(
-                f"Generating test token for session: {session_id} and user: {user_id}"
-            )
+                token = session_id_var.set(session_id)
 
-            token = generate_jwt_token(session_id=session_id, user_id=user_id)
+                logger.info(f"Generating token for user: {user_id}")
 
-            return ZoomAuthResponse(meetinguuid=session_id, token=token)
+                token = generate_jwt_token(session_id=session_id, user_id=user_id)
 
-        except HTTPException as e:
-            raise e
-        except Exception as e:
-            with log_step("AUTH"):
+                return ZoomAuthResponse(meetinguuid=session_id, token=token)
+
+            except HTTPException as e:
+                raise e
+            except Exception as e:
                 logger.error(
                     f"Unhandled error in POST /api/auth/test: {e}", exc_info=True
                 )
-            raise HTTPException(
-                status_code=500, detail="An internal server error occurred."
-            )
+                raise HTTPException(
+                    status_code=500, detail="An internal server error occurred."
+                )
 
     @router.post("/zoom", response_model=ZoomAuthResponse)
     async def handle_zoom_auth(

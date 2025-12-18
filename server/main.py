@@ -9,10 +9,6 @@ from core.config import settings
 logger = logging.getLogger(__name__)
 
 logger.info(f"Configuration loaded. Log level set to: {settings.LOGGING_LEVEL}")
-correction_status = (
-    "Enabled" if settings.OLLAMA_URL and settings.ALIBABA_API_KEY else "Disabled"
-)
-logger.info(f"Configuration loaded. Correction: {correction_status}")
 
 from api.auth import create_auth_router
 from api.sessions import create_sessions_router
@@ -39,9 +35,7 @@ async def startup_event():
     On application startup, initialize the database.
     This ensures the DB file and tables are ready before handling requests.
     """
-    logger.info("Running startup tasks...")
     await database.init_db()
-    logger.info("Startup tasks completed.")
 
 
 transcript_cache = TranscriptCache()
@@ -65,16 +59,17 @@ app.include_router(user_router)
 auth_router = create_auth_router()
 app.include_router(auth_router)
 
+app.mount(
+    "/icon.png",
+    StaticFiles(directory="web/dist", html=True, check_dir=False),
+    name="icon",
+)
+
 app.mount("/assets", StaticFiles(directory="web/dist/assets"), name="assets")
 
-try:
-    app.mount(
-        "/icon.png",
-        StaticFiles(directory="web/dist", html=True, check_dir=False),
-        name="icon",
-    )
-except RuntimeError:
-    logger.warning("Static root files not found.")
+app.mount(
+    "/translations", StaticFiles(directory="web/dist/translations"), name="translations"
+)
 
 
 @app.get("/{full_path:path}", response_class=FileResponse)

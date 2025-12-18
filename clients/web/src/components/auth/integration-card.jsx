@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { BiLogoZoom } from "react-icons/bi";
 
 export function IntegrationCard({ id, title, icon, selected, onSelect }) {
@@ -21,6 +22,7 @@ export function IntegrationCard({ id, title, icon, selected, onSelect }) {
 
 // --- Zoom-Specific Form ---
 export function ZoomForm({ onSubmit }) {
+  const { t } = useTranslation();
   const [meetingId, setMeetingId] = useState("");
   const [password, setPassword] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
@@ -31,18 +33,17 @@ export function ZoomForm({ onSubmit }) {
   };
 
   return (
-    // TODO: MeetingID field should auto format and limit input
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label htmlFor="joinUrl" className="block text-sm font-medium">
-          Join URL
+          {t("join_url_label")}
         </label>
         <input
           type="url"
           id="joinUrl"
           value={joinUrl}
           onChange={(e) => setJoinUrl(e.target.value)}
-          placeholder="e.g., https://us02web.zoom.us/j/..."
+          placeholder={t("join_url_placeholder")}
           className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
         />
       </div>
@@ -50,47 +51,47 @@ export function ZoomForm({ onSubmit }) {
       <div className="flex items-center">
         <div className="flex-grow border-t border-zinc-300 dark:border-zinc-700"></div>
         <span className="flex-shrink mx-4 text-sm text-zinc-500 dark:text-zinc-400">
-          OR
+          {t("or_divider")}
         </span>
         <div className="flex-grow border-t border-zinc-300 dark:border-zinc-700"></div>
       </div>
 
       <div>
         <label htmlFor="meetingId" className="block text-sm font-medium">
-          Meeting ID
+          {t("meeting_id_label")}
         </label>
         <input
           type="text"
           id="meetingId"
           value={meetingId}
           onChange={(e) => setMeetingId(e.target.value)}
-          placeholder="e.g., 800 1234 5678"
+          placeholder={t("meeting_id_placeholder")}
           className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
         />
       </div>
 
       <div>
         <label htmlFor="password" className="block text-sm font-medium">
-          Passcode
+          {t("passcode_label")}
         </label>
         <input
           type="password"
           id="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="e.g., a1B2c3"
+          placeholder={t("passcode_placeholder")}
           className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
         />
       </div>
       <button
         type="submit"
-        className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+        className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
       >
-        Join Zoom Session
+        {t("join_zoom_btn")}
       </button>
-      <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-700 text-center">
+      <div className="pt-6 border-t border-zinc-200 dark:border-zinc-700 text-center">
         <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
-          Haven't added our app to your Zoom account yet?
+          {t("add_to_zoom")}
         </p>
         <a
           href="https://zoom.us/oauth/authorize?response_type=code&client_id=LvEJnDi1TtGpWjUba7xxfg&redirect_uri=https://translator.my-uam.com/api/auth/zoom/callback"
@@ -99,7 +100,7 @@ export function ZoomForm({ onSubmit }) {
           className="inline-flex items-center justify-center w-full px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 font-medium rounded-lg text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
         >
           <BiLogoZoom className="mr-2 h-4 w-4 text-blue-500" />
-          Add App to Zoom
+          {t("add_to_zoom_btn")}
         </a>
       </div>
     </form>
@@ -107,6 +108,7 @@ export function ZoomForm({ onSubmit }) {
 }
 
 export function TestForm({ onSubmit }) {
+  const { t } = useTranslation();
   const [sessionId, setSessionId] = useState("");
 
   const handleSubmit = (e) => {
@@ -122,23 +124,23 @@ export function TestForm({ onSubmit }) {
           htmlFor="session-id"
           className="block text-sm font-medium text-gray-700 dark:text-gray-300"
         >
-          Session ID
+          {t("session_id_label")}
         </label>
         <input
           type="text"
           id="session-id"
           value={sessionId}
           onChange={(e) => setSessionId(e.target.value)}
-          placeholder="e.g., 'test'"
+          placeholder={t("session_id_placeholder")}
           required
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600"
+          className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
         />
       </div>
       <button
         type="submit"
-        className="w-full justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
       >
-        Join Test Session
+        {t("join_test_btn")}
       </button>
     </form>
   );

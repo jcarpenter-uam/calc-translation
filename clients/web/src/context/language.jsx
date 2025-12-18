@@ -1,11 +1,11 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 const LanguageContext = createContext();
 
 const STORAGE_KEY = "app-language";
 
 function getInitialLanguage() {
-  // 1. Check for a saved value in localStorage
   try {
     const storedLanguage = window.localStorage.getItem(STORAGE_KEY);
     if (storedLanguage) {
@@ -15,27 +15,32 @@ function getInitialLanguage() {
     console.error("Error reading from localStorage", error);
   }
 
-  // 2. If no saved value, check the browser's language
-  //    'navigator.language' returns codes like "en-US", "en", "zh-CN", "zh"
   const browserLang = window.navigator.language;
   if (browserLang.startsWith("zh")) {
-    return "chinese";
+    return "zh";
   }
 
-  // 3. Fallback to English
-  return "english";
+  return "en";
 }
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState(getInitialLanguage);
+  const [language, setLanguageState] = useState(getInitialLanguage);
+  const { i18n } = useTranslation();
 
   useEffect(() => {
+    i18n.changeLanguage(language);
+  }, []);
+
+  const setLanguage = (newLang) => {
+    setLanguageState(newLang);
+    i18n.changeLanguage(newLang);
+
     try {
-      window.localStorage.setItem(STORAGE_KEY, language);
+      window.localStorage.setItem(STORAGE_KEY, newLang);
     } catch (error) {
       console.error("Error writing to localStorage", error);
     }
-  }, [language]);
+  };
 
   const value = { language, setLanguage };
 

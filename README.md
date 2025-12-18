@@ -4,34 +4,26 @@
 
 ## About This Project
 
-This project develops a real-time translation pipeline that integrates directly with Zoom meetings using its RTMS functionality. It captures live audio and processes it through an automated workflow that transcribes, translates, and corrects the content in real time. The final output is displayed on an intuitive frontend where visual indicators clearly highlight any corrections, ensuring participants can follow the conversation accurately and seamlessly.
+This project develops a real-time translation pipeline that integrates directly with Zoom meetings using its RTMS functionality. It captures live audio and processes it through an automated workflow that transcribes and translates the content in real time. The final output is displayed on an intuitive frontend, ensuring participants can follow the conversation accurately and seamlessly.
 
 ## How It Works
 
 ```mermaid
 graph TD
     A["Zoom RTMS WebSocket<br>(raw 16-bit PCM chunks)"] --> B["RTMS Receiver (WS server)<br>- accept websocket frames<br>- speaker-id"];
-    B --> C["Audio Preprocessing<br>- Noise suppression<br>- Volume Normalize"];
-    C --> D["Soniox WS Connection"];
+    B --> D["Soniox WS Connection"];
 
     D --> E["Immediate (low-lat) pipeline<br>- Produce initial translation"];
-    D --> F["Correction pipeline (future context)<br>- rolling context window<br>- disambiguate tone-based confusions<br>- output: correction_needed: true or false "];
 
     E --> G["Publish (low-latency)"];
-    F --> H["Re-translate corrected text<br>- Qwen-MT-Turbo"];
-    H --> I["Publish correction event to frontend<br>(edit/update message)"];
 
-    G --> J["Frontend (web/desktop)<br>- display live transcription/translation<br>- apply inline replacements"];
-    I -- "WebSocket updates" --> J;
-
-    J --> K["( User sees immediate translation → then corrected revision )"];
+    G --> J["Frontend (web/desktop)<br>- display live transcription/translation"];
 ```
 
 ## Prerequisites
 
-- **Ollama:** Used to handle the text correction logic. To enable this feature, you must train a model using the colab notebook and dataset [here](https://github.com/jcarpenter-uam/zoom-translation/tree/master/extras/ollama/correction)
 - **Soniox:** Used as the current transcription/translation model. An API key can be obtained [here](https://soniox.com/docs/)
-- **Qwen-MT-Turbo:** Used as the current retranslation model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
+- **Qwen-MT-Turbo:** Used as the current backfill model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
 
 ## Installation
 
@@ -49,7 +41,6 @@ services:
       - APP_BASE_URL=${APP_BASE_URL}
       - SONIOX_API_KEY=${SONIOX_API_KEY}
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
-      - OLLAMA_URL=${OLLAMA_URL}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
       - DATABASE_URL=${DATABASE_URL}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
@@ -124,6 +115,9 @@ APP_BASE_URL="http://localhost:8000" # Default if not set
 # Get this from your Soniox account dashboard.
 SONIOX_API_KEY=
 #
+# API Key for Alibaba DashScope (for Qwen-MT-Turbo Backfill)
+ALIBABA_API_KEY=
+#
 # Encryption key for storing secrets
 # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENCRYPTION_KEY=""
@@ -148,19 +142,4 @@ LOGGING_LEVEL=INFO # Default if not set
 # The max size (in MB) for each session's in-memory transcript cache.
 # Once exceeded, the oldest entries are evicted.
 MAX_CACHE_MB=10 # Default if not set
-
-## Optional: Transcription Correction & Retranslation
-#
-# This feature enables real-time correction of transcripts using a local
-# Ollama model, followed by re-translation of the corrected text using
-# Alibaba Qwen-MT.
-#
-# This entire feature is DISABLED unless BOTH of the following variables
-# are set.
-#
-# URL for your local Ollama instance (e.g., http://localhost:11434)
-OLLAMA_URL=
-#
-# API Key for Alibaba DashScope (for Qwen-MT retranslation)
-ALIBABA_API_KEY=
 ```

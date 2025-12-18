@@ -5,6 +5,7 @@ const languages = [
   { code: "en", name: "English" },
   { code: "zh", name: "中文 (Chinese)" },
   { code: "es", name: "Español (Spanish)" },
+  { code: "id", name: "Bahasa Indonesia (Indonesian)" },
 ];
 
 export default function Language() {

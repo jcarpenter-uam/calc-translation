@@ -4,10 +4,10 @@ import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
+import websockets
 from core.config import settings
 from core.logging_setup import log_step, session_id_var, speaker_var
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
-from websockets.sync.client import connect
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +130,7 @@ class SonioxService:
         Runs in a separate task to receive and process messages from Soniox.
         """
         try:
-            while True:
-                message = await self.loop.run_in_executor(None, self.ws.recv)
-
+            async for message in self.ws:
                 spk_token = None
                 if self.current_speaker:
                     spk_token = speaker_var.set(self.current_speaker)
@@ -311,24 +309,23 @@ class SonioxService:
         finally:
             self._is_connected = False
             if self.ws:
-                self.ws.close()
+                await self.ws.close()
 
-    def connect(self):
+    async def connect(self):
         """
         Connects to the websocket and starts the receive loop.
-        This is synchronous, but it starts an async task.
         """
         token = None
         if self.session_id:
             token = session_id_var.set(self.session_id)
         try:
             config = self._get_config()
-            self.ws = connect(
+            self.ws = await websockets.connect(
                 self.SONIOX_WEBSOCKET_URL,
                 ping_interval=20,
                 ping_timeout=10,
             )
-            self.ws.send(json.dumps(config))
+            await self.ws.send(json.dumps(config))
             self._is_connected = True
             self.receive_task = self.loop.create_task(self._receive_loop())
             with log_step("SONIOX"):
@@ -344,27 +341,27 @@ class SonioxService:
             if token:
                 session_id_var.reset(token)
 
-    def send_chunk(self, chunk: bytes):
+    async def send_chunk(self, chunk: bytes):
         """
         * Sends a chunk of audio data to the websocket.
-        * This is run in an executor by the caller.
+        * This is an async method to be awaited by the caller.
         """
         if self.ws and self._is_connected:
             try:
-                self.ws.send(chunk)
+                await self.ws.send(chunk)
             except Exception as e:
                 with log_step("SONIOX"):
                     logger.error(f"Send chunk error: {e}")
                 self._is_connected = False
 
-    def finalize_stream(self):
+    async def finalize_stream(self):
         """
         * Signals the end of the *entire* audio stream (session end).
-        * This is run in an executor by the caller.
+        * This is an async method to be awaited by the caller.
         """
         if self.ws and self._is_connected:
             try:
-                self.ws.send("")
+                await self.ws.send("")
                 with log_step("SONIOX"):
                     logger.debug("Soniox stream finalized (session end).")
             except Exception as e:

@@ -171,15 +171,15 @@ class StreamHandler:
             session_id=self.session_id,
         )
         self.connect_time = datetime.now()
-        await self.loop.run_in_executor(None, self.service.connect)
+        await self.service.connect()
 
     async def send_audio(self, audio_chunk: bytes):
         if self.service:
-            await self.loop.run_in_executor(None, self.service.send_chunk, audio_chunk)
+            await self.service.send_chunk(audio_chunk)
 
     async def close(self):
         if self.service:
-            await self.loop.run_in_executor(None, self.service.finalize_stream)
+            await self.service.finalize_stream()
             if self.service.receive_task:
                 try:
                     await asyncio.wait_for(self.service.receive_task, timeout=5.0)

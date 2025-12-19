@@ -45,29 +45,6 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
             logger.info(f"Found {len(result)} active sessions.")
             return result
 
-    # NOTE: Admin only
-    @router.get(
-        "/{integration}",
-        response_model=List[Dict[str, Any]],
-        dependencies=[Depends(get_admin_user_payload)],
-    )
-    async def get_sessions_by_integration(integration: str = Path()):
-        """Returns a JSON array of all active sessions for a specific integration."""
-        with log_step(LOG_STEP):
-            logger.info(
-                f"Request to get active sessions for integration: {integration}"
-            )
-            sessions = viewer_manager.active_transcription_sessions
-            result = [
-                {"session_id": sid, **data}
-                for sid, data in sessions.items()
-                if data.get("integration") == integration
-            ]
-            logger.info(
-                f"Found {len(result)} active sessions for integration: {integration}."
-            )
-            return result
-
     # NOTE: Requires User Auth AND Session Token
     @router.get(
         "/{integration}/{session_id:path}/download/vtt",
@@ -170,28 +147,5 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"An error occurred while retrieving the file: {e}",
                 )
-
-    # NOTE: Admin only
-    @router.get(
-        "/{integration}/{session_id:path}",
-        response_model=Dict[str, Any],
-        dependencies=[Depends(get_admin_user_payload)],
-    )
-    async def get_session_details(integration: str = Path(), session_id: str = Path()):
-        """Returns status data for a specific active session."""
-        with log_step(LOG_STEP):
-            logger.info(
-                f"Request for details on session: '{session_id}' (Integration: '{integration}')"
-            )
-            session_data = viewer_manager.active_transcription_sessions.get(session_id)
-
-            if not session_data or session_data.get("integration") != integration:
-                logger.warning(
-                    f"Active session not found: {session_id} (Integration: {integration})"
-                )
-                raise HTTPException(status_code=404, detail="Active session not found")
-
-            logger.info(f"Successfully found details for session: {session_id}")
-            return {"session_id": session_id, **session_data}
 
     return router

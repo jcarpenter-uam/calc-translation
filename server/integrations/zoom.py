@@ -251,27 +251,29 @@ async def get_meeting_data(
     meeting_uuid: str, user_id: str = None, zoom_host_id: str = None
 ) -> str:
     """
-    Queries the Zoom API for meeting data using the meeting UUID
+    Queries the Zoom API for meeting data using the meeting UUID.
+    If the fetch fails for ANY reason (404, 500, network, auth), it falls back
+    to creating a placeholder meeting record so the transcription session can proceed.
     """
     first_pass = urllib.parse.quote(meeting_uuid, safe="")
     encoded_uuid = urllib.parse.quote(first_pass, safe="")
+
+    integration_id = None
 
     with log_step(LOG_STEP):
         try:
             if zoom_host_id:
                 logger.debug(f"Getting meeting data using zoom_host_id: {zoom_host_id}")
-                (
-                    access_token,
-                    integration_id,
-                ) = await get_access_token_by_zoom_id(zoom_host_id)
+                access_token, integration_id = await get_access_token_by_zoom_id(
+                    zoom_host_id
+                )
             elif user_id:
                 logger.debug(f"Getting meeting data using user_id: {user_id}")
                 access_token, integration_id = await get_valid_access_token(user_id)
             else:
-                logger.error(
-                    "Must provide user_id or zoom_host_id to get meeting data."
+                raise Exception(
+                    "Must provide user_id or zoom_host_id to fetch Zoom data."
                 )
-                raise Exception("Must provide user_id or zoom_host_id")
 
             meeting_url = f"https://api.zoom.us/v2/meetings/{encoded_uuid}"
             headers = {"Authorization": f"Bearer {access_token}"}
@@ -283,17 +285,16 @@ async def get_meeting_data(
             async with httpx.AsyncClient() as client:
                 response = await client.get(meeting_url, headers=headers)
 
-            if response.status_code == 404:
+            if response.status_code != 200:
                 logger.warning(
-                    f"Meeting UUID {encoded_uuid} not found via Zoom API (URL: {meeting_url})."
+                    f"Zoom API returned status {response.status_code} for {encoded_uuid}. Triggering fallback."
                 )
-                raise HTTPException(status_code=404, detail="Meeting (UUID) not found")
+                raise Exception(f"Zoom API returned status {response.status_code}")
 
-            response.raise_for_status()
             meeting_data = response.json()
 
-            real_uuid = meeting_data.get("uuid")
-            meeting_id = meeting_data.get("id")
+            real_uuid = meeting_data.get("uuid", meeting_uuid)
+            meeting_id = meeting_data.get("id", "")
             start_time_str = meeting_data.get("created_at")
             join_url = meeting_data.get("join_url")
             passcode = meeting_data.get("pstn_password", "")
@@ -301,14 +302,6 @@ async def get_meeting_data(
             parsed_start_time = None
             if start_time_str:
                 parsed_start_time = datetime.fromisoformat(start_time_str)
-
-            if not real_uuid:
-                logger.error(
-                    f"Zoom API did not return a UUID for meeting {encoded_uuid}"
-                )
-                raise HTTPException(
-                    500, "Could not retrieve meeting's unique ID from Zoom."
-                )
 
             async with database.DB_POOL.acquire() as conn:
                 async with conn.transaction():
@@ -324,25 +317,42 @@ async def get_meeting_data(
                     )
 
             logger.info(
-                f"Successfully fetched and saved/updated meeting {encoded_uuid}"
+                f"Successfully fetched and saved/updated meeting {real_uuid} from Zoom API."
             )
-
             return real_uuid
 
-        except HTTPException as e:
-            logger.warning(
-                f"Handled error getting meeting data for UUID {encoded_uuid}: {e.detail}"
-            )
-            raise e
         except Exception as e:
-            logger.error(
-                f"Failed to get_meeting_data for UUID {encoded_uuid}: {e}",
-                exc_info=True,
+            logger.warning(
+                f"Failed to fetch Zoom data for {encoded_uuid}: {e}. Creating fallback meeting record."
             )
-            raise HTTPException(
-                status_code=500,
-                detail="An internal error occurred while fetching meeting data",
-            )
+
+            real_uuid = meeting_uuid
+
+            try:
+                async with database.DB_POOL.acquire() as conn:
+                    async with conn.transaction():
+                        await conn.execute(
+                            SQL_INSERT_MEETING,
+                            real_uuid,
+                            integration_id,
+                            "",
+                            "zoom",
+                            real_uuid,
+                            datetime.now(),
+                            None,
+                        )
+
+                logger.info(f"Created fallback meeting record for {real_uuid}")
+                return real_uuid
+
+            except Exception as db_e:
+                logger.error(
+                    f"Critical failure creating fallback meeting: {db_e}", exc_info=True
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Server error: Could not initialize meeting session.",
+                )
 
 
 async def authenticate_zoom_session(request: ZoomAuthRequest) -> str:

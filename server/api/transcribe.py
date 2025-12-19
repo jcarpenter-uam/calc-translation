@@ -38,14 +38,6 @@ def create_transcribe_router(viewer_manager):
                 logger.info(
                     f"New WebSocket connection for session: {session_id} (Integration: {integration})"
                 )
-                # BUG: This is to replicate zoom api errors for testing
-                #
-                # if integration == "zoom" and "zoom_host_id" not in payload:
-                #     logger.warning(
-                #         "⚠️ BYPASSING AUTH: Injecting dummy Zoom Host ID for testing"
-                #     )
-                #     payload["zoom_host_id"] = "me"
-
                 if integration == "zoom":
                     zoom_host_id = payload.get("zoom_host_id")
                     user_id = payload.get("sub")

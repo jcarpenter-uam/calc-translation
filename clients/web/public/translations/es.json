@@ -297,5 +297,12 @@
   "user_menu_tooltip": "Iniciado sesión como {{name}}. Haga clic para opciones.",
   "download_transcript": "La sesión ha finalizado. Descargar transcripción.",
   "downloading": "Descargando...",
-  "loading_history": "Traduciendo el historial de conversaciones..."
+  "loading_history": "Traduciendo el historial de conversaciones...",
+  "active_sessions_title": "Sesiones Activas",
+  "active_sessions_desc": "Monitoreo en tiempo real",
+  "refetching": "Actualizando...",
+  "updated_at": "Actualizado: {{time}}",
+  "no_active_sessions": "No se encontraron sesiones activas.",
+  "live_status": "En Vivo",
+  "started_label": "Iniciado:"
 }

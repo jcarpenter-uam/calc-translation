@@ -297,5 +297,12 @@
   "user_menu_tooltip": "Masuk sebagai {{name}}. Klik untuk opsi.",
   "download_transcript": "Sesi berakhir. Unduh transkrip",
   "downloading": "Mengunduh...",
-  "loading_history": "Menerjemahkan riwayat percakapan..."
+  "loading_history": "Menerjemahkan riwayat percakapan...",
+  "active_sessions_title": "Sesi Aktif",
+  "active_sessions_desc": "Pemantauan real-time",
+  "refetching": "Memuat ulang...",
+  "updated_at": "Diperbarui: {{time}}",
+  "no_active_sessions": "Tidak ada sesi aktif ditemukan.",
+  "live_status": "Langsung",
+  "started_label": "Dimulai:"
 }

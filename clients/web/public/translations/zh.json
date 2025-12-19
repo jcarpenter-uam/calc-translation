@@ -296,5 +296,12 @@
   "user_menu_tooltip": "已登录为 {{name}}。点击查看选项。",
   "download_transcript": "会话已结束。下载文字记录",
   "downloading": "正在下载...",
-  "loading_history": "正在翻译对话记录……"
+  "loading_history": "正在翻译对话记录……",
+  "active_sessions_title": "活跃会话",
+  "active_sessions_desc": "实时监控",
+  "refetching": "正在刷新...",
+  "updated_at": "更新于: {{time}}",
+  "no_active_sessions": "未发现活跃会话。",
+  "live_status": "直播",
+  "started_label": "开始于:"
 }

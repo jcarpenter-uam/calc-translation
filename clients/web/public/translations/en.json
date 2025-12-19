@@ -297,5 +297,12 @@
   "user_menu_tooltip": "Logged in as {{name}}. Click for options.",
   "download_transcript": "Session ended. Download transcript",
   "downloading": "Downloading...",
-  "loading_history": "Translating conversation history..."
+  "loading_history": "Translating conversation history...",
+  "active_sessions_title": "Active Sessions",
+  "active_sessions_desc": "Real-time monitoring",
+  "refetching": "Refetching...",
+  "updated_at": "Updated: {{time}}",
+  "no_active_sessions": "No active sessions found.",
+  "live_status": "Live",
+  "started_label": "Started:"
 }

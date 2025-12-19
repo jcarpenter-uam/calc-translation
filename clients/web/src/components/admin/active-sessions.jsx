@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 export default function ActiveSessions({
   sessions,
@@ -7,15 +8,17 @@ export default function ActiveSessions({
   lastUpdated,
   onRefresh,
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="w-full space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            Active Sessions
+            {t("active_sessions_title")}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Real-time monitoring
+            {t("active_sessions_desc")}
           </p>
         </div>
         <button
@@ -23,21 +26,21 @@ export default function ActiveSessions({
           className="px-3 py-1.5 text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors border border-zinc-300 dark:border-zinc-600"
         >
           {loading
-            ? "Refetching..."
-            : `Updated: ${lastUpdated.toLocaleTimeString()}`}
+            ? t("refetching")
+            : t("updated_at", { time: lastUpdated.toLocaleTimeString() })}
         </button>
       </div>
 
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm border border-red-200 dark:border-red-800">
-          Error: {error}
+          {t("error_label")} {error}
         </div>
       )}
 
       {!loading && sessions.length === 0 && !error && (
         <div className="text-center py-12 border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl">
           <p className="text-zinc-500 dark:text-zinc-400 font-medium">
-            No active sessions found.
+            {t("no_active_sessions")}
           </p>
         </div>
       )}
@@ -55,7 +58,7 @@ export default function ActiveSessions({
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
                 </span>
                 <span className="text-xs font-bold text-green-600 dark:text-green-400 tracking-wider uppercase">
-                  Live
+                  {t("live_status")}
                 </span>
               </div>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
@@ -74,7 +77,7 @@ export default function ActiveSessions({
 
             <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800">
               <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                <span>Started:</span>
+                <span>{t("started_label")}</span>
                 <span className="font-mono">
                   {new Date(session.start_time).toLocaleTimeString([], {
                     hour: "2-digit",

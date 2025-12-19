@@ -1,28 +1,26 @@
-FROM node:24-slim
+FROM python:3.13-slim
 
 LABEL org.opencontainers.image.source="https://github.com/jcarpenter-uam/calc-translation"
 
+ENV PYTHONUNBUFFERED=1 \
+  PIP_NO_CACHE_DIR=off \
+  PIP_DISABLE_PIP_VERSION_CHECK=on \
+  PIP_DEFAULT_TIMEOUT=100
+
 WORKDIR /app
 
-COPY package*.json ./
+COPY requirements.txt .
+RUN pip install --extra-index-url https://test.pypi.org/simple/ -r requirements.txt
 
-USER root
+RUN addgroup --system zoom-rtms && adduser --system --ingroup zoom-rtms --shell /bin/sh zoom-rtms
 
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3 && \
-  rm -rf /var/lib/apt/lists/*
+COPY ./server.py ./
+COPY ./worker.py ./
 
-RUN npm install
+RUN chown -R zoom-rtms:zoom-rtms /app
 
-# Explicialy copy files into container
-# Removes need for .dockerignore
-COPY ./server.js ./
-COPY ./worker.js ./
-RUN mkdir -p /app/logs
-
-RUN chown -R node:node /app
-
-USER node
+USER zoom-rtms
 
 EXPOSE 8080
 
-CMD [ "node", "server.js" ]
+CMD ["python", "server.py"]

@@ -1,5 +1,7 @@
+import base64
 import subprocess
 import sys
+import uuid
 
 
 def run_simultaneously():
@@ -20,6 +22,11 @@ def run_simultaneously():
     print(f"--- Starting {num_streams} streams ---")
 
     for i in range(1, num_streams + 1):
+        # Random UUIDs to mimic zoom
+        # raw_uuid = uuid.uuid4().bytes
+        # session_id = base64.b64encode(raw_uuid).decode("utf-8")
+
+        # Standard 1,2,3... session IDs
         session_id = f"{i}"
         if i % 2 != 0:
             script_path = "./one/test_1.py"

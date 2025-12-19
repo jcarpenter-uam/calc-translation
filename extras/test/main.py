@@ -23,9 +23,8 @@ def run_simultaneously():
 
     for i in range(1, num_streams + 1):
         # Random UUIDs to mimic zoom
-        # raw_uuid = uuid.uuid4().bytes
-        # session_id = base64.b64encode(raw_uuid).decode("utf-8")
-        session_id = "/19buUqoSqaHdtt+aP4Kng=="
+        raw_uuid = uuid.uuid4().bytes
+        session_id = base64.b64encode(raw_uuid).decode("utf-8")
         # Standard 1,2,3... session IDs
         # session_id = f"{i}"
         if i % 2 != 0:

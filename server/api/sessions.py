@@ -39,7 +39,7 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
     async def get_all_sessions():
         """Returns a JSON array of all currently active sessions."""
         with log_step(LOG_STEP):
-            logger.info("Request to get all active sessions.")
+            logger.debug("Request to get all active sessions.")
             sessions = viewer_manager.active_transcription_sessions
             result = [{"session_id": sid, **data} for sid, data in sessions.items()]
             logger.info(f"Found {len(result)} active sessions.")

@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from "react";
 import UserManagement from "../components/admin/user-management.jsx";
 import TenantManagement from "../components/admin/tenant-management.jsx";
+import ActiveSessions from "../components/admin/active-sessions.jsx";
 
 export default function AdminPage() {
   const [users, setUsers] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState(null);
+  const [sessionsLastUpdated, setSessionsLastUpdated] = useState(new Date());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,6 +39,30 @@ export default function AdminPage() {
     };
 
     fetchData();
+  }, []);
+
+  const fetchSessions = async (isBackground = false) => {
+    if (!isBackground) setSessionsLoading(true);
+    try {
+      const response = await fetch("/api/session");
+      if (!response.ok) throw new Error("Failed to fetch sessions");
+
+      const data = await response.json();
+      setSessions(data);
+      setSessionsLastUpdated(new Date());
+      setSessionsError(null);
+    } catch (err) {
+      setSessionsError(err.message);
+    } finally {
+      if (!isBackground) setSessionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+
+    const interval = setInterval(() => fetchSessions(true), 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleToggleUserAdmin = async (userId, isAdmin) => {
@@ -143,6 +172,14 @@ export default function AdminPage() {
             onCreateTenant={handleCreateTenant}
             onUpdateTenant={handleUpdateTenant}
             onDeleteTenant={handleDeleteTenant}
+          />
+          <hr className="border-zinc-200 dark:border-zinc-700" />
+          <ActiveSessions
+            sessions={sessions}
+            loading={sessionsLoading}
+            error={sessionsError}
+            lastUpdated={sessionsLastUpdated}
+            onRefresh={() => fetchSessions(false)}
           />
         </div>
       )}

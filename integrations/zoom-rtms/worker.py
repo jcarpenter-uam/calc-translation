@@ -53,7 +53,6 @@ def connect_websocket(meeting_uuid, host_id):
     if is_stopping:
         return
 
-    encoded_uuid = requests.utils.quote(meeting_uuid)
     import urllib.parse
 
     encoded_uuid = urllib.parse.quote(meeting_uuid, safe="")

@@ -1,3 +1,9 @@
+# NOTE:Now that the entra calender will allow us to query zooms api ahead of time
+# The existing Soniox language logic should be used as a fallback.
+# If /ws/transcribe connectes we first check the DB for an exsiting meeting record
+# If that record exist go ahead and spin up the needed languages per the "languages" column
+# Otherwise the existing logic will be used as fallback or for spur the moment meetings
+
 import asyncio
 import base64
 import json

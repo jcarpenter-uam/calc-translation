@@ -199,6 +199,13 @@ async def handle_callback(request: Request) -> RedirectResponse:
                 detail=f"Token error: {token_response.get('error_description')}",
             )
 
+        # NOTE: This response should be parsed and saved in db for zoom meetings
+        # If we can reliably get the zoom join url, we can take the readable meetingID from that
+        # and query the zoom api for the detailed information ahead of time.
+        # Along with this we can add an additional column in the meetings table for "languages"
+        # to store a list of langauges required per meetingID using the entra users "language_code" field we already have
+        # If new language needed -> append to list
+
         # --- START TEMPORARY DEBUG CODE ---
         try:
             access_token = token_response.get("access_token")

@@ -1,6 +1,9 @@
 # BUG: There is an error that is thrown when attempting to refresh zoom tokens
 # Once replicated it needs to be fixed
 
+# NOTE: Now when a user request zoom auth we should first check the DB for an existing entry
+# to avoid quering the zoom API again.
+
 import base64
 import logging
 import time

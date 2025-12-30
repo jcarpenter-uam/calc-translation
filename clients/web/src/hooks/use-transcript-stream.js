@@ -47,6 +47,8 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
           return;
         }
 
+        // NOTE: With the new logic we need to update this logic to know wether the meeting has ended
+        // by checking if a transcript exist for a given meetingID, or if the user is just early
         if (code === 4004) {
           console.warn("Session not found (4004). It has likely ended.");
           setIsDownloadable(true);

@@ -47,6 +47,12 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
           return;
         }
 
+        if (code === 4004) {
+          console.warn("Session not found (4004). It has likely ended.");
+          setIsDownloadable(true);
+          return;
+        }
+
         if (code === 4001 || code === 4008) {
           console.error(
             `WebSocket connection failed permanently: ${event.reason} (${code})`,

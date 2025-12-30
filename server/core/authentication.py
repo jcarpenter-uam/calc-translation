@@ -27,14 +27,18 @@ class TokenPayload(BaseModel):
     aud: str
 
 
-def generate_jwt_token(user_id: str, session_id: str | None = None) -> str:
+def generate_jwt_token(
+    user_id: str, session_id: str | None = None, expires_delta: timedelta | None = None
+) -> str:
     """
     Generates a short-lived JWT for a viewing session. (HS256)
     - If session_id is None, it's a main user auth token.
     - If session_id is provided, it's a session auth token.
     """
     now = datetime.now(timezone.utc)
-    expires_delta = timedelta(hours=3)
+
+    if expires_delta is None:
+        expires_delta = timedelta(hours=3)  # 3 Hours
 
     payload = {
         "iss": "calc-translation-service",

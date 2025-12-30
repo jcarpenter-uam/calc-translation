@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from datetime import timedelta
 
 import core.database as database
 import msal
@@ -222,7 +223,9 @@ async def handle_callback(request: Request) -> RedirectResponse:
         except Exception as e:
             logger.error(f"Failed to upsert user {user_id}: {e}", exc_info=True)
 
-        app_token = generate_jwt_token(user_id=user_id, session_id=None)
+        app_token = generate_jwt_token(
+            user_id=user_id, session_id=None, expires_delta=timedelta(days=90)
+        )
 
         redirect_response = RedirectResponse(url="/")
 
@@ -234,7 +237,7 @@ async def handle_callback(request: Request) -> RedirectResponse:
         redirect_response.set_cookie(
             key="app_auth_token",
             value=app_token,
-            max_age=60 * 60,
+            max_age=90 * 24 * 60 * 60,  # 90 Days
             httponly=True,
             secure=secure_policy,
             samesite=samesite_policy,

@@ -102,12 +102,12 @@ def on_audio_data(data, size, timestamp, metadata):
     if not ws_client or is_stopping:
         return
 
-    logger.info(f"METADATA TYPE: {type(metadata)}")
-    logger.info(f"METADATA DIR: {dir(metadata)}")
-
     try:
         b64_audio = base64.b64encode(data).decode("utf-8")
-        speaker = metadata.userName if metadata.userName else "Zoom RTMS"
+        speaker = getattr(metadata, "userName", "")
+
+        if not speaker:
+            speaker = "Zoom RTMS"
 
         payload = json.dumps({"userName": speaker, "audio": b64_audio})
 

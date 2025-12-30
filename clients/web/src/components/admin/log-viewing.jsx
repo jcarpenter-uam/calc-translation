@@ -22,9 +22,14 @@ export default function LogViewing({ logs = [], loading, error, onRefresh }) {
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          Main Server Logs
-        </h2>
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            Server Logs
+          </h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            (Does not include RTMS container)
+          </p>
+        </div>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
             <input

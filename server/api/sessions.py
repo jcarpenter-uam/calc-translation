@@ -1,3 +1,5 @@
+# NOTE: Tired of seeing this spammed on admin page "[2025-12-30T22:50:26.800][INFO][API-SESSION] Found 0 active sessions."
+
 import logging
 import os
 import urllib.parse

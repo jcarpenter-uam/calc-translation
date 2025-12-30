@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -7,10 +8,10 @@ import sys
 import time
 from datetime import datetime
 
+import aiohttp
 import jwt
 import rtms
 from dotenv import load_dotenv
-from websocket import WebSocketException, create_connection
 
 load_dotenv()
 
@@ -29,8 +30,8 @@ logging.basicConfig(
 logger = logging.getLogger("worker")
 
 rtms_client = None
-ws_client = None
-is_stopping = False
+stop_event = asyncio.Event()
+audio_queue = asyncio.Queue()
 
 
 def get_timestamp_filename():
@@ -38,6 +39,7 @@ def get_timestamp_filename():
 
 
 def generate_auth_token(host_id):
+    """Generates a JWT token for the backend connection."""
     payload = {
         "iss": "zoom-rtms-service",
         "iat": int(time.time()),
@@ -47,138 +49,178 @@ def generate_auth_token(host_id):
     return jwt.encode(payload, ZM_PRIVATE_KEY, algorithm="RS256")
 
 
-def connect_websocket(meeting_uuid, host_id):
-    """Establishes connection to the Main App API"""
-    global ws_client
-    if is_stopping:
-        return
-
-    import urllib.parse
-
-    encoded_uuid = urllib.parse.quote(meeting_uuid, safe="")
-
-    url = f"{ZOOM_BASE_SERVER_URL}/{encoded_uuid}"
-    token = generate_auth_token(host_id)
-    headers = {"Authorization": f"Bearer {token}"}
-
-    logger.info(f"Connecting to Backend WebSocket: {url}")
-    try:
-        ws_client = create_connection(url, header=headers, timeout=10)
-        logger.info("Backend WebSocket connected.")
-    except Exception as e:
-        logger.error(f"WebSocket connection failed: {e}")
-        ws_client = None
-
-
-def signal_handler(sig, frame):
-    """Handle SIGTERM from server.py for graceful shutdown"""
-    global is_stopping
-    logger.info(f"Received signal {sig}. Shutting down...")
-    is_stopping = True
-
-    if rtms_client:
-        try:
-            logger.info("Leaving Zoom meeting...")
-            rtms_client.leave()
-        except Exception as e:
-            logger.error(f"Error leaving meeting: {e}")
-
-    if ws_client:
-        try:
-            ws_client.close()
-        except:
-            pass
-
-    sys.exit(0)
-
-
-signal.signal(signal.SIGTERM, signal_handler)
-
-
 def on_audio_data(data, size, timestamp, metadata):
-    """Callback from Zoom RTMS SDK"""
-    global ws_client
-
-    if not ws_client or is_stopping:
+    """
+    Callback from Zoom RTMS SDK (Synchronous).
+    We do the heavy lifting (Base64) here, then push to the async queue.
+    """
+    if stop_event.is_set():
         return
 
     try:
         b64_audio = base64.b64encode(data).decode("utf-8")
-        speaker = getattr(metadata, "userName", "")
 
+        speaker = getattr(metadata, "userName", "")
         if not speaker:
             speaker = "Zoom RTMS"
 
-        payload = json.dumps({"userName": speaker, "audio": b64_audio})
+        payload = {"userName": speaker, "audio": b64_audio}
 
-        ws_client.send(payload)
+        audio_queue.put_nowait(payload)
 
-    except (WebSocketException, BrokenPipeError):
-        logger.warning("WebSocket lost. Attempting reconnect...")
-        ws_client = None
     except Exception as e:
-        logger.error(f"Error sending audio: {e}")
+        logger.error(f"Error processing audio callback: {e}")
 
 
-def main():
-    global rtms_client, ws_client
+async def websocket_sender_task(meeting_uuid, host_id):
+    """
+    Consumer Task: Reads from queue and sends via aiohttp.
+    Maintains persistent connection logic.
+    """
+    import urllib.parse
+
+    encoded_uuid = urllib.parse.quote(meeting_uuid, safe="")
+    url = f"{ZOOM_BASE_SERVER_URL}/{encoded_uuid}"
+
+    logger.info(f"Starting WebSocket Sender Task for {url}")
+
+    while not stop_event.is_set():
+        try:
+            token = generate_auth_token(host_id)
+            headers = {"Authorization": f"Bearer {token}"}
+
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.ws_connect(url) as ws:
+                    logger.info("Backend WebSocket connected (aiohttp).")
+
+                    while not stop_event.is_set():
+                        try:
+                            payload = await asyncio.wait_for(
+                                audio_queue.get(), timeout=1.0
+                            )
+                        except asyncio.TimeoutError:
+                            continue
+
+                        await ws.send_str(json.dumps(payload))
+                        audio_queue.task_done()
+
+        except aiohttp.ClientConnectorError:
+            logger.warning("Connection failed. Retrying in 2 seconds...")
+            await asyncio.sleep(2)
+        except Exception as e:
+            if not stop_event.is_set():
+                logger.error(f"WebSocket Error: {e}. Reconnecting...")
+                await asyncio.sleep(1)
+            else:
+                break
+
+    logger.info("WebSocket Sender Task finished.")
+
+
+async def rtms_polling_loop(
+    rtms_client, meeting_uuid, stream_id, server_urls, signature
+):
+    """
+    Producer Task: Runs the RTMS join and polling loop.
+    """
+    try:
+        logger.info("Joining Zoom RTMS...")
+        rtms_client.join(
+            meeting_uuid=meeting_uuid,
+            rtms_stream_id=stream_id,
+            server_urls=server_urls,
+            signature=signature,
+        )
+        logger.info("Joined successfully. Starting polling...")
+
+        while not stop_event.is_set():
+            rtms_client._process_join_queue()
+            rtms_client._poll_if_needed()
+
+            await asyncio.sleep(0.01)
+
+    except Exception as e:
+        logger.critical(f"RTMS Polling Error: {e}", exc_info=True)
+        stop_event.set()
+    finally:
+        logger.info("Leaving Zoom meeting...")
+        try:
+            rtms_client.leave()
+        except:
+            pass
+
+
+async def main():
+    global rtms_client
 
     if not ZM_PRIVATE_KEY:
         logger.critical("ZM_PRIVATE_KEY not found.")
         sys.exit(1)
 
     try:
-        input_data = sys.stdin.readline()
+        loop = asyncio.get_running_loop()
+        input_data = await loop.run_in_executor(None, sys.stdin.readline)
+
         if not input_data:
             logger.error("No input data received.")
             sys.exit(1)
 
         config = json.loads(input_data)
-        payload = config.get("payload")
+        payload_data = config.get("payload")
         stream_id = config.get("stream_id")
-        meeting_uuid = payload.get("meeting_uuid")
-        operator_id = payload.get("operator_id")
+        meeting_uuid = payload_data.get("meeting_uuid")
+        operator_id = payload_data.get("operator_id")
+
+        safe_uuid = meeting_uuid.replace("/", "_")
+        log_file = os.path.join(LOG_DIR, f"{safe_uuid}_{get_timestamp_filename()}.log")
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        logger.addHandler(file_handler)
+
+        logger.info(f"Worker started for stream {stream_id}")
+
     except Exception as e:
         logger.error(f"Failed to parse input config: {e}")
         sys.exit(1)
 
-    safe_uuid = meeting_uuid.replace("/", "_")
-    log_file = os.path.join(LOG_DIR, f"{safe_uuid}_{get_timestamp_filename()}.log")
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
-    logger.addHandler(file_handler)
+    rtms_client = rtms.Client()
+    rtms_client.onAudioData(on_audio_data)
 
-    logger.info(f"Worker started for stream {stream_id} (Meeting: {meeting_uuid})")
+    sender_task = asyncio.create_task(websocket_sender_task(meeting_uuid, operator_id))
 
-    connect_websocket(meeting_uuid, operator_id)
+    poller_task = asyncio.create_task(
+        rtms_polling_loop(
+            rtms_client,
+            meeting_uuid,
+            stream_id,
+            payload_data.get("server_urls"),
+            payload_data.get("signature"),
+        )
+    )
 
     try:
-        rtms_client = rtms.Client()
-        rtms_client.onAudioData(on_audio_data)
+        await stop_event.wait()
+    except asyncio.CancelledError:
+        pass
 
-        logger.info("Joining Zoom RTMS...")
-        rtms_client.join(
-            meeting_uuid=meeting_uuid,
-            rtms_stream_id=stream_id,
-            server_urls=payload.get("server_urls"),
-            signature=payload.get("signature"),
-        )
+    logger.info("Shutting down tasks...")
+    if not stop_event.is_set():
+        stop_event.set()
 
-        logger.info("Joined successfully. Entering polling loop.")
+    await asyncio.gather(sender_task, poller_task, return_exceptions=True)
+    logger.info("Worker exited cleanly.")
 
-        while not is_stopping:
-            rtms_client._process_join_queue()
-            rtms_client._poll_if_needed()
 
-            if not ws_client and not is_stopping:
-                connect_websocket(meeting_uuid, operator_id)
-
-            time.sleep(0.01)
-
-    except Exception as e:
-        logger.critical(f"Unexpected error in worker: {e}", exc_info=True)
-        sys.exit(1)
+def handle_exit(sig, frame):
+    logger.info(f"Received signal {sig}. Initiating shutdown...")
+    stop_event.set()
 
 
 if __name__ == "__main__":
-    main()
+    signal.signal(signal.SIGTERM, handle_exit)
+    signal.signal(signal.SIGINT, handle_exit)
+
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

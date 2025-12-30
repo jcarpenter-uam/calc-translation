@@ -1,3 +1,6 @@
+# NOTE: Per session auth should be stateful, so that if a user is in a long meeting the JWT can auto refresh
+# This way the user does not get a 401 when attempting to download the VTT at the end
+
 import logging
 from datetime import datetime, timedelta, timezone
 

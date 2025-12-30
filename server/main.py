@@ -1,3 +1,6 @@
+# NOTE: Each meeting should get a unique SSO URL that bypasses entra auth and allows the user to get directly into a meeting
+# This will be used for guest
+
 import logging
 
 from core.logging_setup import setup_logging

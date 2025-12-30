@@ -1,3 +1,6 @@
+# NOTE: If we have the calender event description It can be used as context for Soniox
+# But this could cause more problems than its worth
+
 import asyncio
 import json
 import logging

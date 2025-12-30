@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"Configuration loaded. Log level set to: {settings.LOGGING_LEVEL}")
 
 from api.auth import create_auth_router
+from api.logs import create_logs_router
 from api.sessions import create_sessions_router
 from api.tenants import create_tenant_router
 from api.transcribe import create_transcribe_router
@@ -58,6 +59,9 @@ app.include_router(user_router)
 
 auth_router = create_auth_router()
 app.include_router(auth_router)
+
+logs_router = create_logs_router()
+app.include_router(logs_router)
 
 app.mount(
     "/icon.png",

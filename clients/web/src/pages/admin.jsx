@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import UserManagement from "../components/admin/user-management.jsx";
 import TenantManagement from "../components/admin/tenant-management.jsx";
 import ActiveSessions from "../components/admin/active-sessions.jsx";
+import LogViewing from "../components/admin/log-viewing.jsx";
 
 export default function AdminPage() {
   const [users, setUsers] = useState([]);
@@ -12,6 +13,9 @@ export default function AdminPage() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState(null);
   const [sessionsLastUpdated, setSessionsLastUpdated] = useState(new Date());
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,6 +66,25 @@ export default function AdminPage() {
     fetchSessions();
 
     const interval = setInterval(() => fetchSessions(true), 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchLogs = async () => {
+    try {
+      const response = await fetch("/api/logs/?lines=200");
+      if (!response.ok) throw new Error("Failed to fetch logs");
+
+      const data = await response.json();
+      setLogs(data.logs || []);
+      setLogsError(null);
+    } catch (err) {
+      console.error("Log fetch failed", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -180,6 +203,13 @@ export default function AdminPage() {
             error={sessionsError}
             lastUpdated={sessionsLastUpdated}
             onRefresh={() => fetchSessions(false)}
+          />
+          <hr className="border-zinc-200 dark:border-zinc-700" />
+          <LogViewing
+            logs={logs}
+            loading={logsLoading}
+            error={logsError}
+            onRefresh={fetchLogs}
           />
         </div>
       )}

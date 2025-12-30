@@ -6,6 +6,7 @@ import sys
 import urllib.parse
 from contextlib import contextmanager
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from typing import Optional
 
 import colorama
@@ -167,6 +168,12 @@ def setup_logging():
     stderr_handler.setLevel(logging.ERROR)
     stderr_handler.setFormatter(CustomFormatter())
 
+    file_handler = RotatingFileHandler(
+        "server.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(PlainFormatter())
+
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
 
@@ -175,6 +182,7 @@ def setup_logging():
 
     root_logger.addHandler(stdout_handler)
     root_logger.addHandler(stderr_handler)
+    root_logger.addHandler(file_handler)
 
     logging.getLogger("websockets").setLevel(logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)

@@ -11,7 +11,7 @@ export default function ActiveSessions({
   const { t } = useTranslation();
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full max-w-4xl mx-auto space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">

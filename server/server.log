@@ -1,0 +1,201 @@
+[2025-12-30T13:26:46.388][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2025-12-30T13:26:46.718][DEBUG][CACHE] TranscriptCache Manager initialized. Per-session-language limit: 50MB.
+[2025-12-30T13:26:46.719][DEBUG][CONN-MANAGER] ConnectionManager initialized.
+[2025-12-30T13:26:46.946][INFO][DATABASE] Database pool initialized successfully and schema verified.
+[2025-12-30T13:29:10.439][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2025-12-30T13:29:10.790][DEBUG][CACHE] TranscriptCache Manager initialized. Per-session-language limit: 50MB.
+[2025-12-30T13:29:10.790][DEBUG][CONN-MANAGER] ConnectionManager initialized.
+[2025-12-30T13:29:11.034][INFO][DATABASE] Database pool initialized successfully and schema verified.
+[2025-12-30T13:35:51.343][DEBUG][AUTHENTICATION] Client Auth failed: No 'app_auth_token' cookie found in request.
+[2025-12-30T13:35:51.350][DEBUG][AUTHENTICATION] Client Auth failed: No 'app_auth_token' cookie found in request.
+[2025-12-30T13:35:53.488][DEBUG][API-AUTH] Handling Entra login request for email: jcarpenter@uaminc.com
+[2025-12-30T13:35:53.489][DEBUG][INT-ENTRA] Handling Entra login request for email: jcarpenter@uaminc.com
+[2025-12-30T13:35:53.489][DEBUG][INT-ENTRA] Checking DB for config for domain: uaminc.com
+[2025-12-30T13:35:53.524][DEBUG][INT-ENTRA] Found config for domain: uaminc.com
+[2025-12-30T13:35:53.711][DEBUG][INT-ENTRA] Redirecting user from domain uaminc.com to auth URL.
+[2025-12-30T13:35:53.934][DEBUG][API-AUTH] Handling Entra OAuth callback.
+[2025-12-30T13:35:53.934][DEBUG][INT-ENTRA] Checking DB for config for tenant_id: 40a67165-83cc-4999-a00c-c703c3f347c5
+[2025-12-30T13:35:53.937][DEBUG][INT-ENTRA] Found config for tenant_id: 40a67165-83cc-4999-a00c-c703c3f347c5
+[2025-12-30T13:35:54.274][DEBUG][INT-ENTRA] Upserted user: jcarpenter@uaminc.com (OID: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3)
+[2025-12-30T13:35:54.274][INFO][INT-ENTRA] Successfully authenticated user 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3 (jcarpenter@uaminc.com).
+[2025-12-30T13:35:54.617][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:35:58.518][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:35:58.523][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:36:01.096][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:36:01.103][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:36:01.115][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:36:01.115][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:36:01.124][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:36:01.124][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:36:01.165][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:36:01.169][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:36:01.171][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:36:01.174][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:36:01.180][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:36:01.181][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:36:01.181][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:36:01.182][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:36:11.108][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:36:11.109][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:36:21.109][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:36:21.109][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:36:31.107][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:36:31.107][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:36:41.109][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:36:41.110][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:36:51.107][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:36:51.107][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:36:59.895][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:36:59.896][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:36:59.913][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:36:59.914][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:36:59.916][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:36:59.916][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:36:59.923][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:36:59.935][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:37:00.010][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:37:00.011][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:37:00.016][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:37:00.017][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:37:00.017][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:37:00.020][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:37:09.910][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:37:09.910][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:37:20.223][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:37:20.223][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:37:30.223][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:37:30.223][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:37:40.222][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:37:40.222][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:37:50.223][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:37:50.223][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:38:00.222][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:38:00.222][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:38:10.222][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:38:10.222][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:38:41.223][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:38:41.223][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:39:41.227][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:39:41.227][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:40:41.225][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:40:41.225][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:41:24.408][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:41:24.408][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:41:25.761][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:41:25.761][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:41:25.777][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:41:25.777][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:41:25.777][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:41:25.778][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:41:25.779][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:41:25.780][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:41:25.781][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:41:25.781][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:41:25.782][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:41:25.783][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:41:25.784][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:41:25.784][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:41:35.777][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:41:35.777][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:41:41.997][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2025-12-30T13:41:42.360][DEBUG][CACHE] TranscriptCache Manager initialized. Per-session-language limit: 50MB.
+[2025-12-30T13:41:42.360][DEBUG][CONN-MANAGER] ConnectionManager initialized.
+[2025-12-30T13:41:42.602][INFO][DATABASE] Database pool initialized successfully and schema verified.
+[2025-12-30T13:41:45.465][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:41:45.466][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:41:45.481][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:41:45.484][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:41:45.492][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:41:45.493][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:41:45.493][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:41:45.495][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:41:45.495][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:41:45.496][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:41:45.496][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:41:45.497][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:41:45.497][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:41:45.499][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:41:55.482][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:41:55.482][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:42:05.480][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:42:05.480][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:42:16.224][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:42:16.224][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:42:26.222][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:42:26.222][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:42:36.222][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:42:36.222][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:42:46.223][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:42:46.223][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:42:56.223][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:42:56.223][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:43:41.223][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:43:41.223][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:44:20.411][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:44:20.411][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:44:21.526][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:44:21.527][DEBUG][API-USERS] Successfully retrieved profile for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2025-12-30T13:44:21.577][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:44:21.578][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:44:21.578][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:44:21.578][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:44:21.579][DEBUG][API-USERS] Request to get all users.
+[2025-12-30T13:44:21.579][DEBUG][API-TENANT] Request to get all tenants.
+[2025-12-30T13:44:21.582][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:44:21.584][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:44:21.584][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:44:21.584][INFO][API-USERS] Found 2 users.
+[2025-12-30T13:44:21.587][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:44:21.588][INFO][API-TENANT] Found 2 tenants.
+[2025-12-30T13:44:31.543][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:44:31.543][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:44:41.542][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:44:41.542][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:44:51.541][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:44:51.542][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:45:01.540][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:45:01.540][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:45:11.543][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:45:11.543][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:45:21.543][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:45:21.543][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:45:31.542][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:45:31.542][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:45:41.540][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:45:41.541][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:45:51.543][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:45:51.543][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:46:01.541][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:46:01.542][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:46:11.541][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:46:11.541][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:46:22.225][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:46:22.225][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:46:32.222][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:46:32.222][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:46:42.221][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:46:42.221][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:46:52.223][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:46:52.224][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:47:02.222][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:47:02.222][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:47:12.222][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:47:12.223][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:47:41.224][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:47:41.224][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:48:01.759][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:48:01.759][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:48:11.542][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:48:11.543][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:48:21.542][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:48:21.542][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:48:31.541][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:48:31.541][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:48:41.543][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:48:41.543][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:48:51.542][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:48:51.542][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:49:01.541][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:49:01.541][INFO][API-SESSION] Found 0 active sessions.
+[2025-12-30T13:49:11.542][DEBUG][API-SESSION] Request to get all active sessions.
+[2025-12-30T13:49:11.542][INFO][API-SESSION] Found 0 active sessions.

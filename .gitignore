@@ -6,26 +6,23 @@ server/logs/*
 !server/logs/README.md
 server/output/*
 !server/output/README.md
+server/server.log
+
+# ----- web/desktop -----
+node_modules/
+dist/
+out/
 
 # ----- integrations -----
 # ----- zoom -----
 integrations/zoom-rtms/logs/*
 !integrations/zoom-rtms/logs/README.md
-
-# Correction Model
-*.gguf
-
-# Web
-node_modules/
-dist/
-out/
 logs/node*
 
-# TEMP
-docker-compose.yaml
+# ----- test -----
+*.m4a
+*.mp4
 
 # Secrets
 .env
 ngrok-conf.yaml
-*.m4a
-*.mp4

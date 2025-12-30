@@ -1,9 +1,10 @@
 import json
 import logging
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import core.database as database
+import httpx
 import msal
 from core.authentication import decrypt, generate_jwt_token
 from core.config import settings
@@ -28,7 +29,7 @@ class EntraLoginRequest(BaseModel):
 
 
 REDIRECT_PATH = "/api/auth/entra/callback"
-SCOPE = ["User.Read"]
+SCOPE = ["User.Read", "Calendars.Read"]
 
 
 async def get_config_for_domain(domain: str) -> dict | None:
@@ -197,6 +198,49 @@ async def handle_callback(request: Request) -> RedirectResponse:
                 status_code=400,
                 detail=f"Token error: {token_response.get('error_description')}",
             )
+
+        # --- START TEMPORARY DEBUG CODE ---
+        try:
+            access_token = token_response.get("access_token")
+            if access_token:
+                logger.info(
+                    "Fetched Access Token. Querying Graph API for CalendarView..."
+                )
+
+                # 1. Set Specific Date Range (10-24-2025)
+                # We go from the start of the 24th to the very start of the 25th to catch everything.
+                start_str = "2025-10-24T00:00:00Z"
+                end_str = "2025-10-25T00:00:00Z"
+
+                # 2. Use /calendarView
+                # This endpoint REQUIRES startDateTime and endDateTime
+                url = (
+                    f"https://graph.microsoft.com/v1.0/me/calendarView"
+                    f"?startDateTime={start_str}"
+                    f"&endDateTime={end_str}"
+                    f"&$top=10"  # Limit to 10 items to keep console clean
+                )
+
+                async with httpx.AsyncClient() as client:
+                    graph_response = await client.get(
+                        url, headers={"Authorization": f"Bearer {access_token}"}
+                    )
+
+                if graph_response.status_code == 200:
+                    data = graph_response.json()
+                    print("\n\n" + "=" * 50)
+                    print(f" CALENDAR VIEW ({start_str} to {end_str})")
+                    print("=" * 50)
+                    print(json.dumps(data, indent=2))
+                    print("=" * 50 + "\n\n")
+                else:
+                    print(
+                        f"Graph API Error: {graph_response.status_code} - {graph_response.text}"
+                    )
+
+        except Exception as e:
+            print(f"Debug print failed: {e}")
+        # --- END TEMPORARY DEBUG CODE ---
 
         claims = token_response.get("id_token_claims", {})
 

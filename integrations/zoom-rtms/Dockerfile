@@ -12,6 +12,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --extra-index-url https://test.pypi.org/simple/ -r requirements.txt
 
+ENV LD_LIBRARY_PATH="/usr/local/lib/python3.13/site-packages/rtms:${LD_LIBRARY_PATH}"
+
 RUN addgroup --system zoom-rtms && adduser --system --ingroup zoom-rtms --shell /bin/sh zoom-rtms
 
 COPY ./server.py ./

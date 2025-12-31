@@ -124,6 +124,7 @@ async def init_db():
                             join_url TEXT,
                             web_link TEXT,
                             organizer TEXT,
+                            is_cancelled BOOLEAN DEFAULT FALSE,
                             full_event_data JSONB
                         )
                         """
@@ -303,9 +304,9 @@ WHERE meeting_id = $1 AND language_code = $2;
 SQL_UPSERT_CALENDAR_EVENT = """
 INSERT INTO CALENDAR_EVENTS (
     id, user_id, subject, body_content, start_time, end_time, location, 
-    join_url, web_link, organizer, full_event_data
+    join_url, web_link, organizer, is_cancelled, full_event_data
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
 ON CONFLICT (id) DO UPDATE SET
     subject = excluded.subject,
     body_content = excluded.body_content,
@@ -315,6 +316,7 @@ ON CONFLICT (id) DO UPDATE SET
     join_url = excluded.join_url,
     web_link = excluded.web_link,
     organizer = excluded.organizer,
+    is_cancelled = excluded.is_cancelled,
     full_event_data = excluded.full_event_data;
 """
 

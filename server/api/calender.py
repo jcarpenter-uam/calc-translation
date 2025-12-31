@@ -100,6 +100,7 @@ def create_calender_router() -> APIRouter:
                     for event in events:
                         event_id = event.get("id")
                         subject = event.get("subject")
+                        is_cancelled = event.get("isCancelled", False)
 
                         start_raw = event.get("start", {}).get("dateTime")
                         end_raw = event.get("end", {}).get("dateTime")
@@ -115,7 +116,18 @@ def create_calender_router() -> APIRouter:
                             else None
                         )
 
-                        location = event.get("location", {}).get("displayName")
+                        location_obj = event.get("location") or {}
+                        location = location_obj.get("displayName")
+
+                        if not location:
+                            locations_list = event.get("locations")
+                            if (
+                                locations_list
+                                and isinstance(locations_list, list)
+                                and len(locations_list) > 0
+                            ):
+                                location = locations_list[0].get("displayName")
+
                         web_link = event.get("webLink")
                         organizer = (
                             event.get("organizer", {})
@@ -139,6 +151,17 @@ def create_calender_router() -> APIRouter:
                         ):
                             join_url = location
 
+                        # Only proceed if we have a Join URL that matches our supported platforms
+                        if not join_url:
+                            continue
+
+                        is_zoom = "zoom.us" in join_url
+                        is_google = "meet.google.com" in join_url
+                        is_teams = "teams.microsoft.com" in join_url
+
+                        if not (is_zoom or is_google or is_teams):
+                            continue
+
                         if location and (
                             location.startswith("http://")
                             or location.startswith("https://")
@@ -147,6 +170,8 @@ def create_calender_router() -> APIRouter:
                                 location = "Google Meet Meeting"
                             elif "zoom.us" in location:
                                 location = "Zoom Meeting"
+                            elif "teams.microsoft.com" in location:
+                                location = "Microsoft Teams Meeting"
 
                         full_event_json = json.dumps(event)
 
@@ -162,6 +187,7 @@ def create_calender_router() -> APIRouter:
                             join_url,
                             web_link,
                             organizer,
+                            is_cancelled,
                             full_event_json,
                         )
 
@@ -176,6 +202,7 @@ def create_calender_router() -> APIRouter:
                                 join_url=join_url,
                                 web_link=web_link,
                                 organizer=organizer,
+                                is_cancelled=is_cancelled,
                             )
                         )
 

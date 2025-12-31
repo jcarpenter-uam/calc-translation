@@ -110,6 +110,26 @@ async def init_db():
                         """
                     )
 
+                    # Calendar Events
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS CALENDAR_EVENTS (
+                            id TEXT PRIMARY KEY, -- Microsoft Event ID
+                            user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
+                            subject TEXT,
+                            start_time TIMESTAMPTZ,
+                            end_time TIMESTAMPTZ,
+                            location TEXT,
+                            web_link TEXT,
+                            is_online_meeting BOOLEAN,
+                            organizer TEXT
+                        )
+                        """
+                    )
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_calendar_user_time ON CALENDAR_EVENTS(user_id, start_time);"
+                    )
+
             with log_step(LOG_STEP):
                 logger.info(
                     "Database pool initialized successfully and schema verified."
@@ -274,4 +294,26 @@ SQL_GET_TRANSCRIPT_BY_MEETING_ID = """
 SELECT file_name, creation_date 
 FROM TRANSCRIPTS 
 WHERE meeting_id = $1 AND language_code = $2;
+"""
+
+# --- CALENDAR EVENTS ---
+
+SQL_UPSERT_CALENDAR_EVENT = """
+INSERT INTO CALENDAR_EVENTS (id, user_id, subject, start_time, end_time, location, web_link, is_online_meeting, organizer)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (id) DO UPDATE SET
+    subject = excluded.subject,
+    start_time = excluded.start_time,
+    end_time = excluded.end_time,
+    location = excluded.location,
+    web_link = excluded.web_link,
+    is_online_meeting = excluded.is_online_meeting,
+    organizer = excluded.organizer;
+"""
+
+SQL_GET_CALENDAR_EVENTS_BY_USER_ID = """
+SELECT * FROM CALENDAR_EVENTS 
+WHERE user_id = $1
+AND start_time >= CURRENT_DATE - INTERVAL '1 day'
+ORDER BY start_time ASC;
 """

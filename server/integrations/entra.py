@@ -1,16 +1,18 @@
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timedelta
 
 import core.database as database
-import httpx
 import msal
 from core.authentication import decrypt, generate_jwt_token
 from core.config import settings
 from core.database import (
     SQL_GET_TENANT_AUTH_BY_ID,
     SQL_GET_TENANT_BY_DOMAIN,
+    SQL_GET_USER_BY_ID,
+    SQL_UPSERT_INTEGRATION,
     SQL_UPSERT_USER,
 )
 from core.logging_setup import log_step
@@ -119,6 +121,85 @@ def _get_token_from_code(tenant_config: dict, code: str) -> dict:
     )
 
 
+async def get_valid_microsoft_token(user_id: str) -> str | None:
+    with log_step(LOG_STEP):
+        if not database.DB_POOL:
+            logger.error("Database not initialized.")
+            return None
+
+        async with database.DB_POOL.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, access_token, refresh_token, expires_at, platform_user_id FROM INTEGRATIONS WHERE user_id = $1 AND platform = 'microsoft'",
+                user_id,
+            )
+
+        if not row:
+            logger.warning(f"No Microsoft integration found for user {user_id}")
+            return None
+
+        integration_id = row["id"]
+        access_token = row["access_token"]
+        refresh_token = row["refresh_token"]
+        expires_at = row["expires_at"] or 0
+
+        if time.time() < (expires_at - 300):
+            return access_token
+
+        logger.info(f"Microsoft token for user {user_id} expired. Refreshing...")
+
+        if not refresh_token:
+            logger.error(f"No refresh token for integration {integration_id}")
+            return None
+
+        async with database.DB_POOL.acquire() as conn:
+            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+
+        if not user_row or not user_row.get("email"):
+            logger.error(
+                f"User {user_id} not found or has no email. Cannot refresh token."
+            )
+            return None
+
+        try:
+            domain = user_row["email"].split("@")[1]
+            tenant_config = await get_config_for_domain(domain)
+        except Exception as e:
+            logger.error(f"Failed to determine domain/config for user {user_id}: {e}")
+            return None
+
+        if not tenant_config:
+            logger.error(f"No tenant config found for domain {domain}")
+            return None
+
+        app = _build_msal_app(tenant_config)
+        result = app.acquire_token_by_refresh_token(refresh_token, scopes=SCOPE)
+
+        if "error" in result:
+            logger.error(f"MSAL Refresh Error: {result.get('error_description')}")
+            return None
+
+        new_access_token = result.get("access_token")
+        new_refresh_token = result.get("refresh_token")
+        new_expires_in = result.get("expires_in", 3600)
+        new_expires_at = int(time.time()) + new_expires_in
+
+        async with database.DB_POOL.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE INTEGRATIONS 
+                SET access_token = $1, refresh_token = $2, expires_at = $3
+                WHERE id = $4
+                """,
+                new_access_token,
+                new_refresh_token,
+                new_expires_at,
+                integration_id,
+            )
+
+        logger.info(f"Successfully refreshed Microsoft token for user {user_id}")
+        return new_access_token
+
+
 async def handle_login(
     request: EntraLoginRequest, response: Response
 ) -> RedirectResponse:
@@ -199,56 +280,6 @@ async def handle_callback(request: Request) -> RedirectResponse:
                 detail=f"Token error: {token_response.get('error_description')}",
             )
 
-        # NOTE: This response should be parsed and saved in db for zoom meetings
-        # If we can reliably get the zoom join url, we can take the readable meetingID from that
-        # and query the zoom api for the detailed information ahead of time.
-        # Along with this we can add an additional column in the meetings table for "languages"
-        # to store a list of langauges required per meetingID using the entra users "language_code" field we already have
-        # If new language needed -> append to list
-
-        # --- START TEMPORARY DEBUG CODE ---
-        try:
-            access_token = token_response.get("access_token")
-            if access_token:
-                logger.info(
-                    "Fetched Access Token. Querying Graph API for CalendarView..."
-                )
-
-                # 1. Set Specific Date Range (10-24-2025)
-                # We go from the start of the 24th to the very start of the 25th to catch everything.
-                start_str = "2025-10-24T00:00:00Z"
-                end_str = "2025-10-25T00:00:00Z"
-
-                # 2. Use /calendarView
-                # This endpoint REQUIRES startDateTime and endDateTime
-                url = (
-                    f"https://graph.microsoft.com/v1.0/me/calendarView"
-                    f"?startDateTime={start_str}"
-                    f"&endDateTime={end_str}"
-                    f"&$top=10"  # Limit to 10 items to keep console clean
-                )
-
-                async with httpx.AsyncClient() as client:
-                    graph_response = await client.get(
-                        url, headers={"Authorization": f"Bearer {access_token}"}
-                    )
-
-                if graph_response.status_code == 200:
-                    data = graph_response.json()
-                    print("\n\n" + "=" * 50)
-                    print(f" CALENDAR VIEW ({start_str} to {end_str})")
-                    print("=" * 50)
-                    print(json.dumps(data, indent=2))
-                    print("=" * 50 + "\n\n")
-                else:
-                    print(
-                        f"Graph API Error: {graph_response.status_code} - {graph_response.text}"
-                    )
-
-        except Exception as e:
-            print(f"Debug print failed: {e}")
-        # --- END TEMPORARY DEBUG CODE ---
-
         claims = token_response.get("id_token_claims", {})
 
         user_id = claims.get("oid")
@@ -273,6 +304,26 @@ async def handle_callback(request: Request) -> RedirectResponse:
             logger.debug(f"Upserted user: {user_email} (OID: {user_id})")
         except Exception as e:
             logger.error(f"Failed to upsert user {user_id}: {e}", exc_info=True)
+
+        access_token = token_response.get("access_token")
+        refresh_token = token_response.get("refresh_token")
+        expires_in = token_response.get("expires_in", 3599)
+        expires_at = int(time.time()) + expires_in
+
+        try:
+            async with database.DB_POOL.acquire() as conn:
+                await conn.execute(
+                    SQL_UPSERT_INTEGRATION,
+                    user_id,
+                    "microsoft",
+                    user_id,
+                    access_token,
+                    refresh_token,
+                    expires_at,
+                )
+            logger.debug(f"Stored Microsoft tokens for user {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to store Microsoft tokens: {e}")
 
         app_token = generate_jwt_token(
             user_id=user_id, session_id=None, expires_delta=timedelta(days=90)
@@ -307,7 +358,7 @@ async def handle_logout(response: Response, user_payload: dict) -> dict:
     """
     with log_step(LOG_STEP):
         user_id = user_payload.get("sub", "unknown")
-        logger.info(f"Handling user logout for user: {user_id}.")
+        logger.debug(f"Handling user logout for user: {user_id}.")
 
         response.delete_cookie("app_auth_token")
 

@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/auth";
+import { useCalendar } from "../hooks/use-calender.js";
 import {
   IntegrationCard,
   ZoomForm,
   TestForm,
 } from "../components/auth/integration-card.jsx";
+import { CalendarView } from "../components/calender/view.jsx";
 
 import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
 
@@ -16,6 +18,12 @@ export default function LandingPage() {
   const [integration, setIntegration] = useState("zoom");
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const {
+    events,
+    loading: calendarLoading,
+    error: calendarError,
+    syncCalendar,
+  } = useCalendar();
 
   useEffect(() => {
     const checkPendingZoomLink = async () => {
@@ -189,6 +197,12 @@ export default function LandingPage() {
           )}
         </div>
       </div>
+      <CalendarView
+        events={events}
+        loading={calendarLoading}
+        error={calendarError}
+        onSync={syncCalendar}
+      />
     </div>
   );
 }

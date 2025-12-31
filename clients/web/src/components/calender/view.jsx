@@ -34,6 +34,7 @@ export function CalendarView({ events, loading, onSync, error }) {
         label: "Zoom",
         className:
           "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 border-blue-200 dark:border-blue-800",
+        comingSoon: false,
       };
     }
 
@@ -43,6 +44,7 @@ export function CalendarView({ events, loading, onSync, error }) {
         label: "Google Meet",
         className:
           "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
+        comingSoon: true,
       };
     }
 
@@ -52,6 +54,7 @@ export function CalendarView({ events, loading, onSync, error }) {
         label: "Teams",
         className:
           "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800",
+        comingSoon: true,
       };
     }
 
@@ -60,6 +63,7 @@ export function CalendarView({ events, loading, onSync, error }) {
       label: location || "Online",
       className:
         "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700",
+      comingSoon: false,
     };
   };
 
@@ -198,17 +202,23 @@ export function CalendarView({ events, loading, onSync, error }) {
                   </a>
                 )}
 
-                {hasJoinUrl && !isCancelled && (
-                  <a
-                    href={event.join_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900"
-                  >
-                    Join
-                    <BiVideo className="w-4 h-4" />
-                  </a>
-                )}
+                {hasJoinUrl &&
+                  !isCancelled &&
+                  (platformConfig.comingSoon ? (
+                    <span className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg cursor-not-allowed select-none opacity-80">
+                      Coming Soon
+                    </span>
+                  ) : (
+                    <a
+                      href={event.join_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900"
+                    >
+                      Join
+                      <BiVideo className="w-4 h-4" />
+                    </a>
+                  ))}
               </div>
             </div>
           );

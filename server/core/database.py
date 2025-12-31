@@ -117,12 +117,14 @@ async def init_db():
                             id TEXT PRIMARY KEY, -- Microsoft Event ID
                             user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
                             subject TEXT,
+                            body_content TEXT,
                             start_time TIMESTAMPTZ,
                             end_time TIMESTAMPTZ,
                             location TEXT,
+                            join_url TEXT,
                             web_link TEXT,
-                            is_online_meeting BOOLEAN,
-                            organizer TEXT
+                            organizer TEXT,
+                            full_event_data JSONB
                         )
                         """
                     )
@@ -299,16 +301,21 @@ WHERE meeting_id = $1 AND language_code = $2;
 # --- CALENDAR EVENTS ---
 
 SQL_UPSERT_CALENDAR_EVENT = """
-INSERT INTO CALENDAR_EVENTS (id, user_id, subject, start_time, end_time, location, web_link, is_online_meeting, organizer)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO CALENDAR_EVENTS (
+    id, user_id, subject, body_content, start_time, end_time, location, 
+    join_url, web_link, organizer, full_event_data
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
 ON CONFLICT (id) DO UPDATE SET
     subject = excluded.subject,
+    body_content = excluded.body_content,
     start_time = excluded.start_time,
     end_time = excluded.end_time,
     location = excluded.location,
+    join_url = excluded.join_url,
     web_link = excluded.web_link,
-    is_online_meeting = excluded.is_online_meeting,
-    organizer = excluded.organizer;
+    organizer = excluded.organizer,
+    full_event_data = excluded.full_event_data;
 """
 
 SQL_GET_CALENDAR_EVENTS_BY_USER_ID = """

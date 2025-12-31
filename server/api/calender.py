@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -20,8 +21,9 @@ class CalendarEvent(BaseModel):
     start_time: datetime | None
     end_time: datetime | None
     location: str | None
+    join_url: str | None
+    body_content: str | None
     web_link: str | None
-    is_online_meeting: bool
     organizer: str | None
 
 
@@ -65,7 +67,6 @@ def create_calender_router() -> APIRouter:
                 f"?startDateTime={start_str}"
                 f"&endDateTime={end_str}"
                 f"&$top=50"
-                f"&$select=id,subject,start,end,location,webLink,isOnlineMeeting,organizer"
                 f"&$orderby=start/dateTime"
             )
 
@@ -116,35 +117,64 @@ def create_calender_router() -> APIRouter:
 
                         location = event.get("location", {}).get("displayName")
                         web_link = event.get("webLink")
-                        is_online = event.get("isOnlineMeeting", False)
                         organizer = (
                             event.get("organizer", {})
                             .get("emailAddress", {})
                             .get("name")
                         )
 
+                        body_data = event.get("body") or {}
+                        body_content = body_data.get("content")
+
+                        online_meeting = event.get("onlineMeeting") or {}
+                        join_url = online_meeting.get("joinUrl")
+
+                        if (
+                            not join_url
+                            and location
+                            and (
+                                location.startswith("http://")
+                                or location.startswith("https://")
+                            )
+                        ):
+                            join_url = location
+
+                        if location and (
+                            location.startswith("http://")
+                            or location.startswith("https://")
+                        ):
+                            if "meet.google.com" in location:
+                                location = "Google Meet Meeting"
+                            elif "zoom.us" in location:
+                                location = "Zoom Meeting"
+
+                        full_event_json = json.dumps(event)
+
                         await conn.execute(
                             SQL_UPSERT_CALENDAR_EVENT,
                             event_id,
                             user_id,
                             subject,
+                            body_content,
                             start_time,
                             end_time,
                             location,
+                            join_url,
                             web_link,
-                            is_online,
                             organizer,
+                            full_event_json,
                         )
 
                         parsed_events.append(
                             CalendarEvent(
                                 id=event_id,
                                 subject=subject,
+                                body_content=body_content,
                                 start_time=start_time,
                                 end_time=end_time,
                                 location=location,
+                                join_url=join_url,
                                 web_link=web_link,
-                                is_online_meeting=is_online,
                                 organizer=organizer,
                             )
                         )
@@ -177,11 +207,12 @@ def create_calender_router() -> APIRouter:
                     CalendarEvent(
                         id=row["id"],
                         subject=row["subject"],
+                        body_content=row["body_content"],
                         start_time=row["start_time"],
                         end_time=row["end_time"],
                         location=row["location"],
+                        join_url=row["join_url"],
                         web_link=row["web_link"],
-                        is_online_meeting=row["is_online_meeting"],
                         organizer=row["organizer"],
                     )
                 )

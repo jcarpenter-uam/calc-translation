@@ -38,19 +38,20 @@ export function useCalendar(startDate = null, endDate = null) {
     setError(null);
     try {
       const response = await fetch("/api/calender/sync");
+
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(errData.detail || "Failed to sync calendar.");
       }
-      const data = await response.json();
-      setEvents(data);
+
+      await fetchCalendar();
     } catch (err) {
       console.error(err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchCalendar]);
 
   useEffect(() => {
     fetchCalendar();

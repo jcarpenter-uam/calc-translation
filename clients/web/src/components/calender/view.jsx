@@ -4,7 +4,8 @@ import {
   BiLinkExternal,
   BiVideo,
   BiXCircle,
-  BiTime,
+  BiPlayCircle,
+  BiStopCircle,
   BiMap,
   BiUser,
   BiLogoZoom,
@@ -68,7 +69,7 @@ export function CalendarView({ events, loading, onSync, error }) {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto mt-8 space-y-6">
+    <div className="w-full max-w-4xl mx-auto mt-8 space-y-6 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 bg-white/50 dark:bg-zinc-900/50">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -165,13 +166,24 @@ export function CalendarView({ events, loading, onSync, error }) {
 
                 <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-sm text-zinc-500 dark:text-zinc-400">
                   <div className="flex items-center gap-1.5">
-                    <BiTime className="w-4 h-4 text-zinc-400" />
+                    <BiPlayCircle className="w-4 h-4 text-zinc-400" />
                     <span
                       className={
                         isCancelled ? "line-through" : "font-mono text-xs"
                       }
                     >
                       {formatDate(event.start_time)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <BiStopCircle className="w-4 h-4 text-zinc-400" />
+                    <span
+                      className={
+                        isCancelled ? "line-through" : "font-mono text-xs"
+                      }
+                    >
+                      {formatDate(event.end_time)}
                     </span>
                   </div>
 

@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import core.database as database
@@ -25,6 +25,7 @@ class CalendarEvent(BaseModel):
     body_content: str | None
     web_link: str | None
     organizer: str | None
+    is_cancelled: bool
 
 
 def create_calender_router() -> APIRouter:
@@ -56,7 +57,7 @@ def create_calender_router() -> APIRouter:
                     detail="Microsoft account not linked or token expired. Please login again.",
                 )
 
-            start_dt = datetime.utcnow()
+            start_dt = datetime.now(timezone.utc)
             end_dt = start_dt + timedelta(days=30)
 
             start_str = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -102,19 +103,21 @@ def create_calender_router() -> APIRouter:
                         subject = event.get("subject")
                         is_cancelled = event.get("isCancelled", False)
 
-                        start_raw = event.get("start", {}).get("dateTime")
-                        end_raw = event.get("end", {}).get("dateTime")
+                        start_data = event.get("start") or {}
+                        end_data = event.get("end") or {}
 
-                        start_time = (
-                            datetime.fromisoformat(start_raw.rstrip("Z"))
-                            if start_raw
-                            else None
-                        )
-                        end_time = (
-                            datetime.fromisoformat(end_raw.rstrip("Z"))
-                            if end_raw
-                            else None
-                        )
+                        start_raw = start_data.get("dateTime")
+                        end_raw = end_data.get("dateTime")
+
+                        start_time = None
+                        if start_raw:
+                            dt = datetime.fromisoformat(start_raw)
+                            start_time = dt.replace(tzinfo=timezone.utc)
+
+                        end_time = None
+                        if end_raw:
+                            dt = datetime.fromisoformat(end_raw)
+                            end_time = dt.replace(tzinfo=timezone.utc)
 
                         location_obj = event.get("location") or {}
                         location = location_obj.get("displayName")
@@ -151,7 +154,7 @@ def create_calender_router() -> APIRouter:
                         ):
                             join_url = location
 
-                        # Only proceed if we have a Join URL that matches our supported platforms
+                        # NOTE: Only proceed if we have a Join URL that matches our supported platforms
                         if not join_url:
                             continue
 
@@ -241,6 +244,7 @@ def create_calender_router() -> APIRouter:
                         join_url=row["join_url"],
                         web_link=row["web_link"],
                         organizer=row["organizer"],
+                        is_cancelled=row["is_cancelled"],
                     )
                 )
 

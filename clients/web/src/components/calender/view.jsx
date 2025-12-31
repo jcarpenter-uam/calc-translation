@@ -14,7 +14,15 @@ import {
 
 import { SiGooglemeet } from "react-icons/si";
 
-export function CalendarView({ events, loading, onSync, error }) {
+export function CalendarView({
+  events,
+  loading,
+  onSync,
+  error,
+  startDate,
+  endDate,
+  onDateChange,
+}) {
   const formatDate = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleString([], {
@@ -24,6 +32,20 @@ export function CalendarView({ events, loading, onSync, error }) {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const formatDateForInput = (date) => {
+    if (!date) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const parseInputDate = (dateString) => {
+    if (!dateString) return null;
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day);
   };
 
   const getPlatformConfig = (location) => {
@@ -70,7 +92,7 @@ export function CalendarView({ events, loading, onSync, error }) {
 
   return (
     <div className="w-full max-w-4xl mx-auto mt-8 space-y-6 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 bg-white/50 dark:bg-zinc-900/50">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <BiCalendar className="h-5 w-5 text-blue-600 dark:text-blue-500" />
@@ -82,14 +104,45 @@ export function CalendarView({ events, loading, onSync, error }) {
             View and join your scheduled online meetings
           </p>
         </div>
-        <button
-          onClick={onSync}
-          disabled={loading}
-          className="cursor-pointer flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-500 disabled:opacity-50 transition-all shadow-sm"
-        >
-          <BiRefresh className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "Syncing..." : "Sync Calendar"}
-        </button>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <input
+              type="date"
+              value={formatDateForInput(startDate)}
+              onChange={(e) => {
+                const date = parseInputDate(e.target.value);
+                if (date) {
+                  date.setHours(0, 0, 0, 0);
+                  onDateChange((prev) => ({ ...prev, start: date }));
+                }
+              }}
+              className="px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+            />
+            <span className="text-zinc-400">-</span>
+            <input
+              type="date"
+              value={formatDateForInput(endDate)}
+              onChange={(e) => {
+                const date = parseInputDate(e.target.value);
+                if (date) {
+                  date.setHours(23, 59, 59, 999);
+                  onDateChange((prev) => ({ ...prev, end: date }));
+                }
+              }}
+              className="px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+            />
+          </div>
+
+          <button
+            onClick={onSync}
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-500 disabled:opacity-50 transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed"
+          >
+            <BiRefresh className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+            {loading ? "Syncing..." : "Sync"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -106,7 +159,7 @@ export function CalendarView({ events, loading, onSync, error }) {
             No upcoming events found
           </p>
           <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-            Click sync to refresh your calendar
+            Try adjusting the date filter or syncing
           </p>
         </div>
       )}
@@ -207,7 +260,7 @@ export function CalendarView({ events, loading, onSync, error }) {
                     href={event.web_link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 text-zinc-400 hover:text-blue-600 dark:text-zinc-500 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    className="p-2 text-zinc-400 hover:text-blue-600 dark:text-zinc-500 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
                     title="View in Outlook"
                   >
                     <BiLinkExternal className="w-5 h-5" />
@@ -225,7 +278,7 @@ export function CalendarView({ events, loading, onSync, error }) {
                       href={event.join_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900 cursor-pointer"
                     >
                       Join
                       <BiVideo className="w-4 h-4" />

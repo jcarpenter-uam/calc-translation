@@ -6,7 +6,11 @@ from typing import List, Optional
 import core.database as database
 import httpx
 from core.authentication import get_current_user_payload
-from core.database import SQL_GET_CALENDAR_EVENTS_BY_USER_ID, SQL_UPSERT_CALENDAR_EVENT
+from core.database import (
+    SQL_GET_CALENDAR_EVENTS_BY_USER_ID,
+    SQL_GET_CALENDAR_EVENTS_FILTERED,
+    SQL_UPSERT_CALENDAR_EVENT,
+)
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException
 from integrations.entra import get_valid_microsoft_token
@@ -216,9 +220,15 @@ def create_calender_router() -> APIRouter:
 
     # NOTE: Requires User Auth
     @router.get("/", response_model=List[CalendarEvent])
-    async def get_calendar(payload: dict = Depends(get_current_user_payload)):
+    async def get_calendar(
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        payload: dict = Depends(get_current_user_payload),
+    ):
         """
-        Get the calender from our database
+        Get the calendar from our database.
+        Optional 'start' and 'end' query params filter the results.
+        If no params are sent, returns all events.
         """
         with log_step(LOG_STEP):
             user_id = payload.get("sub")
@@ -229,7 +239,9 @@ def create_calender_router() -> APIRouter:
                 raise HTTPException(status_code=503, detail="Database not initialized.")
 
             async with database.DB_POOL.acquire() as conn:
-                rows = await conn.fetch(SQL_GET_CALENDAR_EVENTS_BY_USER_ID, user_id)
+                rows = await conn.fetch(
+                    SQL_GET_CALENDAR_EVENTS_FILTERED, user_id, start, end
+                )
 
             events = []
             for row in rows:

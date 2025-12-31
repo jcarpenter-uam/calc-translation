@@ -12,18 +12,35 @@ import { CalendarView } from "../components/calender/view.jsx";
 
 import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
 
+const getCurrentWorkWeek = () => {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+
+  const start = new Date(now);
+  start.setDate(diff);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 4);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+};
+
 export default function LandingPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [integration, setIntegration] = useState("zoom");
   const [error, setError] = useState(null);
+  const [dateRange, setDateRange] = useState(getCurrentWorkWeek());
   const navigate = useNavigate();
   const {
     events,
     loading: calendarLoading,
     error: calendarError,
     syncCalendar,
-  } = useCalendar();
+  } = useCalendar(dateRange.start, dateRange.end);
 
   useEffect(() => {
     const checkPendingZoomLink = async () => {
@@ -202,6 +219,9 @@ export default function LandingPage() {
         loading={calendarLoading}
         error={calendarError}
         onSync={syncCalendar}
+        startDate={dateRange.start}
+        endDate={dateRange.end}
+        onDateChange={setDateRange}
       />
     </div>
   );

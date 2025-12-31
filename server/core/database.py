@@ -326,3 +326,11 @@ WHERE user_id = $1
 AND start_time >= CURRENT_DATE - INTERVAL '1 day'
 ORDER BY start_time ASC;
 """
+
+SQL_GET_CALENDAR_EVENTS_FILTERED = """
+SELECT * FROM CALENDAR_EVENTS 
+WHERE user_id = $1
+AND ($2::timestamptz IS NULL OR start_time >= $2)
+AND ($3::timestamptz IS NULL OR start_time <= $3)
+ORDER BY start_time ASC;
+"""

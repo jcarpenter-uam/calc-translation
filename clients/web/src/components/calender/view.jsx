@@ -4,12 +4,12 @@ import {
   BiLinkExternal,
   BiVideo,
   BiXCircle,
-  BiPlayCircle,
-  BiStopCircle,
   BiMap,
   BiUser,
   BiLogoZoom,
   BiLogoMicrosoftTeams,
+  BiTime,
+  BiCheckCircle,
 } from "react-icons/bi";
 
 import { SiGooglemeet } from "react-icons/si";
@@ -23,12 +23,9 @@ export function CalendarView({
   endDate,
   onDateChange,
 }) {
-  const formatDate = (dateString) => {
+  const formatTime = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleString([], {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -46,6 +43,28 @@ export function CalendarView({
     if (!dateString) return null;
     const [year, month, day] = dateString.split("-").map(Number);
     return new Date(year, month - 1, day);
+  };
+
+  const groupEventsByDate = (eventsList) => {
+    const groups = [];
+    let lastDateKey = null;
+
+    eventsList.forEach((event) => {
+      const date = new Date(event.start_time);
+      const dateKey = date.toLocaleDateString([], {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+
+      if (dateKey !== lastDateKey) {
+        groups.push({ date: dateKey, events: [] });
+        lastDateKey = dateKey;
+      }
+      groups[groups.length - 1].events.push(event);
+    });
+
+    return groups;
   };
 
   const getPlatformConfig = (location) => {
@@ -89,6 +108,8 @@ export function CalendarView({
       comingSoon: false,
     };
   };
+
+  const groupedEvents = groupEventsByDate(events);
 
   return (
     <div className="w-full max-w-4xl mx-auto mt-8 space-y-6 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 bg-white/50 dark:bg-zinc-900/50">
@@ -164,130 +185,143 @@ export function CalendarView({
         </div>
       )}
 
-      <div className="grid gap-4">
-        {events.map((event) => {
-          const isCancelled = event.is_cancelled;
-          const hasJoinUrl = !!event.join_url;
-          const platformConfig = getPlatformConfig(event.location);
-
-          return (
-            <div
-              key={event.id}
-              className={`group relative flex flex-col sm:flex-row sm:items-start justify-between p-5 rounded-xl border transition-all duration-200 ${
-                isCancelled
-                  ? "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-800 opacity-75"
-                  : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-500 shadow-sm hover:shadow-md"
-              }`}
-            >
-              <div className="flex-1 min-w-0 pr-4">
-                <div className="flex items-center gap-2 mb-3">
-                  {isCancelled ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800">
-                      Cancelled
-                    </span>
-                  ) : hasJoinUrl ? (
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide border ${platformConfig.className}`}
-                    >
-                      {platformConfig.icon}
-                      <span className="truncate max-w-[150px]">
-                        {platformConfig.label}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                      Scheduled
-                    </span>
-                  )}
-
-                  {event.location && !hasJoinUrl && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
-                      <BiMap className="w-3 h-3" /> {event.location}
-                    </span>
-                  )}
-                </div>
-
-                <h3
-                  className={`text-base font-semibold mb-2 ${
-                    isCancelled
-                      ? "text-zinc-500 line-through"
-                      : "text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors"
-                  }`}
-                >
-                  {event.subject || "No Subject"}
-                </h3>
-
-                <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-sm text-zinc-500 dark:text-zinc-400">
-                  <div className="flex items-center gap-1.5">
-                    <BiPlayCircle className="w-4 h-4 text-zinc-400" />
-                    <span
-                      className={
-                        isCancelled ? "line-through" : "font-mono text-xs"
-                      }
-                    >
-                      {formatDate(event.start_time)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <BiStopCircle className="w-4 h-4 text-zinc-400" />
-                    <span
-                      className={
-                        isCancelled ? "line-through" : "font-mono text-xs"
-                      }
-                    >
-                      {formatDate(event.end_time)}
-                    </span>
-                  </div>
-
-                  {event.organizer && (
-                    <div
-                      className="flex items-center gap-1.5"
-                      title={event.organizer}
-                    >
-                      <BiUser className="w-4 h-4 text-zinc-400" />
-                      <span className="truncate max-w-[150px] text-xs">
-                        {event.organizer}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 sm:mt-0 flex items-center gap-2 sm:self-center">
-                {event.web_link && (
-                  <a
-                    href={event.web_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 text-zinc-400 hover:text-blue-600 dark:text-zinc-500 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
-                    title="View in Outlook"
-                  >
-                    <BiLinkExternal className="w-5 h-5" />
-                  </a>
-                )}
-
-                {hasJoinUrl &&
-                  !isCancelled &&
-                  (platformConfig.comingSoon ? (
-                    <span className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg cursor-not-allowed select-none opacity-80">
-                      Coming Soon
-                    </span>
-                  ) : (
-                    <a
-                      href={event.join_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900 cursor-pointer"
-                    >
-                      Join
-                      <BiVideo className="w-4 h-4" />
-                    </a>
-                  ))}
-              </div>
+      <div className="space-y-8">
+        {groupedEvents.map((group, groupIndex) => (
+          <div key={group.date || groupIndex}>
+            <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm py-2 px-1 mb-3 border-b border-zinc-100 dark:border-zinc-800">
+              <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                {group.date}
+              </h3>
             </div>
-          );
-        })}
+
+            <div className="grid gap-4">
+              {group.events.map((event) => {
+                const isCancelled = event.is_cancelled;
+                const endTime = event.end_time
+                  ? new Date(event.end_time)
+                  : null;
+                const isEnded = endTime && endTime < new Date();
+                const hasJoinUrl = !!event.join_url;
+                const platformConfig = getPlatformConfig(event.location);
+
+                return (
+                  <div
+                    key={event.id}
+                    className={`group relative flex flex-col sm:flex-row sm:items-start justify-between p-5 rounded-xl border transition-all duration-200 ${
+                      isCancelled
+                        ? "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-800 opacity-75"
+                        : isEnded
+                          ? "bg-zinc-50/50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-800 opacity-60" // Dim ended events
+                          : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-500 shadow-sm hover:shadow-md"
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0 pr-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        {isCancelled ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800">
+                            Cancelled
+                          </span>
+                        ) : isEnded ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                            <BiCheckCircle className="w-3 h-3" /> Ended
+                          </span>
+                        ) : hasJoinUrl ? (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide border ${platformConfig.className}`}
+                          >
+                            {platformConfig.icon}
+                            <span className="truncate max-w-[150px]">
+                              {platformConfig.label}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                            Scheduled
+                          </span>
+                        )}
+
+                        {event.location && !hasJoinUrl && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+                            <BiMap className="w-3 h-3" /> {event.location}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3
+                        className={`text-base font-semibold mb-2 ${
+                          isCancelled || isEnded
+                            ? "text-zinc-500"
+                            : "text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors"
+                        } ${isCancelled ? "line-through" : ""}`}
+                      >
+                        {event.subject || "No Subject"}
+                      </h3>
+
+                      <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-sm text-zinc-500 dark:text-zinc-400">
+                        <div className="flex items-center gap-1.5">
+                          <BiTime className="w-4 h-4 text-zinc-400" />
+                          <span
+                            className={
+                              isCancelled ? "line-through" : "font-mono text-xs"
+                            }
+                          >
+                            {formatTime(event.start_time)} -{" "}
+                            {formatTime(event.end_time)}
+                          </span>
+                        </div>
+
+                        {event.organizer && (
+                          <div
+                            className="flex items-center gap-1.5"
+                            title={event.organizer}
+                          >
+                            <BiUser className="w-4 h-4 text-zinc-400" />
+                            <span className="truncate max-w-[150px] text-xs">
+                              {event.organizer}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 sm:mt-0 flex items-center gap-2 sm:self-center">
+                      {event.web_link && (
+                        <a
+                          href={event.web_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-zinc-400 hover:text-blue-600 dark:text-zinc-500 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                          title="View in Outlook"
+                        >
+                          <BiLinkExternal className="w-5 h-5" />
+                        </a>
+                      )}
+
+                      {hasJoinUrl &&
+                        !isCancelled &&
+                        !isEnded &&
+                        (platformConfig.comingSoon ? (
+                          <span className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg cursor-not-allowed select-none opacity-80">
+                            Coming Soon
+                          </span>
+                        ) : (
+                          <a
+                            href={event.join_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900 cursor-pointer"
+                          >
+                            Join
+                            <BiVideo className="w-4 h-4" />
+                          </a>
+                        ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

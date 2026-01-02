@@ -90,10 +90,12 @@ async def init_db():
                             platform TEXT,
                             readable_id TEXT,
                             meeting_time TIMESTAMPTZ,
-                            join_url TEXT,
-                            UNIQUE(platform, readable_id)
+                            join_url TEXT
                         )
                         """
+                    )
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_meetings_readable ON MEETINGS(platform, readable_id);"
                     )
 
                     # Transcripts
@@ -259,7 +261,10 @@ ON CONFLICT(id) DO NOTHING;
 SQL_GET_MEETING_BY_ID = "SELECT * FROM MEETINGS WHERE id = $1;"
 
 SQL_GET_MEETING_BY_READABLE_ID = """
-SELECT id FROM MEETINGS WHERE platform = $1 AND readable_id = $2;
+SELECT id FROM MEETINGS 
+WHERE platform = $1 AND readable_id = $2
+ORDER BY meeting_time DESC
+LIMIT 1;
 """
 
 SQL_GET_MEETING_BY_JOIN_URL = """
@@ -271,7 +276,9 @@ WHERE m.join_url LIKE '%' || $1;
 SQL_GET_MEETING_AUTH_BY_READABLE_ID = """
 SELECT m.id, m.passcode
 FROM MEETINGS m
-WHERE m.platform = $1 AND m.readable_id = $2;
+WHERE m.platform = $1 AND m.readable_id = $2
+ORDER BY meeting_time DESC
+LIMIT 1;
 """
 
 SQL_GET_MEETINGS_BY_USER_ID = """

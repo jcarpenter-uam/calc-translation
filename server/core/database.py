@@ -247,7 +247,9 @@ LIMIT 1;
 SQL_GET_MEETING_BY_JOIN_URL = """
 SELECT m.id
 FROM MEETINGS m
-WHERE m.join_url LIKE '%' || $1;
+WHERE m.join_url LIKE '%' || $1
+ORDER BY meeting_time DESC
+LIMIT 1;
 """
 
 SQL_GET_MEETING_AUTH_BY_READABLE_ID = """

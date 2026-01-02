@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional
 
+from core import database
 from core.logging_setup import (
     add_session_log_handler,
     log_step,
@@ -221,6 +222,33 @@ async def handle_receiver_session(
             return
 
         session_log_handler = add_session_log_handler(session_id, integration)
+
+        if integration == "zoom":
+            try:
+                async with database.DB_POOL.acquire() as conn:
+                    row = await conn.fetchrow(
+                        "SELECT readable_id FROM MEETINGS WHERE id = $1", session_id
+                    )
+                    if row and row["readable_id"]:
+                        readable_id = row["readable_id"]
+
+                        rows = await conn.fetch(
+                            "SELECT id FROM MEETINGS WHERE readable_id = $1 AND id != $2 AND started_at IS NULL",
+                            readable_id,
+                            session_id,
+                        )
+
+                        for r in rows:
+                            old_uuid = r["id"]
+                            if old_uuid in viewer_manager.sessions:
+                                logger.info(
+                                    f"Found waiting room session {old_uuid} matching readable_id {readable_id}. Migrating..."
+                                )
+                                await viewer_manager.migrate_session(
+                                    old_uuid, session_id
+                                )
+            except Exception as e:
+                logger.error(f"Failed to check/migrate waiting room sessions: {e}")
 
         async def add_language_stream(language_code: str):
             if language_code in active_handlers:

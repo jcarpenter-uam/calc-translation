@@ -85,6 +85,42 @@ class ConnectionManager:
                     languages.add(lang)
         return languages
 
+    async def migrate_session(self, old_session_id: str, new_session_id: str):
+        """
+        Moves all viewer connections from an old session ID to a new one.
+        Useful when a Waiting Room (scheduled UUID) transitions to a Live Meeting (new UUID).
+        """
+        session_token = session_id_var.set(new_session_id)
+        try:
+            if old_session_id in self.sessions:
+                old_connections = self.sessions.pop(old_session_id)
+
+                if new_session_id not in self.sessions:
+                    self.sessions[new_session_id] = []
+
+                self.sessions[new_session_id].extend(old_connections)
+
+                with log_step("CONN-MANAGER"):
+                    logger.info(
+                        f"Migrated {len(old_connections)} viewers from Waiting Room {old_session_id} to Live Session {new_session_id}"
+                    )
+
+                for ws in old_connections:
+                    try:
+                        await ws.send_json({"type": "status", "status": "active"})
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to send status update during migration: {e}"
+                        )
+
+        except Exception as e:
+            logger.error(
+                f"Error migrating session {old_session_id} to {new_session_id}: {e}",
+                exc_info=True,
+            )
+        finally:
+            session_id_var.reset(session_token)
+
     async def _cleanup_language_stream(self, session_id: str, language_code: str):
         """
         Waits for a grace period, then checks if viewers are still 0.

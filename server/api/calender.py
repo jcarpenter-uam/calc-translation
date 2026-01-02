@@ -163,22 +163,36 @@ def create_calender_router() -> APIRouter:
                             continue
 
                         is_zoom = "zoom.us" in join_url
-                        is_google = "meet.google.com" in join_url
-                        is_teams = "teams.microsoft.com" in join_url
 
-                        if not (is_zoom or is_google or is_teams):
+                        if not (is_zoom):
                             continue
 
                         if location and (
                             location.startswith("http://")
                             or location.startswith("https://")
                         ):
-                            if "meet.google.com" in location:
-                                location = "Google Meet Meeting"
-                            elif "zoom.us" in location:
+                            if "zoom.us" in location:
                                 location = "Zoom Meeting"
-                            elif "teams.microsoft.com" in location:
-                                location = "Microsoft Teams Meeting"
+
+                        # TODO: For when other platforms are integrated
+                        #
+                        # is_zoom = "zoom.us" in join_url
+                        # is_google = "meet.google.com" in join_url
+                        # is_teams = "teams.microsoft.com" in join_url
+                        #
+                        # if not (is_zoom or is_google or is_teams):
+                        #     continue
+                        #
+                        # if location and (
+                        #     location.startswith("http://")
+                        #     or location.startswith("https://")
+                        # ):
+                        #     if "meet.google.com" in location:
+                        #         location = "Google Meet Meeting"
+                        #     elif "zoom.us" in location:
+                        #         location = "Zoom Meeting"
+                        #     elif "teams.microsoft.com" in location:
+                        #         location = "Microsoft Teams Meeting"
 
                         full_event_json = json.dumps(event)
 

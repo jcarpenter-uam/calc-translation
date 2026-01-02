@@ -10,7 +10,6 @@ from core.config import settings
 from core.logging_setup import log_step, session_id_var
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
-from integrations.test import TestAuthRequest, authenticate_test_session
 from integrations.zoom import (
     ZoomAuthRequest,
     ZoomAuthResponse,
@@ -20,6 +19,7 @@ from integrations.zoom import (
 from pydantic import BaseModel
 
 from integrations import entra
+from integrations.test import TestAuthRequest, authenticate_test_session
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,9 @@ def create_auth_router() -> APIRouter:
                         detail="Either 'join_url' or 'meetingid' must be provided.",
                     )
 
-                session_id = await authenticate_zoom_session(request=request)
+                session_id = await authenticate_zoom_session(
+                    request=request, user_id=user_id
+                )
 
                 token = generate_jwt_token(user_id=user_id, session_id=session_id)
                 logger.info(

@@ -1,5 +1,6 @@
 import base64
 import logging
+import re
 import time
 import urllib.parse
 from datetime import datetime, timezone
@@ -373,10 +374,13 @@ async def get_meeting_data(
                 )
 
 
-async def authenticate_zoom_session(request: ZoomAuthRequest) -> str:
+async def authenticate_zoom_session(
+    request: ZoomAuthRequest, user_id: str = None
+) -> str:
     """
     Authenticates a session against the database using either
-    Join URL or Meeting ID/Passcode. This is NOT scoped to a user.
+    Join URL or Meeting ID/Passcode.
+    If not found in DB, attempts to fetch from Zoom API using the user's credentials.
 
     Returns:
         str: The meeting UUID if authentication is successful.
@@ -391,8 +395,30 @@ async def authenticate_zoom_session(request: ZoomAuthRequest) -> str:
 
                 if not row:
                     logger.warning(
-                        f"Auth failed: Meeting not found for join_url: {request.join_url}"
+                        f"Auth failed in DB for join_url. Attempting Zoom API fallback..."
                     )
+
+                    match = re.search(r"/j/(\d+)", request.join_url)
+
+                    if match and user_id:
+                        readable_id = match.group(1)
+                        try:
+                            logger.info(
+                                f"Detected Readable ID {readable_id}. Fetching from Zoom..."
+                            )
+                            meeting_uuid = await get_meeting_data(
+                                meeting_identifier=readable_id,
+                                user_id=user_id,
+                                is_waiting_room=True,
+                            )
+                            return meeting_uuid
+                        except Exception as e:
+                            logger.error(f"Zoom API fallback failed: {e}")
+                    else:
+                        logger.warning(
+                            "Could not parse ID from URL or no user_id provided for fallback."
+                        )
+
                     raise HTTPException(
                         status_code=404,
                         detail="Meeting not found for the provided Join URL.",
@@ -411,6 +437,23 @@ async def authenticate_zoom_session(request: ZoomAuthRequest) -> str:
                 )
 
                 if not row:
+                    logger.info(
+                        f"Meeting ID {request.meetingid} not in DB. Attempting Zoom API fallback..."
+                    )
+                    if user_id:
+                        try:
+                            meeting_uuid = await get_meeting_data(
+                                meeting_identifier=request.meetingid,
+                                user_id=user_id,
+                                is_waiting_room=True,
+                            )
+                            return meeting_uuid
+                        except Exception as e:
+                            logger.warning(
+                                f"Zoom API fallback failed for Meeting ID: {e}"
+                            )
+                            pass
+
                     logger.warning(
                         f"Auth failed: Meeting ID not found: {request.meetingid}"
                     )

@@ -64,14 +64,12 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
             )
             return
 
-        active_user_id = token_user_id
-
         await handle_viewer_session(
             websocket=websocket,
             session_id=session_id,
             viewer_manager=viewer_manager,
             language_code=language_code,
-            user_id=active_user_id,
+            user_id=cookie_user_id,
         )
 
     return router

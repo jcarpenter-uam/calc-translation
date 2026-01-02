@@ -1,6 +1,7 @@
 import logging
 
-from core.database import DB_POOL, SQL_GET_MEETING_BY_ID
+from core import database
+from core.database import SQL_GET_MEETING_BY_ID
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket, WebSocketDisconnect, status
 from integrations.zoom import get_meeting_data
@@ -33,7 +34,7 @@ async def handle_viewer_session(
                 )
 
                 meeting_exists = False
-                async with DB_POOL.acquire() as conn:
+                async with database.DB_POOL.acquire() as conn:
                     row = await conn.fetchrow(SQL_GET_MEETING_BY_ID, session_id)
                     if row:
                         meeting_exists = True

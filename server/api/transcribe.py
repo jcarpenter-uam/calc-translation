@@ -4,9 +4,10 @@ import logging
 from core.logging_setup import log_step
 from core.security import validate_server_token
 from fastapi import APIRouter, Depends, HTTPException, Path, WebSocket
-from integrations.test import ensure_test_meeting
 from integrations.zoom import get_meeting_data
 from services.receiver import handle_receiver_session
+
+from integrations.test import ensure_test_meeting
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +48,16 @@ def create_transcribe_router(viewer_manager):
                             f"Proactively fetching Zoom data using zoom_host_id: {zoom_host_id}"
                         )
                         await get_meeting_data(
-                            meeting_uuid=session_id, zoom_host_id=zoom_host_id
+                            meeting_identifier=session_id, zoom_host_id=zoom_host_id
                         )
 
                     elif user_id:
                         logger.info(
                             f"Proactively fetching Zoom data using user_id: {user_id}"
                         )
-                        await get_meeting_data(meeting_uuid=session_id, user_id=user_id)
+                        await get_meeting_data(
+                            meeting_identifier=session_id, user_id=user_id
+                        )
 
                     else:
                         logger.warning(

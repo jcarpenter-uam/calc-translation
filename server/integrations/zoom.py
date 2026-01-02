@@ -1,9 +1,3 @@
-# BUG: There is an error that is thrown when attempting to refresh zoom tokens
-# Once replicated it needs to be fixed
-
-# NOTE: Now when a user request zoom auth we should first check the DB for an existing entry
-# to avoid quering the zoom API again.
-
 import base64
 import logging
 import time
@@ -251,19 +245,28 @@ async def get_valid_access_token(user_id: str) -> tuple[str, int]:
 
 
 async def get_meeting_data(
-    meeting_uuid: str, user_id: str = None, zoom_host_id: str = None
+    meeting_identifier: str,
+    user_id: str = None,
+    zoom_host_id: str = None,
+    is_waiting_room: bool = False,
 ) -> str:
     """
-    Queries the Zoom API for meeting data using the meeting UUID.
-    If the fetch fails for ANY reason (404, 500, network, auth), it falls back
-    to creating a placeholder meeting record so the transcription session can proceed.
+    Queries the Zoom API for meeting data using the meeting UUID or Readable ID.
+    If is_waiting_room is True, the 'started_at' field in the DB will be set to NULL.
+
+    Args:
+        meeting_identifier (str): The meeting UUID or Readable ID.
+        user_id (str, optional): The internal user ID to use for auth lookup.
+        zoom_host_id (str, optional): The Zoom host ID to use for auth lookup.
+        is_waiting_room (bool): If True, indicates this is a pre-fetch for early viewers.
+
+    Returns:
+        str: The canonical meeting UUID.
     """
-    first_pass = urllib.parse.quote(meeting_uuid, safe="")
-    encoded_uuid = urllib.parse.quote(first_pass, safe="")
+    encoded_id = urllib.parse.quote(meeting_identifier, safe="")
 
     integration_id = None
-
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(timezone.utc) if not is_waiting_room else None
 
     with log_step(LOG_STEP):
         try:
@@ -276,11 +279,12 @@ async def get_meeting_data(
                 logger.debug(f"Getting meeting data using user_id: {user_id}")
                 access_token, integration_id = await get_valid_access_token(user_id)
             else:
-                raise Exception(
-                    "Must provide user_id or zoom_host_id to fetch Zoom data."
-                )
+                if not user_id and not zoom_host_id:
+                    raise Exception(
+                        "Must provide user_id or zoom_host_id to fetch Zoom data."
+                    )
 
-            meeting_url = f"https://api.zoom.us/v2/meetings/{encoded_uuid}"
+            meeting_url = f"https://api.zoom.us/v2/meetings/{encoded_id}"
             headers = {"Authorization": f"Bearer {access_token}"}
 
             logger.info(
@@ -292,18 +296,18 @@ async def get_meeting_data(
 
             if response.status_code != 200:
                 logger.warning(
-                    f"Zoom API returned status {response.status_code} for {encoded_uuid}. Triggering fallback."
+                    f"Zoom API returned status {response.status_code} for {encoded_id}. Triggering fallback."
                 )
                 raise Exception(f"Zoom API returned status {response.status_code}")
 
             meeting_data = response.json()
 
-            real_uuid = meeting_data.get("uuid", meeting_uuid)
+            real_uuid = meeting_data.get("uuid", meeting_identifier)
             meeting_id = meeting_data.get("id", "")
-            start_time_str = meeting_data.get("created_at")
             join_url = meeting_data.get("join_url")
             passcode = meeting_data.get("pstn_password", "")
 
+            start_time_str = meeting_data.get("created_at")
             parsed_start_time = None
             if start_time_str:
                 parsed_start_time = datetime.fromisoformat(start_time_str)
@@ -311,7 +315,14 @@ async def get_meeting_data(
             async with database.DB_POOL.acquire() as conn:
                 async with conn.transaction():
                     await conn.execute(
-                        SQL_INSERT_MEETING,
+                        """
+                        INSERT INTO MEETINGS (id, integration_id, passcode, platform, readable_id, meeting_time, join_url, started_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        ON CONFLICT(id) DO UPDATE SET
+                            readable_id = excluded.readable_id,
+                            join_url = excluded.join_url,
+                            started_at = COALESCE(MEETINGS.started_at, excluded.started_at) 
+                        """,
                         real_uuid,
                         integration_id,
                         passcode,
@@ -323,16 +334,16 @@ async def get_meeting_data(
                     )
 
             logger.info(
-                f"Successfully fetched and saved/updated meeting {real_uuid} from Zoom API."
+                f"Successfully fetched and saved meeting {real_uuid} (Waiting Room: {is_waiting_room})."
             )
             return real_uuid
 
         except Exception as e:
             logger.warning(
-                f"Failed to fetch Zoom data for {encoded_uuid}: {e}. Creating fallback meeting record."
+                f"Failed to fetch Zoom data for {encoded_id}: {e}. Creating fallback meeting record."
             )
 
-            real_uuid = meeting_uuid
+            real_uuid = meeting_identifier
 
             try:
                 async with database.DB_POOL.acquire() as conn:

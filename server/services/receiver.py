@@ -22,6 +22,7 @@ from core.logging_setup import (
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .backfill import BackfillService
+from .connection_manager import ConnectionManager
 from .soniox import (
     SonioxConnectionError,
     SonioxError,
@@ -328,7 +329,18 @@ async def handle_receiver_session(
             session_id, remove_language_stream
         )
 
-        await add_language_stream("en")
+        waiting_languages = viewer_manager.get_waiting_languages(session_id)
+
+        languages_to_start = {"en"}
+        languages_to_start.update(waiting_languages)
+
+        with log_step("SESSION"):
+            logger.info(
+                f"Starting session '{session_id}' with languages: {languages_to_start} (Waiting viewers: {len(waiting_languages) > 0})"
+            )
+
+        for lang in languages_to_start:
+            await add_language_stream(lang)
 
         try:
             while True:

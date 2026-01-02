@@ -8,7 +8,7 @@ import base64
 import logging
 import time
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 from core import database
@@ -263,6 +263,8 @@ async def get_meeting_data(
 
     integration_id = None
 
+    started_at = datetime.now(timezone.utc)
+
     with log_step(LOG_STEP):
         try:
             if zoom_host_id:
@@ -317,6 +319,7 @@ async def get_meeting_data(
                         str(meeting_id),
                         parsed_start_time,
                         join_url,
+                        started_at,
                     )
 
             logger.info(
@@ -343,6 +346,7 @@ async def get_meeting_data(
                             real_uuid,
                             datetime.now(),
                             None,
+                            started_at,
                         )
 
                 logger.info(f"Created fallback meeting record for {real_uuid}")

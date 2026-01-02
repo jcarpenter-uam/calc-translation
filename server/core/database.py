@@ -90,12 +90,16 @@ async def init_db():
                             platform TEXT,
                             readable_id TEXT,
                             meeting_time TIMESTAMPTZ,
-                            join_url TEXT
+                            join_url TEXT,
+                            started_at TIMESTAMPTZ
                         )
                         """
                     )
                     await conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_meetings_readable ON MEETINGS(platform, readable_id);"
+                    )
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_meetings_started_at ON MEETINGS(started_at);"
                     )
 
                     # Transcripts
@@ -253,8 +257,8 @@ SQL_DELETE_INTEGRATION = (
 # --- MEETINGS ---
 
 SQL_INSERT_MEETING = """
-INSERT INTO MEETINGS (id, integration_id, passcode, platform, readable_id, meeting_time, join_url)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO MEETINGS (id, integration_id, passcode, platform, readable_id, meeting_time, join_url, started_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT(id) DO NOTHING;
 """
 
@@ -263,21 +267,23 @@ SQL_GET_MEETING_BY_ID = "SELECT * FROM MEETINGS WHERE id = $1;"
 SQL_GET_MEETING_BY_READABLE_ID = """
 SELECT id FROM MEETINGS 
 WHERE platform = $1 AND readable_id = $2
-ORDER BY meeting_time DESC
+ORDER BY started_at DESC
 LIMIT 1;
 """
 
 SQL_GET_MEETING_BY_JOIN_URL = """
 SELECT m.id
 FROM MEETINGS m
-WHERE m.join_url LIKE '%' || $1;
+WHERE m.join_url LIKE '%' || $1
+ORDER BY started_at DESC
+LIMIT 1;
 """
 
 SQL_GET_MEETING_AUTH_BY_READABLE_ID = """
 SELECT m.id, m.passcode
 FROM MEETINGS m
 WHERE m.platform = $1 AND m.readable_id = $2
-ORDER BY meeting_time DESC
+ORDER BY started_at DESC
 LIMIT 1;
 """
 

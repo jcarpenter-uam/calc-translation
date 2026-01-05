@@ -35,8 +35,10 @@ app.get("/metrics", (req, res) => {
     return {
       streamId: entry.streamId,
       meetingUuid: entry.metadata?.meeting_uuid || "unknown",
+      pid: entry.worker.pid,
       startTime: new Date(entry.startTime).toISOString(),
       durationSeconds: Math.floor((Date.now() - entry.startTime) / 1000),
+      usage: entry.metrics || { status: "waiting_for_report" },
     };
   });
 
@@ -44,7 +46,7 @@ app.get("/metrics", (req, res) => {
     status: "ok",
     system: {
       uptimeSeconds: Math.floor(uptime),
-      memoryUsageMB: {
+      managerMemoryMB: {
         rss: Math.round(memory.rss / 1024 / 1024),
       },
       loadAverage: os.loadavg(),
@@ -113,6 +115,15 @@ app.post("/zoom", (req, res) => {
         ],
       });
 
+      worker.on("message", (msg) => {
+        if (msg.type === "METRICS") {
+          const entry = activeWorkers.get(streamId);
+          if (entry) {
+            entry.metrics = msg.payload;
+          }
+        }
+      });
+
       worker.on("exit", (code) => {
         console.log(
           `Worker process for stream ${streamId} exited with code ${code}`,
@@ -131,6 +142,7 @@ app.post("/zoom", (req, res) => {
         streamId,
         startTime: Date.now(),
         metadata: payload,
+        metrics: null,
       });
 
       return res.status(200).send("OK");

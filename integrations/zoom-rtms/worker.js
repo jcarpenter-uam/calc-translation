@@ -10,6 +10,9 @@ const ZM_PRIVATE_KEY = process.env.ZM_PRIVATE_KEY;
 
 let currentClientEntry = null;
 let isStopping = false;
+let metricsInterval = null;
+let lastCpuUsage = process.cpuUsage();
+let lastCpuTime = Date.now();
 
 process.on("message", (msg) => {
   if (msg.type === "START") {
@@ -23,6 +26,39 @@ process.on("uncaughtException", (err) => {
   console.error(`[Worker ${process.pid}] CRITICAL CRASH:`, err);
   process.exit(1);
 });
+
+function startMetricsReporting() {
+  if (metricsInterval) clearInterval(metricsInterval);
+
+  metricsInterval = setInterval(() => {
+    const memory = process.memoryUsage();
+
+    const now = Date.now();
+    const currentCpu = process.cpuUsage();
+
+    const userDiff = currentCpu.user - lastCpuUsage.user;
+    const sysDiff = currentCpu.system - lastCpuUsage.system;
+    const timeDiff = (now - lastCpuTime) * 1000;
+
+    const cpuPercent =
+      timeDiff > 0 ? ((userDiff + sysDiff) / timeDiff) * 100 : 0;
+
+    lastCpuUsage = currentCpu;
+    lastCpuTime = now;
+
+    if (process.connected) {
+      process.send({
+        type: "METRICS",
+        payload: {
+          rss: Math.round(memory.rss / 1024 / 1024),
+          heap: Math.round(memory.heapUsed / 1024 / 1024),
+          ext: Math.round(memory.external / 1024 / 1024),
+          cpu: cpuPercent.toFixed(1),
+        },
+      });
+    }
+  }, 2000);
+}
 
 function generateAuthToken(host_id) {
   const payload = {
@@ -43,6 +79,8 @@ function handleRtmsStarted(payload, streamId) {
   const encoded_meeting_uuid = encodeURIComponent(meeting_uuid);
 
   console.log(`[Worker ${process.pid}] Starting Meeting ${meeting_uuid}`);
+
+  startMetricsReporting();
 
   const rtmsClient = new rtms.Client({
     log: { enable: false },
@@ -110,6 +148,8 @@ function handleRtmsStarted(payload, streamId) {
 
 function handleRtmsStopped(streamId) {
   isStopping = true;
+  if (metricsInterval) clearInterval(metricsInterval);
+
   if (!currentClientEntry) {
     process.exit(0);
     return;

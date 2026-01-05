@@ -2,16 +2,21 @@ import "dotenv/config";
 import rtms from "@zoom/rtms";
 import { WebSocket } from "ws";
 import jwt from "jsonwebtoken";
+import { parentPort } from "worker_threads";
 
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
 const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 const ZM_PRIVATE_KEY = process.env.ZM_PRIVATE_KEY;
 
+if (!parentPort) {
+  throw new Error("This file must be run as a Worker Thread.");
+}
+
 let currentClientEntry = null;
 let isStopping = false;
 
-process.on("message", (msg) => {
+parentPort.on("message", (msg) => {
   if (msg.type === "START") {
     handleRtmsStarted(msg.payload, msg.streamId);
   } else if (msg.type === "STOP") {
@@ -20,7 +25,7 @@ process.on("message", (msg) => {
 });
 
 process.on("uncaughtException", (err) => {
-  console.error("CRITICAL WORKER CRASH:", err);
+  console.error("CRITICAL WORKER THREAD CRASH:", err);
   process.exit(1);
 });
 
@@ -43,7 +48,7 @@ function handleRtmsStarted(payload, streamId) {
   const encoded_meeting_uuid = encodeURIComponent(meeting_uuid);
 
   console.log(
-    `Starting worker for Meeting ${meeting_uuid} (Stream: ${streamId})`,
+    `Starting worker thread for Meeting ${meeting_uuid} (Stream: ${streamId})`,
   );
 
   const rtmsClient = new rtms.Client({
@@ -158,6 +163,6 @@ function handleRtmsStopped(streamId) {
     console.error("Error closing WebSocket:", err);
   }
 
-  console.log(`Worker stopping for stream ${streamId}`);
+  console.log(`Worker thread stopping for stream ${streamId}`);
   process.exit(0);
 }

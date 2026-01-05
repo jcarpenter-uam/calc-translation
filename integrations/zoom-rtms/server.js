@@ -1,7 +1,7 @@
 import "dotenv/config";
 import crypto from "crypto";
 import express from "express";
-import { fork } from "child_process";
+import { Worker } from "worker_threads";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -93,14 +93,20 @@ app.post("/zoom", (req, res) => {
         return res.status(200).send("OK");
       }
 
-      const worker = fork(path.resolve(__dirname, "./worker.js"));
+      const worker = new Worker(path.resolve(__dirname, "./worker.js"));
 
       worker.on("exit", (code) => {
-        console.log(`Worker for stream ${streamId} exited with code ${code}`);
+        console.log(
+          `Worker thread for stream ${streamId} exited with code ${code}`,
+        );
         activeWorkers.delete(streamId);
       });
 
-      worker.send({
+      worker.on("error", (err) => {
+        console.error(`Worker thread error for stream ${streamId}:`, err);
+      });
+
+      worker.postMessage({
         type: "START",
         payload: payload,
         streamId: streamId,
@@ -113,12 +119,15 @@ app.post("/zoom", (req, res) => {
       console.log(`Handling meeting.rtms_stopped for stream: ${streamId}`);
       if (streamId && activeWorkers.has(streamId)) {
         const targetWorker = activeWorkers.get(streamId);
-        targetWorker.send({ type: "STOP", streamId: streamId });
+
+        targetWorker.postMessage({ type: "STOP", streamId: streamId });
 
         setTimeout(() => {
           if (activeWorkers.has(streamId)) {
-            console.log(`Force killing worker for stream ${streamId}`);
-            targetWorker.kill();
+            console.log(
+              `Force terminating worker thread for stream ${streamId}`,
+            );
+            targetWorker.terminate();
             activeWorkers.delete(streamId);
           }
         }, 10000);
@@ -131,5 +140,5 @@ app.post("/zoom", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Zoom RTMS Manager listening on port ${PORT}`);
+  console.log(`Zoom RTMS Manager (Threaded) listening on port ${PORT}`);
 });

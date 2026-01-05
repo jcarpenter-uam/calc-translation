@@ -2,21 +2,16 @@ import "dotenv/config";
 import rtms from "@zoom/rtms";
 import { WebSocket } from "ws";
 import jwt from "jsonwebtoken";
-import { parentPort } from "worker_threads";
 
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
 const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 const ZM_PRIVATE_KEY = process.env.ZM_PRIVATE_KEY;
 
-if (!parentPort) {
-  throw new Error("This file must be run as a Worker Thread.");
-}
-
 let currentClientEntry = null;
 let isStopping = false;
 
-parentPort.on("message", (msg) => {
+process.on("message", (msg) => {
   if (msg.type === "START") {
     handleRtmsStarted(msg.payload, msg.streamId);
   } else if (msg.type === "STOP") {
@@ -25,7 +20,7 @@ parentPort.on("message", (msg) => {
 });
 
 process.on("uncaughtException", (err) => {
-  console.error("CRITICAL WORKER THREAD CRASH:", err);
+  console.error(`[Worker ${process.pid}] CRITICAL CRASH:`, err);
   process.exit(1);
 });
 
@@ -47,9 +42,7 @@ function handleRtmsStarted(payload, streamId) {
   const host_id = payload?.operator_id;
   const encoded_meeting_uuid = encodeURIComponent(meeting_uuid);
 
-  console.log(
-    `Starting worker thread for Meeting ${meeting_uuid} (Stream: ${streamId})`,
-  );
+  console.log(`[Worker ${process.pid}] Starting Meeting ${meeting_uuid}`);
 
   const rtmsClient = new rtms.Client({
     log: { enable: false },
@@ -63,13 +56,10 @@ function handleRtmsStarted(payload, streamId) {
   };
 
   function connect(retries = 0) {
-    if (isStopping) {
-      console.log("Stream stopping, aborting WebSocket connect.");
-      return;
-    }
+    if (isStopping) return;
 
     console.log(
-      `Attempting WebSocket connection to ${BASE_SERVER_URL} (attempt ${retries + 1})...`,
+      `[Worker ${process.pid}] Connecting WS to ${BASE_SERVER_URL}...`,
     );
 
     const token = generateAuthToken(host_id);
@@ -77,38 +67,25 @@ function handleRtmsStarted(payload, streamId) {
 
     const wsClient = new WebSocket(
       `${ZOOM_BASE_SERVER_URL}/${encoded_meeting_uuid}`,
-      {
-        headers: authHeader,
-        handshakeTimeout: 10000,
-      },
+      { headers: authHeader, handshakeTimeout: 10000 },
     );
 
     currentClientEntry.wsClient = wsClient;
 
     wsClient.on("open", () => {
-      console.log(`WebSocket connection established for stream ${streamId}`);
+      console.log(`[Worker ${process.pid}] WS Connected`);
       currentClientEntry.hasLoggedWarning = false;
-      retries = 0;
     });
 
     wsClient.on("error", (error) => {
-      console.error(`WebSocket error for stream ${streamId}:`, error);
+      console.error(`[Worker ${process.pid}] WS Error:`, error.message);
     });
 
     wsClient.on("close", (code, reason) => {
       if (isStopping) return;
-
-      console.log(
-        `WebSocket closed for stream ${streamId}. Code: ${code}, Reason: ${reason}`,
-      );
-
-      const nextRetries = retries + 1;
+      console.log(`[Worker ${process.pid}] WS Closed. Retrying...`);
       const delay = Math.min(1000 * 2 ** retries, 30000);
-
-      console.log(
-        `Will retry WebSocket connection in ${delay / 1000} seconds...`,
-      );
-      setTimeout(() => connect(nextRetries), delay);
+      setTimeout(() => connect(retries + 1), delay);
     });
   }
 
@@ -124,45 +101,29 @@ function handleRtmsStarted(payload, streamId) {
         audio: data.toString("base64"),
       };
       wsClient.send(JSON.stringify(payload));
-    } else {
-      if (!currentClientEntry.hasLoggedWarning) {
-        console.warn(
-          `WebSocket not open for stream ${streamId}. Skipping audio packets.`,
-        );
-        currentClientEntry.hasLoggedWarning = true;
-      }
     }
   });
 
-  console.log(`Joining RTMS for meeting: ${meeting_uuid}`);
   rtmsClient.join(payload);
-
   connect();
 }
 
 function handleRtmsStopped(streamId) {
   isStopping = true;
-
   if (!currentClientEntry) {
     process.exit(0);
     return;
   }
 
   const { rtmsClient, wsClient } = currentClientEntry;
-  console.log(`Cleaning up clients for stream: ${streamId}`);
 
   try {
     rtmsClient.leave();
-  } catch (err) {
-    console.error("Error leaving RTMS:", err);
-  }
-
+  } catch (err) {}
   try {
     if (wsClient) wsClient.close();
-  } catch (err) {
-    console.error("Error closing WebSocket:", err);
-  }
+  } catch (err) {}
 
-  console.log(`Worker thread stopping for stream ${streamId}`);
+  console.log(`[Worker ${process.pid}] Stopping...`);
   process.exit(0);
 }

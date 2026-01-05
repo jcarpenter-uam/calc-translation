@@ -1,19 +1,16 @@
 import "dotenv/config";
 import crypto from "crypto";
 import express from "express";
-import { Worker } from "worker_threads";
+import { fork } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
+import os from "os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION:", err);
-  process.exit(1);
-});
-process.on("unhandledRejection", (reason) => {
-  console.error("UNHANDLED REJECTION:", reason);
   process.exit(1);
 });
 
@@ -28,13 +25,34 @@ if (!process.env.ZM_PRIVATE_KEY) {
 const activeWorkers = new Map();
 const app = express();
 
-app.use(
-  "/",
-  express.raw({
-    type: "application/json",
-    limit: "2mb",
-  }),
-);
+app.use("/", express.raw({ type: "application/json", limit: "2mb" }));
+
+app.get("/metrics", (req, res) => {
+  const uptime = process.uptime();
+  const memory = process.memoryUsage();
+
+  const streams = Array.from(activeWorkers.values()).map((entry) => {
+    return {
+      streamId: entry.streamId,
+      meetingUuid: entry.metadata?.meeting_uuid || "unknown",
+      startTime: new Date(entry.startTime).toISOString(),
+      durationSeconds: Math.floor((Date.now() - entry.startTime) / 1000),
+    };
+  });
+
+  res.json({
+    status: "ok",
+    system: {
+      uptimeSeconds: Math.floor(uptime),
+      memoryUsageMB: {
+        rss: Math.round(memory.rss / 1024 / 1024),
+      },
+      loadAverage: os.loadavg(),
+    },
+    activeStreamsCount: activeWorkers.size,
+    streams: streams,
+  });
+});
 
 app.post("/zoom", (req, res) => {
   if (!ZM_WEBHOOK_SECRET) {
@@ -53,8 +71,7 @@ app.post("/zoom", (req, res) => {
 
   let bodyPayload;
   try {
-    const rawBodyString = req.body.toString("utf8");
-    bodyPayload = JSON.parse(rawBodyString);
+    bodyPayload = JSON.parse(req.body.toString("utf8"));
   } catch (e) {
     console.error("Failed to parse request body JSON:", e);
     return res.status(400).send("Bad Request: Invalid JSON");
@@ -68,14 +85,9 @@ app.post("/zoom", (req, res) => {
     return res.status(401).send("Invalid signature");
   }
 
-  console.log(`Received valid webhook for event: ${event}`);
-
   switch (event) {
     case "endpoint.url_validation":
       console.log("Handling endpoint.url_validation");
-      if (!payload?.plainToken) {
-        return res.status(400).send("Bad Request: Missing plainToken");
-      }
       const hashForValidate = crypto
         .createHmac("sha256", ZM_WEBHOOK_SECRET)
         .update(payload.plainToken)
@@ -93,41 +105,46 @@ app.post("/zoom", (req, res) => {
         return res.status(200).send("OK");
       }
 
-      const worker = new Worker(path.resolve(__dirname, "./worker.js"));
+      const worker = fork(path.resolve(__dirname, "./worker.js"), [], {
+        execArgv: [
+          "--optimize_for_size",
+          "--max-old-space-size=512",
+          "--gc_interval=100",
+        ],
+      });
 
       worker.on("exit", (code) => {
         console.log(
-          `Worker thread for stream ${streamId} exited with code ${code}`,
+          `Worker process for stream ${streamId} exited with code ${code}`,
         );
         activeWorkers.delete(streamId);
       });
 
-      worker.on("error", (err) => {
-        console.error(`Worker thread error for stream ${streamId}:`, err);
-      });
-
-      worker.postMessage({
+      worker.send({
         type: "START",
         payload: payload,
         streamId: streamId,
       });
 
-      activeWorkers.set(streamId, worker);
+      activeWorkers.set(streamId, {
+        worker,
+        streamId,
+        startTime: Date.now(),
+        metadata: payload,
+      });
+
       return res.status(200).send("OK");
 
     case "meeting.rtms_stopped":
       console.log(`Handling meeting.rtms_stopped for stream: ${streamId}`);
       if (streamId && activeWorkers.has(streamId)) {
-        const targetWorker = activeWorkers.get(streamId);
-
-        targetWorker.postMessage({ type: "STOP", streamId: streamId });
+        const entry = activeWorkers.get(streamId);
+        entry.worker.send({ type: "STOP", streamId: streamId });
 
         setTimeout(() => {
           if (activeWorkers.has(streamId)) {
-            console.log(
-              `Force terminating worker thread for stream ${streamId}`,
-            );
-            targetWorker.terminate();
+            console.log(`Force killing worker process for stream ${streamId}`);
+            entry.worker.kill();
             activeWorkers.delete(streamId);
           }
         }, 10000);
@@ -140,5 +157,5 @@ app.post("/zoom", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Zoom RTMS Manager (Threaded) listening on port ${PORT}`);
+  console.log(`Zoom RTMS listening on port ${PORT}`);
 });

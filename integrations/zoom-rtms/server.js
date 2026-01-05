@@ -1,9 +1,6 @@
-// TODO: Stop creating node_ log files
-
 import "dotenv/config";
 import crypto from "crypto";
 import express from "express";
-import pino from "pino";
 import { fork } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -11,23 +8,12 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const transport = pino.transport({
-  targets: [
-    {
-      level: "info",
-      target: "pino-pretty",
-      options: { colorize: true },
-    },
-  ],
-});
-const logger = pino(transport);
-
 process.on("uncaughtException", (err) => {
-  logger.fatal(err, "UNCAUGHT EXCEPTION");
+  console.error("UNCAUGHT EXCEPTION:", err);
   process.exit(1);
 });
 process.on("unhandledRejection", (reason) => {
-  logger.fatal({ reason }, "UNHANDLED REJECTION");
+  console.error("UNHANDLED REJECTION:", reason);
   process.exit(1);
 });
 
@@ -35,12 +21,11 @@ const ZM_WEBHOOK_SECRET = process.env.ZM_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 8080;
 
 if (!process.env.ZM_PRIVATE_KEY) {
-  logger.fatal("FATAL: ZM_PRIVATE_KEY is not defined in .env file!");
+  console.error("FATAL: ZM_PRIVATE_KEY is not defined in .env file!");
   process.exit(1);
 }
 
 const activeWorkers = new Map();
-
 const app = express();
 
 app.use(
@@ -53,7 +38,7 @@ app.use(
 
 app.post("/zoom", (req, res) => {
   if (!ZM_WEBHOOK_SECRET) {
-    logger.error("FATAL: ZM_WEBHOOK_SECRET is not defined in .env file!");
+    console.error("FATAL: ZM_WEBHOOK_SECRET is not defined in .env file!");
     return res.status(500).send("Server configuration error");
   }
 
@@ -67,12 +52,11 @@ app.post("/zoom", (req, res) => {
   const signature = `v0=${hashForVerify}`;
 
   let bodyPayload;
-  let rawBodyString;
   try {
-    rawBodyString = req.body.toString("utf8");
+    const rawBodyString = req.body.toString("utf8");
     bodyPayload = JSON.parse(rawBodyString);
   } catch (e) {
-    logger.error(e, "Failed to parse request body JSON");
+    console.error("Failed to parse request body JSON:", e);
     return res.status(400).send("Bad Request: Invalid JSON");
   }
 
@@ -80,15 +64,15 @@ app.post("/zoom", (req, res) => {
   const streamId = payload?.rtms_stream_id;
 
   if (req.headers["x-zm-signature"] !== signature) {
-    logger.warn("Received webhook with invalid signature.");
+    console.warn("Received webhook with invalid signature.");
     return res.status(401).send("Invalid signature");
   }
 
-  logger.info(`Received valid webhook for event: ${event}`);
+  console.log(`Received valid webhook for event: ${event}`);
 
   switch (event) {
     case "endpoint.url_validation":
-      logger.info("Handling endpoint.url_validation");
+      console.log("Handling endpoint.url_validation");
       if (!payload?.plainToken) {
         return res.status(400).send("Bad Request: Missing plainToken");
       }
@@ -102,17 +86,17 @@ app.post("/zoom", (req, res) => {
       });
 
     case "meeting.rtms_started":
-      logger.info(`Handling meeting.rtms_started for stream: ${streamId}`);
+      console.log(`Handling meeting.rtms_started for stream: ${streamId}`);
 
       if (activeWorkers.has(streamId)) {
-        logger.warn(`Worker already exists for stream ${streamId}`);
+        console.warn(`Worker already exists for stream ${streamId}`);
         return res.status(200).send("OK");
       }
 
       const worker = fork(path.resolve(__dirname, "./worker.js"));
 
       worker.on("exit", (code) => {
-        logger.info(`Worker for stream ${streamId} exited with code ${code}`);
+        console.log(`Worker for stream ${streamId} exited with code ${code}`);
         activeWorkers.delete(streamId);
       });
 
@@ -126,13 +110,14 @@ app.post("/zoom", (req, res) => {
       return res.status(200).send("OK");
 
     case "meeting.rtms_stopped":
-      logger.info(`Handling meeting.rtms_stopped for stream: ${streamId}`);
+      console.log(`Handling meeting.rtms_stopped for stream: ${streamId}`);
       if (streamId && activeWorkers.has(streamId)) {
         const targetWorker = activeWorkers.get(streamId);
         targetWorker.send({ type: "STOP", streamId: streamId });
 
         setTimeout(() => {
           if (activeWorkers.has(streamId)) {
+            console.log(`Force killing worker for stream ${streamId}`);
             targetWorker.kill();
             activeWorkers.delete(streamId);
           }
@@ -146,5 +131,5 @@ app.post("/zoom", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  logger.info(`Zoom RTMS Manager listening on port ${PORT}`);
+  console.log(`Zoom RTMS Manager listening on port ${PORT}`);
 });

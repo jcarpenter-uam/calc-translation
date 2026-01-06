@@ -69,6 +69,7 @@ function attemptPromotion(meetingUuid, oldStreamId) {
   }
 }
 
+// TODO: Needs to be protected somehow
 app.get("/metrics", (req, res) => {
   const uptime = process.uptime();
   const memory = process.memoryUsage();

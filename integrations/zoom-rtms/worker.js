@@ -199,19 +199,33 @@ function handleRtmsStopped(streamId) {
     rtmsClient.leave();
   } catch (err) {}
 
-  if (isPrimary) {
-    try {
-      if (wsClient && wsClient.readyState === WebSocket.OPEN) {
-        console.log(`[Worker ${process.pid}] Sending session_end...`);
-        wsClient.send(JSON.stringify({ type: "session_end" }));
-      }
-    } catch (err) {}
+  if (isPrimary && wsClient && wsClient.readyState === WebSocket.OPEN) {
+    console.log(`[Worker ${process.pid}] Sending session_end...`);
 
-    try {
-      if (wsClient) wsClient.close();
-    } catch (err) {}
+    wsClient.send(JSON.stringify({ type: "session_end" }), (err) => {
+      if (err)
+        console.error(
+          `[Worker ${process.pid}] Failed to send session_end:`,
+          err,
+        );
+
+      console.log(
+        `[Worker ${process.pid}] session_end sent. Closing connection.`,
+      );
+      try {
+        wsClient.close();
+      } catch (e) {}
+
+      console.log(`[Worker ${process.pid}] Stopping...`);
+      setTimeout(() => process.exit(0), 100);
+    });
+  } else {
+    if (wsClient) {
+      try {
+        wsClient.close();
+      } catch (e) {}
+    }
+    console.log(`[Worker ${process.pid}] Stopping (No active WS session)...`);
+    process.exit(0);
   }
-
-  console.log(`[Worker ${process.pid}] Stopping...`);
-  process.exit(0);
 }

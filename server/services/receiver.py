@@ -5,6 +5,8 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional
 
+from core import database
+from core.database import SQL_UPDATE_MEETING_END, SQL_UPDATE_MEETING_START
 from core.logging_setup import (
     add_session_log_handler,
     log_step,
@@ -203,6 +205,8 @@ async def handle_receiver_session(
     session_start_time = datetime.now()
     backfill_service = BackfillService()
 
+    db_start_written = False
+
     try:
         viewer_manager.register_transcription_session(session_id, integration)
 
@@ -331,6 +335,15 @@ async def handle_receiver_session(
                             f"Received session_start. Resetting session zero point to {new_zero_point}."
                         )
 
+                        try:
+                            async with database.DB_POOL.acquire() as conn:
+                                await conn.execute(
+                                    SQL_UPDATE_MEETING_START, new_zero_point, session_id
+                                )
+                            db_start_written = True
+                        except Exception as e:
+                            logger.error(f"Failed to update meeting start time: {e}")
+
                         session_start_time = new_zero_point
 
                         async with handlers_lock:
@@ -346,11 +359,35 @@ async def handle_receiver_session(
 
                     elif msg_type == "session_end":
                         logger.info("Received session_end. Closing connection.")
+
+                        try:
+                            async with database.DB_POOL.acquire() as conn:
+                                await conn.execute(
+                                    SQL_UPDATE_MEETING_END, datetime.now(), session_id
+                                )
+                        except Exception as e:
+                            logger.error(f"Failed to update meeting end time: {e}")
+
                         break
 
                 audio_b64 = message.get("audio")
                 if not audio_b64:
                     continue
+
+                if not db_start_written:
+                    try:
+                        logger.info(
+                            f"Using fallback zero point (start message missing): {session_start_time}"
+                        )
+                        async with database.DB_POOL.acquire() as conn:
+                            await conn.execute(
+                                SQL_UPDATE_MEETING_START, session_start_time, session_id
+                            )
+                        db_start_written = True
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to update meeting start time (fallback): {e}"
+                        )
 
                 current_speaker = message.get("userName", "Unknown")
                 speaker_var.set(current_speaker)

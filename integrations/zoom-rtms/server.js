@@ -25,6 +25,9 @@ if (!process.env.ZM_PRIVATE_KEY) {
 const activeWorkers = new Map();
 const activeMeetings = new Map();
 
+let lastCpuUsage = process.cpuUsage();
+let lastCpuTime = Date.now();
+
 const app = express();
 
 app.use("/", express.raw({ type: "application/json", limit: "2mb" }));
@@ -70,6 +73,18 @@ app.get("/metrics", (req, res) => {
   const uptime = process.uptime();
   const memory = process.memoryUsage();
 
+  const now = Date.now();
+  const currentCpu = process.cpuUsage();
+
+  const timeDiff = (now - lastCpuTime) * 1000;
+  const userDiff = currentCpu.user - lastCpuUsage.user;
+  const sysDiff = currentCpu.system - lastCpuUsage.system;
+
+  const cpuPercent = timeDiff > 0 ? ((userDiff + sysDiff) / timeDiff) * 100 : 0;
+
+  lastCpuUsage = currentCpu;
+  lastCpuTime = now;
+
   const streams = Array.from(activeWorkers.values()).map((entry) => {
     return {
       streamId: entry.streamId,
@@ -86,9 +101,10 @@ app.get("/metrics", (req, res) => {
     status: "ok",
     system: {
       uptimeSeconds: Math.floor(uptime),
-      managerMemoryMB: {
+      memoryMB: {
         rss: Math.round(memory.rss / 1024 / 1024),
       },
+      cpuPercent: parseFloat(cpuPercent.toFixed(1)),
       loadAverage: os.loadavg(),
     },
     activeStreamsCount: activeWorkers.size,

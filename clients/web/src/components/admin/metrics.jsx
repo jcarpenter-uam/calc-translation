@@ -10,8 +10,12 @@ const formatUptime = (seconds) => {
 const SystemCard = ({ title, data }) => {
   if (!data || !data.system) return null;
 
-  const { uptimeSeconds, managerMemoryMB, memoryMB, loadAverage } = data.system;
+  const { uptimeSeconds, managerMemoryMB, memoryMB, loadAverage, cpuPercent } =
+    data.system;
   const rss = managerMemoryMB?.rss || memoryMB?.rss || 0;
+
+  const cpuDisplay =
+    cpuPercent !== undefined ? `${cpuPercent.toFixed(1)}%` : "N/A";
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 p-4">
@@ -19,6 +23,7 @@ const SystemCard = ({ title, data }) => {
         {title}
       </h3>
       <div className="grid grid-cols-2 gap-4 text-sm">
+        {/* Uptime */}
         <div>
           <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
             Uptime
@@ -27,24 +32,78 @@ const SystemCard = ({ title, data }) => {
             {formatUptime(uptimeSeconds)}
           </p>
         </div>
+
+        {/* Memory */}
         <div>
-          <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
-            Memory (RSS)
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
+              Memory (RSS)
+            </p>
+            <Tooltip text="Actual RAM used by the process (excluding swap)." />
+          </div>
           <p className="font-mono text-zinc-700 dark:text-zinc-200">{rss} MB</p>
         </div>
-        <div className="col-span-2">
-          <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
-            Load Average (1m, 5m, 15m)
+
+        {/* CPU Usage (Container/Process Specific) */}
+        <div>
+          <div className="flex items-center gap-1.5">
+            <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
+              CPU Usage
+            </p>
+            <Tooltip text="Percentage of a single CPU core used by this specific container/process." />
+          </div>
+          <p
+            className={`font-mono font-bold ${parseFloat(cpuDisplay) > 80 ? "text-red-600 dark:text-red-400" : "text-zinc-700 dark:text-zinc-200"}`}
+          >
+            {cpuDisplay}
           </p>
+        </div>
+
+        {/* Load Average (System Wide) */}
+        <div>
+          <div className="flex items-center gap-1.5">
+            <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
+              Host Load (1m)
+            </p>
+            <Tooltip text="Global system load. High values affect all containers on this node." />
+          </div>
           <p className="font-mono text-zinc-700 dark:text-zinc-200">
-            {loadAverage.map((n) => n.toFixed(2)).join(" / ")}
+            {loadAverage && loadAverage.length > 0
+              ? loadAverage[0].toFixed(2)
+              : "0.00"}
           </p>
         </div>
       </div>
     </div>
   );
 };
+
+const Tooltip = ({ text }) => (
+  <div className="group relative flex items-center">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-zinc-400 cursor-help"
+    >
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="16" x2="12" y2="12"></line>
+      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    </svg>
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 hidden group-hover:block z-50">
+      <div className="bg-zinc-800 text-white text-xs rounded py-1 px-2 shadow-lg text-center">
+        {text}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-800"></div>
+      </div>
+    </div>
+  </div>
+);
 
 const ActiveItemsTable = ({ title, items, columns, emptyMessage }) => {
   if (!items || items.length === 0) {

@@ -1,9 +1,9 @@
 import logging
 import os
-import resource
 import time
 
 import httpx
+import psutil
 from core.authentication import get_admin_user_payload
 from fastapi import APIRouter, Depends, HTTPException
 from services.connection_manager import ConnectionManager
@@ -25,13 +25,17 @@ def create_metrics_router(viewer_manager: ConnectionManager):
         user: dict = Depends(get_admin_user_payload),
     ):
         """
-        Returns handmade server metrics (JSON) matching the Node.js style,
-        including active sessions directly from viewer_manager.
+        Returns handmade server metrics (JSON), including
+        process-specific CPU usage (Docker friendly).
         """
         uptime_seconds = int(time.time() - START_TIME)
 
-        usage = resource.getrusage(resource.RUSAGE_SELF)
-        rss_mb = round(usage.ru_maxrss / 1024)
+        process = psutil.Process()
+
+        cpu_percent = process.cpu_percent(interval=None)
+
+        mem_info = process.memory_info()
+        rss_mb = round(mem_info.rss / 1024 / 1024)
 
         try:
             load_avg = os.getloadavg()
@@ -49,6 +53,7 @@ def create_metrics_router(viewer_manager: ConnectionManager):
             "system": {
                 "uptimeSeconds": uptime_seconds,
                 "memoryMB": {"rss": rss_mb},
+                "cpuPercent": cpu_percent,
                 "loadAverage": list(load_avg),
             },
             "activeSessionsCount": len(active_sessions),

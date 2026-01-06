@@ -1,26 +1,20 @@
 import logging
 import os
 import urllib.parse
-from typing import Any, Dict, List
 
 from core import database
-from core.authentication import (
-    get_admin_user_payload,
-    get_current_user_payload,
-    validate_client_token,
-)
+from core.authentication import get_current_user_payload, validate_client_token
 from core.database import SQL_GET_TRANSCRIPT_BY_MEETING_ID
 from core.logging_setup import log_step
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
-from services.connection_manager import ConnectionManager
 
 logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = os.path.join("output")
 
 
-def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
+def create_sessions_router() -> APIRouter:
     """
     Creates the REST API router for session management,
     including active session viewing and transcript downloads.
@@ -29,19 +23,6 @@ def create_sessions_router(viewer_manager: ConnectionManager) -> APIRouter:
         prefix="/api/session",
     )
     LOG_STEP = "API-SESSION"
-
-    # NOTE: Admin only
-    @router.get(
-        "",
-        response_model=List[Dict[str, Any]],
-        dependencies=[Depends(get_admin_user_payload)],
-    )
-    async def get_all_sessions():
-        """Returns a JSON array of all currently active sessions."""
-        with log_step(LOG_STEP):
-            sessions = viewer_manager.active_transcription_sessions
-            result = [{"session_id": sid, **data} for sid, data in sessions.items()]
-            return result
 
     # NOTE: Requires User Auth AND Session Token
     @router.get(

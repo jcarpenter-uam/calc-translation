@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import UserManagement from "../components/admin/user-management.jsx";
 import TenantManagement from "../components/admin/tenant-management.jsx";
-import ActiveSessions from "../components/admin/active-sessions.jsx";
+import MetricsViewing from "../components/admin/metrics.jsx";
 import LogViewing from "../components/admin/log-viewing.jsx";
 
 export default function AdminPage() {
@@ -9,13 +9,13 @@ export default function AdminPage() {
   const [tenants, setTenants] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sessions, setSessions] = useState([]);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sessionsError, setSessionsError] = useState(null);
-  const [sessionsLastUpdated, setSessionsLastUpdated] = useState(new Date());
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState(null);
+  const [serverMetrics, setServerMetrics] = useState(null);
+  const [zoomMetrics, setZoomMetrics] = useState(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,30 +45,6 @@ export default function AdminPage() {
     fetchData();
   }, []);
 
-  const fetchSessions = async (isBackground = false) => {
-    if (!isBackground) setSessionsLoading(true);
-    try {
-      const response = await fetch("/api/session");
-      if (!response.ok) throw new Error("Failed to fetch sessions");
-
-      const data = await response.json();
-      setSessions(data);
-      setSessionsLastUpdated(new Date());
-      setSessionsError(null);
-    } catch (err) {
-      setSessionsError(err.message);
-    } finally {
-      if (!isBackground) setSessionsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSessions();
-
-    const interval = setInterval(() => fetchSessions(true), 10000);
-    return () => clearInterval(interval);
-  }, []);
-
   const fetchLogs = async () => {
     try {
       const response = await fetch("/api/logs/?lines=200");
@@ -85,6 +61,42 @@ export default function AdminPage() {
   useEffect(() => {
     fetchLogs();
     const interval = setInterval(fetchLogs, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchMetrics = async () => {
+    setMetricsLoading(true);
+    try {
+      const [serverRes, zoomRes] = await Promise.all([
+        fetch("/api/metrics/server"),
+        fetch("/api/metrics/zoom"),
+      ]);
+
+      if (serverRes.ok) {
+        const text = await serverRes.text();
+        setServerMetrics(text);
+      } else {
+        console.error("Failed to fetch server metrics");
+      }
+
+      if (zoomRes.ok) {
+        const text = await zoomRes.text();
+        setZoomMetrics(text);
+      } else {
+        console.error("Failed to fetch zoom metrics");
+      }
+
+      setMetricsError(null);
+    } catch (err) {
+      setMetricsError(err.message);
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -197,12 +209,12 @@ export default function AdminPage() {
             onDeleteTenant={handleDeleteTenant}
           />
           <hr className="border-zinc-200 dark:border-zinc-700" />
-          <ActiveSessions
-            sessions={sessions}
-            loading={sessionsLoading}
-            error={sessionsError}
-            lastUpdated={sessionsLastUpdated}
-            onRefresh={() => fetchSessions(false)}
+          <MetricsViewing
+            serverMetrics={serverMetrics}
+            zoomMetrics={zoomMetrics}
+            loading={metricsLoading}
+            error={metricsError}
+            onRefresh={fetchMetrics}
           />
           <hr className="border-zinc-200 dark:border-zinc-700" />
           <LogViewing

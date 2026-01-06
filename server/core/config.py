@@ -34,6 +34,8 @@ class Settings(BaseSettings):
 
     ZM_RTMS_SECRET: str
 
+    ZM_METRICS_URL: str = "http://localhost:8080/metrics"
+
     LOGGING_LEVEL: str = "INFO"
 
 

@@ -5,6 +5,7 @@ import time
 import httpx
 import psutil
 from core.authentication import get_admin_user_payload
+from core.config import settings
 from fastapi import APIRouter, Depends, HTTPException
 from services.connection_manager import ConnectionManager
 
@@ -83,7 +84,7 @@ def create_metrics_router(viewer_manager: ConnectionManager):
         """
         Proxies the metrics from the zoom microservice.
         """
-        target_url = f"http://localhost:8080/metrics"
+        target_url = settings.ZM_METRICS_URL
 
         try:
             async with httpx.AsyncClient() as client:

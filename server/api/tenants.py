@@ -108,7 +108,6 @@ def create_tenant_router() -> APIRouter:
                             SQL_GET_TENANT_BY_ID, tenant.tenant_id
                         )
 
-                logger.info(f"Successfully created/updated tenant: {tenant.tenant_id}")
                 return TenantResponse.model_validate(dict(new_tenant_row))
 
             except asyncpg.exceptions.UniqueViolationError:
@@ -134,7 +133,6 @@ def create_tenant_router() -> APIRouter:
         Retrieve a list of all configured tenants.
         """
         with log_step(LOG_STEP):
-            logger.debug("Request to get all tenants.")
             if not database.DB_POOL:
                 logger.error("Database not initialized during get tenants.")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -142,7 +140,6 @@ def create_tenant_router() -> APIRouter:
             async with database.DB_POOL.acquire() as conn:
                 rows = await conn.fetch(SQL_GET_ALL_TENANTS)
 
-            logger.info(f"Found {len(rows)} tenants.")
             return [TenantResponse.model_validate(dict(row)) for row in rows]
 
     # NOTE: Admin only
@@ -156,7 +153,6 @@ def create_tenant_router() -> APIRouter:
         Retrieve a specific tenant configuration by its Tenant ID.
         """
         with log_step(LOG_STEP):
-            logger.debug(f"Request to get tenant: {tenant_id}")
             if not database.DB_POOL:
                 logger.error(f"Database not initialized during get tenant: {tenant_id}")
                 raise HTTPException(status_code=503, detail="Database not initialized.")
@@ -170,7 +166,6 @@ def create_tenant_router() -> APIRouter:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Tenant with ID '{tenant_id}' not found.",
                 )
-            logger.info(f"Successfully found tenant: {tenant_id}")
             return TenantResponse.model_validate(dict(row))
 
     # NOTE: Admin only
@@ -263,7 +258,6 @@ def create_tenant_router() -> APIRouter:
                         detail=f"Tenant with ID '{tenant_id}' not found after update.",
                     )
 
-                logger.info(f"Successfully updated tenant: {tenant_id}")
                 return TenantResponse.model_validate(dict(row))
 
             except Exception as e:
@@ -298,7 +292,6 @@ def create_tenant_router() -> APIRouter:
                     detail=f"Tenant with ID '{tenant_id}' not found.",
                 )
 
-            logger.info(f"Successfully deleted tenant: {tenant_id}")
             return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router

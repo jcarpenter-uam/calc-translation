@@ -14,16 +14,25 @@ let metricsInterval = null;
 let lastCpuUsage = process.cpuUsage();
 let lastCpuTime = Date.now();
 
+function log(msg) {
+  console.log(`[${new Date().toISOString()}][Worker ${process.pid}] ${msg}`);
+}
+
 process.on("message", (msg) => {
   if (msg.type === "START") {
     handleRtmsStarted(msg.payload, msg.streamId, msg.isPrimary);
   } else if (msg.type === "STOP") {
     handleRtmsStopped(msg.streamId);
+  } else if (msg.type === "PROMOTE") {
+    handlePromotion();
   }
 });
 
 process.on("uncaughtException", (err) => {
-  console.error(`[Worker ${process.pid}] CRITICAL CRASH:`, err);
+  console.error(
+    `[${new Date().toISOString()}][Worker ${process.pid}] CRITICAL CRASH:`,
+    err,
+  );
   process.exit(1);
 });
 
@@ -70,15 +79,33 @@ function generateAuthToken(host_id) {
   });
 }
 
+function handlePromotion() {
+  if (!currentClientEntry || isStopping) {
+    log(
+      "Received PROMOTE command but worker is stopping or invalid. Ignoring.",
+    );
+    return;
+  }
+
+  log("Received PROMOTE command. Promoting STANDBY -> PRIMARY.");
+  currentClientEntry.isPrimary = true;
+
+  if (currentClientEntry.connect) {
+    log("Initiating backend connection for promoted session...");
+    currentClientEntry.connect(0, true);
+  } else {
+    log("Error: No connect function available during promotion.");
+  }
+}
+
 function handleRtmsStarted(payload, streamId, isPrimary) {
   const meeting_uuid = payload?.meeting_uuid;
   const host_id = payload?.operator_id;
   const encoded_meeting_uuid = encodeURIComponent(meeting_uuid);
 
-  console.log(
-    `[Worker ${process.pid}] Starting Meeting ${meeting_uuid} (Role: ${isPrimary ? "PRIMARY" : "STANDBY"})`,
+  log(
+    `Starting. Stream: ${streamId}, Role: ${isPrimary ? "PRIMARY" : "STANDBY"}`,
   );
-
   startMetricsReporting();
 
   const rtmsClient = new rtms.Client({
@@ -91,26 +118,19 @@ function handleRtmsStarted(payload, streamId, isPrimary) {
     hasLoggedWarning: false,
     streamId,
     isPrimary,
+    connect: null,
   };
-
-  if (!isPrimary) {
-    console.log(
-      `[Worker ${process.pid}] Standby mode active. Joining RTMS, but suppressing backend connection.`,
-    );
-    rtmsClient.join(payload);
-    return;
-  }
 
   let hasConnectedOnce = false;
 
-  function connect(retries = 0) {
+  function connect(retries = 0, isPromoted = false) {
     if (isStopping) return;
 
-    console.log(
-      `[Worker ${process.pid}] Connecting WS to ${BASE_SERVER_URL} (Attempt ${
-        retries + 1
-      })...`,
-    );
+    if (retries === 0) {
+      log(
+        `Connecting to backend: ${ZOOM_BASE_SERVER_URL}/${encoded_meeting_uuid}`,
+      );
+    }
 
     const token = generateAuthToken(host_id);
     const authHeader = { Authorization: `Bearer ${token}` };
@@ -123,7 +143,7 @@ function handleRtmsStarted(payload, streamId, isPrimary) {
     currentClientEntry.wsClient = wsClient;
 
     wsClient.on("open", () => {
-      console.log(`[Worker ${process.pid}] WS Connected`);
+      log("Backend WebSocket Connected (OPEN).");
       currentClientEntry.hasLoggedWarning = false;
 
       const meta = {
@@ -132,7 +152,8 @@ function handleRtmsStarted(payload, streamId, isPrimary) {
         workerPid: process.pid,
       };
 
-      if (!hasConnectedOnce) {
+      if (!hasConnectedOnce && !isPromoted) {
+        log("Sending 'session_start'...");
         wsClient.send(
           JSON.stringify({
             type: "session_start",
@@ -141,31 +162,39 @@ function handleRtmsStarted(payload, streamId, isPrimary) {
         );
         hasConnectedOnce = true;
       } else {
-        console.log(`[Worker ${process.pid}] Sending session_reconnected...`);
+        log("Sending 'session_reconnected' (Resume/Failover)...");
         wsClient.send(
           JSON.stringify({
             type: "session_reconnected",
             payload: meta,
           }),
         );
+        hasConnectedOnce = true;
       }
     });
 
     wsClient.on("error", (error) => {
-      console.error(`[Worker ${process.pid}] WS Error:`, error.message);
+      if (!isStopping) log(`Backend WebSocket Error: ${error.message}`);
     });
 
     wsClient.on("close", (code, reason) => {
-      if (isStopping) return;
-      console.log(`[Worker ${process.pid}] WS Closed. Retrying...`);
+      if (isStopping) {
+        log("Backend WebSocket Closed (Clean Shutdown).");
+        return;
+      }
+
       const delay = Math.min(1000 * 2 ** retries, 30000);
-      setTimeout(() => connect(retries + 1), delay);
+      log(
+        `Backend WebSocket Closed unexpectedly. Reconnecting in ${delay}ms... (Attempt ${retries + 1})`,
+      );
+      setTimeout(() => connect(retries + 1, isPromoted), delay);
     });
   }
 
+  currentClientEntry.connect = connect;
+
   rtmsClient.onAudioData((data, size, timestamp, metadata) => {
     if (!currentClientEntry) return;
-
     if (!currentClientEntry.isPrimary) return;
 
     const { wsClient } = currentClientEntry;
@@ -180,15 +209,25 @@ function handleRtmsStarted(payload, streamId, isPrimary) {
     }
   });
 
+  log("Joining Zoom RTMS channel...");
   rtmsClient.join(payload);
-  connect();
+
+  if (isPrimary) {
+    connect();
+  } else {
+    log(
+      "Standby Mode: Joined Zoom RTMS, but waiting for PROMOTE signal to connect backend.",
+    );
+  }
 }
 
 function handleRtmsStopped(streamId) {
+  log("Received STOP command.");
   isStopping = true;
   if (metricsInterval) clearInterval(metricsInterval);
 
   if (!currentClientEntry) {
+    log("No active client entry found. Exiting immediately.");
     process.exit(0);
     return;
   }
@@ -196,27 +235,23 @@ function handleRtmsStopped(streamId) {
   const { rtmsClient, wsClient, isPrimary } = currentClientEntry;
 
   try {
+    log("Leaving RTMS channel...");
     rtmsClient.leave();
-  } catch (err) {}
+  } catch (err) {
+    log(`Error leaving RTMS: ${err.message}`);
+  }
 
   if (isPrimary && wsClient && wsClient.readyState === WebSocket.OPEN) {
-    console.log(`[Worker ${process.pid}] Sending session_end...`);
-
+    log("Sending 'session_end' to backend...");
     wsClient.send(JSON.stringify({ type: "session_end" }), (err) => {
-      if (err)
-        console.error(
-          `[Worker ${process.pid}] Failed to send session_end:`,
-          err,
-        );
+      if (err) log(`Error sending session_end: ${err.message}`);
+      else log("session_end sent successfully.");
 
-      console.log(
-        `[Worker ${process.pid}] session_end sent. Closing connection.`,
-      );
       try {
         wsClient.close();
       } catch (e) {}
 
-      console.log(`[Worker ${process.pid}] Stopping...`);
+      log("Exiting process (Primary).");
       setTimeout(() => process.exit(0), 100);
     });
   } else {
@@ -225,7 +260,7 @@ function handleRtmsStopped(streamId) {
         wsClient.close();
       } catch (e) {}
     }
-    console.log(`[Worker ${process.pid}] Stopping (No active WS session)...`);
+    log("Exiting process (Standby or Disconnected).");
     process.exit(0);
   }
 }

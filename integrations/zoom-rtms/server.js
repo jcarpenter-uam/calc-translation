@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT EXCEPTION:", err);
+  console.error(`[${new Date().toISOString()}] UNCAUGHT EXCEPTION:`, err);
   process.exit(1);
 });
 
@@ -28,6 +28,43 @@ const activeMeetings = new Map();
 const app = express();
 
 app.use("/", express.raw({ type: "application/json", limit: "2mb" }));
+
+function log(msg) {
+  console.log(`[${new Date().toISOString()}][SERVER] ${msg}`);
+}
+
+function attemptPromotion(meetingUuid, oldStreamId) {
+  log(
+    `[Failover] Checking promotion candidates for meeting ${meetingUuid} (Old Primary: ${oldStreamId})`,
+  );
+
+  let candidateStreamId = null;
+  for (const [sId, entry] of activeWorkers.entries()) {
+    if (entry.metadata?.meeting_uuid === meetingUuid && sId !== oldStreamId) {
+      candidateStreamId = sId;
+      break;
+    }
+  }
+
+  if (candidateStreamId) {
+    const candidate = activeWorkers.get(candidateStreamId);
+    log(
+      `[Failover] Candidate found: ${candidateStreamId}. Promoting to PRIMARY.`,
+    );
+
+    activeMeetings.set(meetingUuid, candidateStreamId);
+    candidate.isPrimary = true;
+
+    candidate.worker.send({ type: "PROMOTE" });
+    return true;
+  } else {
+    log(
+      `[Failover] No standby candidates found for meeting ${meetingUuid}. Closing meeting.`,
+    );
+    activeMeetings.delete(meetingUuid);
+    return false;
+  }
+}
 
 app.get("/metrics", (req, res) => {
   const uptime = process.uptime();
@@ -93,7 +130,7 @@ app.post("/zoom", (req, res) => {
 
   switch (event) {
     case "endpoint.url_validation":
-      console.log("Handling endpoint.url_validation");
+      log("Handling endpoint.url_validation");
       const hashForValidate = crypto
         .createHmac("sha256", ZM_WEBHOOK_SECRET)
         .update(payload.plainToken)
@@ -104,10 +141,12 @@ app.post("/zoom", (req, res) => {
       });
 
     case "meeting.rtms_started":
-      console.log(`Handling meeting.rtms_started for stream: ${streamId}`);
+      log(`Received meeting.rtms_started for stream: ${streamId}`);
 
       if (activeWorkers.has(streamId)) {
-        console.warn(`Worker already exists for stream ${streamId}`);
+        log(
+          `Stream ${streamId} already active. Ignoring duplicate start request.`,
+        );
         return res.status(200).send("OK");
       }
 
@@ -115,14 +154,12 @@ app.post("/zoom", (req, res) => {
       let isPrimary = false;
 
       if (meetingUuid && !activeMeetings.has(meetingUuid)) {
-        console.log(
-          `Assigning PRIMARY role for meeting ${meetingUuid} to stream ${streamId}`,
-        );
+        log(`New meeting detected (${meetingUuid}). Assigning PRIMARY role.`);
         activeMeetings.set(meetingUuid, streamId);
         isPrimary = true;
       } else {
-        console.log(
-          `Meeting ${meetingUuid} active. Assigning STANDBY role to stream ${streamId}`,
+        log(
+          `Existing meeting detected (${meetingUuid}). Assigning STANDBY role.`,
         );
         isPrimary = false;
       }
@@ -135,6 +172,8 @@ app.post("/zoom", (req, res) => {
         ],
       });
 
+      log(`Spawned worker process (PID ${worker.pid}) for stream ${streamId}`);
+
       worker.on("message", (msg) => {
         if (msg.type === "METRICS") {
           const entry = activeWorkers.get(streamId);
@@ -145,16 +184,16 @@ app.post("/zoom", (req, res) => {
       });
 
       worker.on("exit", (code) => {
-        console.log(
-          `Worker process for stream ${streamId} exited with code ${code}`,
+        log(
+          `Worker process (PID ${worker.pid}) for stream ${streamId} exited with code ${code}`,
         );
         activeWorkers.delete(streamId);
 
         if (meetingUuid && activeMeetings.get(meetingUuid) === streamId) {
-          console.log(
-            `Primary stream for meeting ${meetingUuid} exited. Clearing lock.`,
+          log(
+            `Primary worker exited unexpectedly. Attempting promotion for ${meetingUuid}.`,
           );
-          activeMeetings.delete(meetingUuid);
+          attemptPromotion(meetingUuid, streamId);
         }
       });
 
@@ -177,23 +216,38 @@ app.post("/zoom", (req, res) => {
       return res.status(200).send("OK");
 
     case "meeting.rtms_stopped":
-      console.log(`Handling meeting.rtms_stopped for stream: ${streamId}`);
+      log(`Received meeting.rtms_stopped for stream: ${streamId}`);
+
       if (streamId && activeWorkers.has(streamId)) {
         const entry = activeWorkers.get(streamId);
+        const mUuid = entry.metadata?.meeting_uuid;
+        const wasPrimary = entry.isPrimary;
+
+        log(
+          `Stopping worker (PID ${entry.worker.pid}). Was Primary? ${wasPrimary}`,
+        );
+
         entry.worker.send({ type: "STOP", streamId: streamId });
 
-        setTimeout(() => {
-          if (activeWorkers.has(streamId)) {
-            console.log(`Force killing worker process for stream ${streamId}`);
-            entry.worker.kill();
-            activeWorkers.delete(streamId);
+        activeWorkers.delete(streamId);
 
-            const mUuid = entry.metadata?.meeting_uuid;
-            if (mUuid && activeMeetings.get(mUuid) === streamId) {
-              activeMeetings.delete(mUuid);
-            }
+        if (wasPrimary && mUuid) {
+          log(
+            `Primary stream stopped explicitly. Checking for failover candidates.`,
+          );
+          attemptPromotion(mUuid, streamId);
+        }
+
+        setTimeout(() => {
+          if (!entry.worker.killed) {
+            log(
+              `Force killing worker (PID ${entry.worker.pid}) after timeout.`,
+            );
+            entry.worker.kill();
           }
         }, 10000);
+      } else {
+        log(`Received stop for unknown or already removed stream: ${streamId}`);
       }
       return res.status(200).send("OK");
 
@@ -203,5 +257,5 @@ app.post("/zoom", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Zoom RTMS listening on port ${PORT}`);
+  log(`Zoom RTMS Manager listening on port ${PORT}`);
 });

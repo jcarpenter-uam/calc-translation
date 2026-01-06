@@ -1,12 +1,12 @@
-# NOTE: This name is slighty misleading as our app does translation and transcription, might change naming later for a better term
 import logging
 
 from core.logging_setup import log_step
 from core.security import validate_server_token
 from fastapi import APIRouter, Depends, HTTPException, Path, WebSocket
-from integrations.test import ensure_test_meeting
 from integrations.zoom import get_meeting_data
 from services.receiver import handle_receiver_session
+
+from integrations.test import ensure_test_meeting
 
 logger = logging.getLogger(__name__)
 

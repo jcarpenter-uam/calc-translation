@@ -23,6 +23,8 @@ if (!process.env.ZM_PRIVATE_KEY) {
 }
 
 const activeWorkers = new Map();
+const activeMeetings = new Map();
+
 const app = express();
 
 app.use("/", express.raw({ type: "application/json", limit: "2mb" }));
@@ -35,6 +37,7 @@ app.get("/metrics", (req, res) => {
     return {
       streamId: entry.streamId,
       meetingUuid: entry.metadata?.meeting_uuid || "unknown",
+      role: entry.isPrimary ? "PRIMARY" : "STANDBY",
       pid: entry.worker.pid,
       startTime: new Date(entry.startTime).toISOString(),
       durationSeconds: Math.floor((Date.now() - entry.startTime) / 1000),
@@ -52,6 +55,7 @@ app.get("/metrics", (req, res) => {
       loadAverage: os.loadavg(),
     },
     activeStreamsCount: activeWorkers.size,
+    activeMeetingsCount: activeMeetings.size,
     streams: streams,
   });
 });
@@ -107,6 +111,22 @@ app.post("/zoom", (req, res) => {
         return res.status(200).send("OK");
       }
 
+      const meetingUuid = payload?.meeting_uuid;
+      let isPrimary = false;
+
+      if (meetingUuid && !activeMeetings.has(meetingUuid)) {
+        console.log(
+          `Assigning PRIMARY role for meeting ${meetingUuid} to stream ${streamId}`,
+        );
+        activeMeetings.set(meetingUuid, streamId);
+        isPrimary = true;
+      } else {
+        console.log(
+          `Meeting ${meetingUuid} active. Assigning STANDBY role to stream ${streamId}`,
+        );
+        isPrimary = false;
+      }
+
       const worker = fork(path.resolve(__dirname, "./worker.js"), [], {
         execArgv: [
           "--optimize_for_size",
@@ -129,12 +149,20 @@ app.post("/zoom", (req, res) => {
           `Worker process for stream ${streamId} exited with code ${code}`,
         );
         activeWorkers.delete(streamId);
+
+        if (meetingUuid && activeMeetings.get(meetingUuid) === streamId) {
+          console.log(
+            `Primary stream for meeting ${meetingUuid} exited. Clearing lock.`,
+          );
+          activeMeetings.delete(meetingUuid);
+        }
       });
 
       worker.send({
         type: "START",
         payload: payload,
         streamId: streamId,
+        isPrimary: isPrimary,
       });
 
       activeWorkers.set(streamId, {
@@ -143,6 +171,7 @@ app.post("/zoom", (req, res) => {
         startTime: Date.now(),
         metadata: payload,
         metrics: null,
+        isPrimary,
       });
 
       return res.status(200).send("OK");
@@ -158,6 +187,11 @@ app.post("/zoom", (req, res) => {
             console.log(`Force killing worker process for stream ${streamId}`);
             entry.worker.kill();
             activeWorkers.delete(streamId);
+
+            const mUuid = entry.metadata?.meeting_uuid;
+            if (mUuid && activeMeetings.get(mUuid) === streamId) {
+              activeMeetings.delete(mUuid);
+            }
           }
         }, 10000);
       }

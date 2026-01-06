@@ -199,19 +199,12 @@ async def handle_receiver_session(
     active_backfill_tasks = set()
     loop = asyncio.get_running_loop()
     session_log_handler = None
-    registration_success = False
 
     session_start_time = datetime.now()
     backfill_service = BackfillService()
 
     try:
-        registration_success = viewer_manager.register_transcription_session(
-            session_id, integration
-        )
-
-        if not registration_success:
-            await websocket.close(code=1008)
-            return
+        viewer_manager.register_transcription_session(session_id, integration)
 
         session_log_handler = add_session_log_handler(session_id, integration)
 
@@ -328,10 +321,41 @@ async def handle_receiver_session(
             while True:
                 raw_message = await websocket.receive_text()
                 message = json.loads(raw_message)
+
+                if "type" in message:
+                    msg_type = message["type"]
+
+                    if msg_type == "session_start":
+                        new_zero_point = datetime.now()
+                        logger.info(
+                            f"Received session_start. Resetting session zero point to {new_zero_point}."
+                        )
+
+                        session_start_time = new_zero_point
+
+                        async with handlers_lock:
+                            for h in active_handlers.values():
+                                h.timestamp_service.start_time = new_zero_point
+                        continue
+
+                    elif msg_type == "session_reconnected":
+                        logger.info(
+                            "Received session_reconnected. Resuming without time reset."
+                        )
+                        continue
+
+                    elif msg_type == "session_end":
+                        logger.info("Received session_end. Closing connection.")
+                        break
+
+                audio_b64 = message.get("audio")
+                if not audio_b64:
+                    continue
+
                 current_speaker = message.get("userName", "Unknown")
                 speaker_var.set(current_speaker)
 
-                audio_chunk = base64.b64decode(message.get("audio"))
+                audio_chunk = base64.b64decode(audio_b64)
 
                 async with handlers_lock:
                     current_handlers_list = list(active_handlers.values())
@@ -347,9 +371,6 @@ async def handle_receiver_session(
 
     finally:
         speaker_var.set(None)
-        if not registration_success:
-            session_id_var.reset(session_token)
-            return
 
         async with handlers_lock:
             close_tasks = [handler.close() for handler in active_handlers.values()]

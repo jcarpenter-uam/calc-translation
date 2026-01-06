@@ -215,7 +215,45 @@ export default function MetricsViewing({
       key: "session_id",
       className: "break-all font-semibold",
     },
-    { header: "Meeting ID", key: "meeting_id" },
+    { header: "Integration", key: "integration" },
+    {
+      header: "Viewers",
+      key: "viewers",
+      align: "right",
+      render: (session) => (
+        <span
+          className={
+            session.viewers > 0 ? "text-green-600 font-bold" : "text-zinc-400"
+          }
+        >
+          {session.viewers || 0}
+        </span>
+      ),
+    },
+    {
+      header: "Languages",
+      key: "viewer_languages",
+      render: (session) => {
+        if (
+          !session.viewer_languages ||
+          Object.keys(session.viewer_languages).length === 0
+        ) {
+          return <span className="text-zinc-400">-</span>;
+        }
+        return (
+          <div className="flex gap-1 flex-wrap">
+            {Object.entries(session.viewer_languages).map(([lang, count]) => (
+              <span
+                key={lang}
+                className="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-xs border border-zinc-200 dark:border-zinc-700"
+              >
+                {lang}: {count}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
   ];
 
   return (

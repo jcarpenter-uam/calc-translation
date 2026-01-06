@@ -25,13 +25,13 @@ def create_metrics_router(viewer_manager: ConnectionManager):
         user: dict = Depends(get_admin_user_payload),
     ):
         """
-        Returns handmade server metrics (JSON), including
-        process-specific CPU usage (Docker friendly).
+        Returns handmade server metrics (JSON), including:
+        - Process-specific CPU usage (Docker friendly)
+        - Active Sessions with Viewer Counts & Language Breakdowns
         """
         uptime_seconds = int(time.time() - START_TIME)
 
         process = psutil.Process()
-
         cpu_percent = process.cpu_percent(interval=None)
 
         mem_info = process.memory_info()
@@ -43,9 +43,25 @@ def create_metrics_router(viewer_manager: ConnectionManager):
             load_avg = [0, 0, 0]
 
         sessions_map = viewer_manager.active_transcription_sessions
-        active_sessions = [
-            {"session_id": sid, **data} for sid, data in sessions_map.items()
-        ]
+        active_sessions = []
+
+        for sid, data in sessions_map.items():
+            sockets = viewer_manager.sessions.get(sid, [])
+            total_viewers = len(sockets)
+
+            language_counts = {}
+            for ws in sockets:
+                lang = viewer_manager.socket_languages.get(ws, "unknown")
+                language_counts[lang] = language_counts.get(lang, 0) + 1
+
+            active_sessions.append(
+                {
+                    "session_id": sid,
+                    **data,
+                    "viewers": total_viewers,
+                    "viewer_languages": language_counts,
+                }
+            )
 
         return {
             "status": "ok",

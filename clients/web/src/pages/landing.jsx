@@ -2,10 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useCalendar } from "../hooks/use-calender.js";
-import {
-  IntegrationCard,
-  ZoomForm,
-} from "../components/auth/integration-card.jsx";
+import { ZoomForm } from "../components/auth/integration-card.jsx";
 import { CalendarView } from "../components/calender/view.jsx";
 
 import { BiLogoZoom } from "react-icons/bi";
@@ -130,34 +127,53 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row items-start justify-center w-full min-h-[calc(100vh-4rem)] gap-8 p-6">
-      <div className="w-full lg:w-[400px] flex-shrink-0 space-y-8 lg:sticky lg:top-6">
-        <div>
-          <h2 className="text-xl font-semibold mb-4 text-center lg:text-left">
-            {t("choose_integration")}
-          </h2>
-          <div className="flex flex-col gap-4">
-            <IntegrationCard
-              id="zoom"
-              title={t("integration_zoom")}
-              icon={<BiLogoZoom className="h-7 w-7 text-blue-500" />}
-              selected={integration}
-              onSelect={setIntegration}
-            />
+    <div className="flex flex-col lg:flex-row items-start justify-center w-full gap-8 p-6">
+      {/* Left Column: Integration Tabs & Form */}
+      <div className="w-full lg:w-[400px] flex-shrink-0 lg:sticky lg:top-6">
+        <h2 className="text-xl font-semibold mb-4 text-center lg:text-left">
+          {t("manual_join")}
+        </h2>
+        <div className="bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm overflow-hidden">
+          {/* Integration Tabs */}
+          <div className="flex border-b border-zinc-200 dark:border-zinc-700">
+            <button
+              onClick={() => setIntegration("zoom")}
+              className={`cursor-pointer flex-1 flex items-center justify-center gap-2 py-4 text-lg font-bold transition-colors ${
+                integration === "zoom"
+                  ? "bg-white dark:bg-zinc-800 text-blue-600 border-b-2 border-blue-600"
+                  : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <BiLogoZoom className="h-5 w-5" />
+              {t("integration_zoom")}
+            </button>
           </div>
-        </div>
 
-        <div className="transition-all bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm">
-          {renderForm()}
-          {error && (
-            <p className="mt-4 text-center text-sm font-medium text-red-600">
-              {error}
-            </p>
-          )}
+          {/* Form Content */}
+          <div className="p-6">
+            {renderForm()}
+            {error && (
+              <p className="mt-4 text-center text-sm font-medium text-red-600">
+                {error}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Vertical Divider */}
+      <div className="hidden lg:flex flex-col items-center self-stretch">
+        <span className="text-zinc-400 dark:text-zinc-500 text-xl font-semibold uppercase mb-4 mt-2">
+          {t("or_divider")}
+        </span>
+        <div className="w-px flex-1 bg-zinc-200 dark:bg-zinc-700"></div>
+      </div>
+
+      {/* Right Column: Calendar */}
       <div className="flex-1 w-full min-w-0">
+        <h2 className="text-xl font-semibold mb-4 text-center lg:text-left">
+          {t("calendar_join")}
+        </h2>
         <CalendarView
           events={events}
           loading={calendarLoading}

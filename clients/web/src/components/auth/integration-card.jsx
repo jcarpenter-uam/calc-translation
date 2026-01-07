@@ -2,24 +2,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BiLogoZoom } from "react-icons/bi";
 
-export function IntegrationCard({ id, title, icon, selected, onSelect }) {
-  const baseClasses =
-    "flex items-center gap-4 p-6 rounded-lg border-2 cursor-pointer transition-all duration-200 ease-in-out";
-  const selectedClasses = "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500";
-  const deselectedClasses =
-    "border-zinc-300 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-400";
-
-  return (
-    <button
-      onClick={() => onSelect(id)}
-      className={`${baseClasses} ${selected === id ? selectedClasses : deselectedClasses}`}
-    >
-      {icon}
-      <span className="text-lg font-semibold">{title}</span>
-    </button>
-  );
-}
-
 // --- Zoom-Specific Form ---
 export function ZoomForm({ onSubmit }) {
   const { t } = useTranslation();

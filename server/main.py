@@ -12,6 +12,7 @@ logger.info(f"Configuration loaded. Log level set to: {settings.LOGGING_LEVEL}")
 
 from api.auth import create_auth_router
 from api.logs import create_logs_router
+from api.metrics import create_metrics_router
 from api.sessions import create_sessions_router
 from api.tenants import create_tenant_router
 from api.transcribe import create_transcribe_router
@@ -48,7 +49,7 @@ app.include_router(transcribe_router)
 viewer_router = create_viewer_router(viewer_manager=viewer_manager)
 app.include_router(viewer_router)
 
-sessions_router = create_sessions_router(viewer_manager=viewer_manager)
+sessions_router = create_sessions_router()
 app.include_router(sessions_router)
 
 tenant_router = create_tenant_router()
@@ -62,6 +63,9 @@ app.include_router(auth_router)
 
 logs_router = create_logs_router()
 app.include_router(logs_router)
+
+metrics_router = create_metrics_router(viewer_manager=viewer_manager)
+app.include_router(metrics_router)
 
 app.mount(
     "/icon.png",

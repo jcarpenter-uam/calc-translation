@@ -1,97 +1,69 @@
 import "dotenv/config";
 import rtms from "@zoom/rtms";
 import { WebSocket } from "ws";
-import pino from "pino";
 import jwt from "jsonwebtoken";
-import pretty from "pino-pretty";
 
 const BASE_SERVER_URL =
   process.env.BASE_SERVER_URL || "ws://localhost:8000/ws/transcribe";
 const ZOOM_BASE_SERVER_URL = `${BASE_SERVER_URL}/zoom`;
 const ZM_PRIVATE_KEY = process.env.ZM_PRIVATE_KEY;
-const logDir = "logs";
 
 let currentClientEntry = null;
 let isStopping = false;
+let metricsInterval = null;
+let lastCpuUsage = process.cpuUsage();
+let lastCpuTime = Date.now();
+
+function log(msg) {
+  console.log(`[${new Date().toISOString()}][Worker ${process.pid}] ${msg}`);
+}
 
 process.on("message", (msg) => {
   if (msg.type === "START") {
-    handleRtmsStarted(msg.payload, msg.streamId);
+    handleRtmsStarted(msg.payload, msg.streamId, msg.isPrimary);
   } else if (msg.type === "STOP") {
     handleRtmsStopped(msg.streamId);
+  } else if (msg.type === "PROMOTE") {
+    handlePromotion();
   }
 });
 
 process.on("uncaughtException", (err) => {
-  console.error("CRITICAL WORKER CRASH:", err);
-
-  if (currentClientEntry?.meetingLogger) {
-    try {
-      currentClientEntry.meetingLogger.fatal(err, "WORKER UNCAUGHT EXCEPTION");
-    } catch (e) {}
-  }
+  console.error(
+    `[${new Date().toISOString()}][Worker ${process.pid}] CRITICAL CRASH:`,
+    err,
+  );
   process.exit(1);
 });
 
-function getTimestamp() {
-  const d = new Date();
-  const YYYY = d.getFullYear();
-  const MM = (d.getMonth() + 1).toString().padStart(2, "0");
-  const DD = d.getDate().toString().padStart(2, "0");
-  const HH = d.getHours().toString().padStart(2, "0");
-  const MIN = d.getMinutes().toString().padStart(2, "0");
-  const SS = d.getSeconds().toString().padStart(2, "0");
-  return `${YYYY}-${MM}-${DD}_${HH}-${MIN}-${SS}`;
-}
+function startMetricsReporting() {
+  if (metricsInterval) clearInterval(metricsInterval);
 
-function createMeetingLogger(meeting_uuid) {
-  const timestamp = getTimestamp();
-  const safe_uuid = meeting_uuid.replace(/\//g, "_");
-  const fileName = `${safe_uuid}_${timestamp}.log`;
-  const logPath = `${logDir}/${fileName}`;
+  metricsInterval = setInterval(() => {
+    const memory = process.memoryUsage();
+    const now = Date.now();
+    const currentCpu = process.cpuUsage();
+    const userDiff = currentCpu.user - lastCpuUsage.user;
+    const sysDiff = currentCpu.system - lastCpuUsage.system;
+    const timeDiff = (now - lastCpuTime) * 1000;
+    const cpuPercent =
+      timeDiff > 0 ? ((userDiff + sysDiff) / timeDiff) * 100 : 0;
 
-  const fileStream = pretty({
-    destination: pino.destination({
-      dest: logPath,
-      sync: true,
-      mkdir: true,
-      append: true,
-    }),
-    colorize: false,
-  });
+    lastCpuUsage = currentCpu;
+    lastCpuTime = now;
 
-  const consoleStream = pretty({
-    destination: pino.destination({ fd: 1, sync: true }),
-    colorize: true,
-  });
-
-  const fileLogger = pino(fileStream);
-  const consoleLogger = pino(consoleStream);
-
-  const dualLogger = {
-    info: (msg) => {
-      fileLogger.info(msg);
-      consoleLogger.info(msg);
-    },
-    warn: (msg) => {
-      fileLogger.warn(msg);
-      consoleLogger.warn(msg);
-    },
-    error: (err, msg) => {
-      fileLogger.error(err, msg);
-      consoleLogger.error(err, msg);
-    },
-    fatal: (err, msg) => {
-      fileLogger.fatal(err, msg);
-      consoleLogger.fatal(err, msg);
-    },
-  };
-
-  dualLogger.info(
-    `--- Log for Meeting ${meeting_uuid} started at ${timestamp} ---`,
-  );
-
-  return { logger: dualLogger, transport: { end: (cb) => cb && cb() } };
+    if (process.connected) {
+      process.send({
+        type: "METRICS",
+        payload: {
+          rss: Math.round(memory.rss / 1024 / 1024),
+          heap: Math.round(memory.heapUsed / 1024 / 1024),
+          ext: Math.round(memory.external / 1024 / 1024),
+          cpu: cpuPercent.toFixed(1),
+        },
+      });
+    }
+  }, 2000);
 }
 
 function generateAuthToken(host_id) {
@@ -107,13 +79,34 @@ function generateAuthToken(host_id) {
   });
 }
 
-function handleRtmsStarted(payload, streamId) {
+function handlePromotion() {
+  if (!currentClientEntry || isStopping) {
+    log(
+      "Received PROMOTE command but worker is stopping or invalid. Ignoring.",
+    );
+    return;
+  }
+
+  log("Received PROMOTE command. Promoting STANDBY -> PRIMARY.");
+  currentClientEntry.isPrimary = true;
+
+  if (currentClientEntry.connect) {
+    log("Initiating backend connection for promoted session...");
+    currentClientEntry.connect(0, true);
+  } else {
+    log("Error: No connect function available during promotion.");
+  }
+}
+
+function handleRtmsStarted(payload, streamId, isPrimary) {
   const meeting_uuid = payload?.meeting_uuid;
   const host_id = payload?.operator_id;
   const encoded_meeting_uuid = encodeURIComponent(meeting_uuid);
 
-  const { logger: meetingLogger, transport: meetingTransport } =
-    createMeetingLogger(meeting_uuid);
+  log(
+    `Starting. Stream: ${streamId}, Role: ${isPrimary ? "PRIMARY" : "STANDBY"}`,
+  );
+  startMetricsReporting();
 
   const rtmsClient = new rtms.Client({
     log: { enable: false },
@@ -122,70 +115,89 @@ function handleRtmsStarted(payload, streamId) {
   currentClientEntry = {
     rtmsClient,
     wsClient: null,
-    meetingLogger,
-    meetingTransport,
     hasLoggedWarning: false,
     streamId,
+    isPrimary,
+    connect: null,
   };
 
-  function connect(retries = 0) {
-    if (isStopping) {
-      meetingLogger.info("Stream stopping, aborting WebSocket connect.");
-      return;
-    }
+  let hasConnectedOnce = false;
 
-    meetingLogger.info(
-      `Attempting WebSocket connection to ${BASE_SERVER_URL} (attempt ${retries + 1})...`,
-    );
+  function connect(retries = 0, isPromoted = false) {
+    if (isStopping) return;
+
+    if (retries === 0) {
+      log(
+        `Connecting to backend: ${ZOOM_BASE_SERVER_URL}/${encoded_meeting_uuid}`,
+      );
+    }
 
     const token = generateAuthToken(host_id);
     const authHeader = { Authorization: `Bearer ${token}` };
 
     const wsClient = new WebSocket(
       `${ZOOM_BASE_SERVER_URL}/${encoded_meeting_uuid}`,
-      {
-        headers: authHeader,
-        handshakeTimeout: 10000,
-      },
+      { headers: authHeader, handshakeTimeout: 10000 },
     );
 
     currentClientEntry.wsClient = wsClient;
 
     wsClient.on("open", () => {
-      meetingLogger.info(
-        `WebSocket connection to ${BASE_SERVER_URL} established for stream ${streamId}`,
-      );
+      log("Backend WebSocket Connected (OPEN).");
       currentClientEntry.hasLoggedWarning = false;
-      retries = 0;
+
+      const meta = {
+        meeting_uuid,
+        streamId,
+        workerPid: process.pid,
+      };
+
+      if (!hasConnectedOnce && !isPromoted) {
+        log("Sending 'session_start'...");
+        wsClient.send(
+          JSON.stringify({
+            type: "session_start",
+            payload: meta,
+          }),
+        );
+        hasConnectedOnce = true;
+      } else {
+        log("Sending 'session_reconnected' (Resume/Failover)...");
+        wsClient.send(
+          JSON.stringify({
+            type: "session_reconnected",
+            payload: meta,
+          }),
+        );
+        hasConnectedOnce = true;
+      }
     });
 
     wsClient.on("error", (error) => {
-      meetingLogger.error(error, `WebSocket error for stream ${streamId}`);
+      if (!isStopping) log(`Backend WebSocket Error: ${error.message}`);
     });
 
     wsClient.on("close", (code, reason) => {
       if (isStopping) {
+        log("Backend WebSocket Closed (Clean Shutdown).");
         return;
       }
 
-      meetingLogger.info(
-        `WebSocket connection for stream ${streamId} closed. Code: ${code}, Reason: ${reason.toString()}`,
-      );
-
-      const nextRetries = retries + 1;
       const delay = Math.min(1000 * 2 ** retries, 30000);
-
-      meetingLogger.info(
-        `Will retry WebSocket connection in ${delay / 1000} seconds...`,
+      log(
+        `Backend WebSocket Closed unexpectedly. Reconnecting in ${delay}ms... (Attempt ${retries + 1})`,
       );
-      setTimeout(() => connect(nextRetries), delay);
+      setTimeout(() => connect(retries + 1, isPromoted), delay);
     });
   }
 
+  currentClientEntry.connect = connect;
+
   rtmsClient.onAudioData((data, size, timestamp, metadata) => {
     if (!currentClientEntry) return;
+    if (!currentClientEntry.isPrimary) return;
 
-    const { wsClient, meetingLogger } = currentClientEntry;
+    const { wsClient } = currentClientEntry;
     const speakerName = metadata.userName || "Zoom RTMS";
 
     if (wsClient && wsClient.readyState === WebSocket.OPEN) {
@@ -194,46 +206,61 @@ function handleRtmsStarted(payload, streamId) {
         audio: data.toString("base64"),
       };
       wsClient.send(JSON.stringify(payload));
-    } else {
-      if (!currentClientEntry.hasLoggedWarning) {
-        meetingLogger.warn(
-          `WebSocket not open for stream ${streamId}. Skipping audio packets until reconnected.`,
-        );
-        currentClientEntry.hasLoggedWarning = true;
-      }
     }
   });
 
-  meetingLogger.info(`Joining RTMS for meeting: ${meeting_uuid}`);
+  log("Joining Zoom RTMS channel...");
   rtmsClient.join(payload);
 
-  connect();
+  if (isPrimary) {
+    connect();
+  } else {
+    log(
+      "Standby Mode: Joined Zoom RTMS, but waiting for PROMOTE signal to connect backend.",
+    );
+  }
 }
 
 function handleRtmsStopped(streamId) {
+  log("Received STOP command.");
   isStopping = true;
+  if (metricsInterval) clearInterval(metricsInterval);
 
   if (!currentClientEntry) {
+    log("No active client entry found. Exiting immediately.");
     process.exit(0);
     return;
   }
 
-  const { rtmsClient, wsClient, meetingLogger, meetingTransport } =
-    currentClientEntry;
-
-  meetingLogger.info(`Cleaning up clients for stream: ${streamId}`);
+  const { rtmsClient, wsClient, isPrimary } = currentClientEntry;
 
   try {
+    log("Leaving RTMS channel...");
     rtmsClient.leave();
-  } catch (err) {}
+  } catch (err) {
+    log(`Error leaving RTMS: ${err.message}`);
+  }
 
-  try {
+  if (isPrimary && wsClient && wsClient.readyState === WebSocket.OPEN) {
+    log("Sending 'session_end' to backend...");
+    wsClient.send(JSON.stringify({ type: "session_end" }), (err) => {
+      if (err) log(`Error sending session_end: ${err.message}`);
+      else log("session_end sent successfully.");
+
+      try {
+        wsClient.close();
+      } catch (e) {}
+
+      log("Exiting process (Primary).");
+      setTimeout(() => process.exit(0), 100);
+    });
+  } else {
     if (wsClient) {
-      wsClient.close();
+      try {
+        wsClient.close();
+      } catch (e) {}
     }
-  } catch (err) {}
-
-  meetingLogger.info(`--- Log for stream ${streamId} ended ---`);
-
-  process.exit(0);
+    log("Exiting process (Standby or Disconnected).");
+    process.exit(0);
+  }
 }

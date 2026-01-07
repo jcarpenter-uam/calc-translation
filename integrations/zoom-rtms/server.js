@@ -1,33 +1,16 @@
-// TODO: Stop creating node_ log files
-
 import "dotenv/config";
 import crypto from "crypto";
 import express from "express";
-import pino from "pino";
 import { fork } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
+import os from "os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const transport = pino.transport({
-  targets: [
-    {
-      level: "info",
-      target: "pino-pretty",
-      options: { colorize: true },
-    },
-  ],
-});
-const logger = pino(transport);
-
 process.on("uncaughtException", (err) => {
-  logger.fatal(err, "UNCAUGHT EXCEPTION");
-  process.exit(1);
-});
-process.on("unhandledRejection", (reason) => {
-  logger.fatal({ reason }, "UNHANDLED REJECTION");
+  console.error(`[${new Date().toISOString()}] UNCAUGHT EXCEPTION:`, err);
   process.exit(1);
 });
 
@@ -35,25 +18,105 @@ const ZM_WEBHOOK_SECRET = process.env.ZM_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 8080;
 
 if (!process.env.ZM_PRIVATE_KEY) {
-  logger.fatal("FATAL: ZM_PRIVATE_KEY is not defined in .env file!");
+  console.error("FATAL: ZM_PRIVATE_KEY is not defined in .env file!");
   process.exit(1);
 }
 
 const activeWorkers = new Map();
+const activeMeetings = new Map();
+
+let lastCpuUsage = process.cpuUsage();
+let lastCpuTime = Date.now();
 
 const app = express();
 
-app.use(
-  "/",
-  express.raw({
-    type: "application/json",
-    limit: "2mb",
-  }),
-);
+app.use("/", express.raw({ type: "application/json", limit: "2mb" }));
+
+function log(msg) {
+  console.log(`[${new Date().toISOString()}][SERVER] ${msg}`);
+}
+
+function attemptPromotion(meetingUuid, oldStreamId) {
+  log(
+    `[Failover] Checking promotion candidates for meeting ${meetingUuid} (Old Primary: ${oldStreamId})`,
+  );
+
+  let candidateStreamId = null;
+  for (const [sId, entry] of activeWorkers.entries()) {
+    if (entry.metadata?.meeting_uuid === meetingUuid && sId !== oldStreamId) {
+      candidateStreamId = sId;
+      break;
+    }
+  }
+
+  if (candidateStreamId) {
+    const candidate = activeWorkers.get(candidateStreamId);
+    log(
+      `[Failover] Candidate found: ${candidateStreamId}. Promoting to PRIMARY.`,
+    );
+
+    activeMeetings.set(meetingUuid, candidateStreamId);
+    candidate.isPrimary = true;
+
+    candidate.worker.send({ type: "PROMOTE" });
+    return true;
+  } else {
+    log(
+      `[Failover] No standby candidates found for meeting ${meetingUuid}. Closing meeting.`,
+    );
+    activeMeetings.delete(meetingUuid);
+    return false;
+  }
+}
+
+// TODO: Needs to be protected somehow
+app.get("/metrics", (req, res) => {
+  const uptime = process.uptime();
+  const memory = process.memoryUsage();
+
+  const now = Date.now();
+  const currentCpu = process.cpuUsage();
+
+  const timeDiff = (now - lastCpuTime) * 1000;
+  const userDiff = currentCpu.user - lastCpuUsage.user;
+  const sysDiff = currentCpu.system - lastCpuUsage.system;
+
+  const cpuPercent = timeDiff > 0 ? ((userDiff + sysDiff) / timeDiff) * 100 : 0;
+
+  lastCpuUsage = currentCpu;
+  lastCpuTime = now;
+
+  const streams = Array.from(activeWorkers.values()).map((entry) => {
+    return {
+      streamId: entry.streamId,
+      meetingUuid: entry.metadata?.meeting_uuid || "unknown",
+      role: entry.isPrimary ? "PRIMARY" : "STANDBY",
+      pid: entry.worker.pid,
+      startTime: new Date(entry.startTime).toISOString(),
+      durationSeconds: Math.floor((Date.now() - entry.startTime) / 1000),
+      usage: entry.metrics || { status: "waiting_for_report" },
+    };
+  });
+
+  res.json({
+    status: "ok",
+    system: {
+      uptimeSeconds: Math.floor(uptime),
+      memoryMB: {
+        rss: Math.round(memory.rss / 1024 / 1024),
+      },
+      cpuPercent: parseFloat(cpuPercent.toFixed(1)),
+      loadAverage: os.loadavg(),
+    },
+    activeStreamsCount: activeWorkers.size,
+    activeMeetingsCount: activeMeetings.size,
+    streams: streams,
+  });
+});
 
 app.post("/zoom", (req, res) => {
   if (!ZM_WEBHOOK_SECRET) {
-    logger.error("FATAL: ZM_WEBHOOK_SECRET is not defined in .env file!");
+    console.error("FATAL: ZM_WEBHOOK_SECRET is not defined in .env file!");
     return res.status(500).send("Server configuration error");
   }
 
@@ -67,12 +130,10 @@ app.post("/zoom", (req, res) => {
   const signature = `v0=${hashForVerify}`;
 
   let bodyPayload;
-  let rawBodyString;
   try {
-    rawBodyString = req.body.toString("utf8");
-    bodyPayload = JSON.parse(rawBodyString);
+    bodyPayload = JSON.parse(req.body.toString("utf8"));
   } catch (e) {
-    logger.error(e, "Failed to parse request body JSON");
+    console.error("Failed to parse request body JSON:", e);
     return res.status(400).send("Bad Request: Invalid JSON");
   }
 
@@ -80,18 +141,13 @@ app.post("/zoom", (req, res) => {
   const streamId = payload?.rtms_stream_id;
 
   if (req.headers["x-zm-signature"] !== signature) {
-    logger.warn("Received webhook with invalid signature.");
+    console.warn("Received webhook with invalid signature.");
     return res.status(401).send("Invalid signature");
   }
 
-  logger.info(`Received valid webhook for event: ${event}`);
-
   switch (event) {
     case "endpoint.url_validation":
-      logger.info("Handling endpoint.url_validation");
-      if (!payload?.plainToken) {
-        return res.status(400).send("Bad Request: Missing plainToken");
-      }
+      log("Handling endpoint.url_validation");
       const hashForValidate = crypto
         .createHmac("sha256", ZM_WEBHOOK_SECRET)
         .update(payload.plainToken)
@@ -102,41 +158,113 @@ app.post("/zoom", (req, res) => {
       });
 
     case "meeting.rtms_started":
-      logger.info(`Handling meeting.rtms_started for stream: ${streamId}`);
+      log(`Received meeting.rtms_started for stream: ${streamId}`);
 
       if (activeWorkers.has(streamId)) {
-        logger.warn(`Worker already exists for stream ${streamId}`);
+        log(
+          `Stream ${streamId} already active. Ignoring duplicate start request.`,
+        );
         return res.status(200).send("OK");
       }
 
-      const worker = fork(path.resolve(__dirname, "./worker.js"));
+      const meetingUuid = payload?.meeting_uuid;
+      let isPrimary = false;
+
+      if (meetingUuid && !activeMeetings.has(meetingUuid)) {
+        log(`New meeting detected (${meetingUuid}). Assigning PRIMARY role.`);
+        activeMeetings.set(meetingUuid, streamId);
+        isPrimary = true;
+      } else {
+        log(
+          `Existing meeting detected (${meetingUuid}). Assigning STANDBY role.`,
+        );
+        isPrimary = false;
+      }
+
+      const worker = fork(path.resolve(__dirname, "./worker.js"), [], {
+        execArgv: [
+          "--optimize_for_size",
+          "--max-old-space-size=512",
+          "--gc_interval=100",
+        ],
+      });
+
+      log(`Spawned worker process (PID ${worker.pid}) for stream ${streamId}`);
+
+      worker.on("message", (msg) => {
+        if (msg.type === "METRICS") {
+          const entry = activeWorkers.get(streamId);
+          if (entry) {
+            entry.metrics = msg.payload;
+          }
+        }
+      });
 
       worker.on("exit", (code) => {
-        logger.info(`Worker for stream ${streamId} exited with code ${code}`);
+        log(
+          `Worker process (PID ${worker.pid}) for stream ${streamId} exited with code ${code}`,
+        );
         activeWorkers.delete(streamId);
+
+        if (meetingUuid && activeMeetings.get(meetingUuid) === streamId) {
+          log(
+            `Primary worker exited unexpectedly. Attempting promotion for ${meetingUuid}.`,
+          );
+          attemptPromotion(meetingUuid, streamId);
+        }
       });
 
       worker.send({
         type: "START",
         payload: payload,
         streamId: streamId,
+        isPrimary: isPrimary,
       });
 
-      activeWorkers.set(streamId, worker);
+      activeWorkers.set(streamId, {
+        worker,
+        streamId,
+        startTime: Date.now(),
+        metadata: payload,
+        metrics: null,
+        isPrimary,
+      });
+
       return res.status(200).send("OK");
 
     case "meeting.rtms_stopped":
-      logger.info(`Handling meeting.rtms_stopped for stream: ${streamId}`);
+      log(`Received meeting.rtms_stopped for stream: ${streamId}`);
+
       if (streamId && activeWorkers.has(streamId)) {
-        const targetWorker = activeWorkers.get(streamId);
-        targetWorker.send({ type: "STOP", streamId: streamId });
+        const entry = activeWorkers.get(streamId);
+        const mUuid = entry.metadata?.meeting_uuid;
+        const wasPrimary = entry.isPrimary;
+
+        log(
+          `Stopping worker (PID ${entry.worker.pid}). Was Primary? ${wasPrimary}`,
+        );
+
+        entry.worker.send({ type: "STOP", streamId: streamId });
+
+        activeWorkers.delete(streamId);
+
+        if (wasPrimary && mUuid) {
+          log(
+            `Primary stream stopped explicitly. Checking for failover candidates.`,
+          );
+          attemptPromotion(mUuid, streamId);
+        }
 
         setTimeout(() => {
-          if (activeWorkers.has(streamId)) {
-            targetWorker.kill();
-            activeWorkers.delete(streamId);
+          if (!entry.worker.killed) {
+            log(
+              `Force killing worker (PID ${entry.worker.pid}) after timeout.`,
+            );
+            entry.worker.kill();
           }
         }, 10000);
+      } else {
+        log(`Received stop for unknown or already removed stream: ${streamId}`);
       }
       return res.status(200).send("OK");
 
@@ -146,5 +274,5 @@ app.post("/zoom", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  logger.info(`Zoom RTMS Manager listening on port ${PORT}`);
+  log(`Zoom RTMS Manager listening on port ${PORT}`);
 });

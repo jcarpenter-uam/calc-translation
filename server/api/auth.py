@@ -1,11 +1,7 @@
 import logging
 from typing import Optional
 
-from core.authentication import (
-    generate_jwt_token,
-    get_admin_user_payload,
-    get_current_user_payload,
-)
+from core.authentication import generate_jwt_token, get_current_user_payload
 from core.config import settings
 from core.logging_setup import log_step, session_id_var
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
@@ -94,7 +90,9 @@ def create_auth_router() -> APIRouter:
                         detail="Either 'join_url' or 'meetingid' must be provided.",
                     )
 
-                session_id = await authenticate_zoom_session(request=request)
+                session_id = await authenticate_zoom_session(
+                    request=request, user_id=user_id
+                )
 
                 token = generate_jwt_token(user_id=user_id, session_id=session_id)
                 logger.info(

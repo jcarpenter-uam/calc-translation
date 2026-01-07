@@ -2,7 +2,7 @@ import asyncio
 import logging
 import threading
 from datetime import datetime
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Set
 
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket
@@ -72,6 +72,55 @@ class ConnectionManager:
                     count += 1
         return count
 
+    def get_waiting_languages(self, session_id: str) -> Set[str]:
+        """
+        Returns a set of language codes requested by viewers currently connected
+        to a session that hasn't started transcription yet (waiting room).
+        """
+        languages = set()
+        if session_id in self.sessions:
+            for ws in self.sessions[session_id]:
+                lang = self.socket_languages.get(ws)
+                if lang:
+                    languages.add(lang)
+        return languages
+
+    async def migrate_session(self, old_session_id: str, new_session_id: str):
+        """
+        Moves all viewer connections from an old session ID to a new one.
+        Useful when a Waiting Room (scheduled UUID) transitions to a Live Meeting (new UUID).
+        """
+        session_token = session_id_var.set(new_session_id)
+        try:
+            if old_session_id in self.sessions:
+                old_connections = self.sessions.pop(old_session_id)
+
+                if new_session_id not in self.sessions:
+                    self.sessions[new_session_id] = []
+
+                self.sessions[new_session_id].extend(old_connections)
+
+                with log_step("CONN-MANAGER"):
+                    logger.info(
+                        f"Migrated {len(old_connections)} viewers from Waiting Room {old_session_id} to Live Session {new_session_id}"
+                    )
+
+                for ws in old_connections:
+                    try:
+                        await ws.send_json({"type": "status", "status": "active"})
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to send status update during migration: {e}"
+                        )
+
+        except Exception as e:
+            logger.error(
+                f"Error migrating session {old_session_id} to {new_session_id}: {e}",
+                exc_info=True,
+            )
+        finally:
+            session_id_var.reset(session_token)
+
     async def _cleanup_language_stream(self, session_id: str, language_code: str):
         """
         Waits for a grace period, then checks if viewers are still 0.
@@ -138,17 +187,18 @@ class ConnectionManager:
                 self.cleanup_tasks[session_id][language_code].cancel()
                 del self.cleanup_tasks[session_id][language_code]
 
-            if session_id in self.language_request_callbacks:
-                try:
-                    callback = self.language_request_callbacks[session_id]
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback(language_code)
-                    else:
-                        callback(language_code)
-                except Exception as e:
-                    logger.error(
-                        f"Error triggering language request callback for session {session_id}: {e}"
-                    )
+            if self.is_session_active(session_id):
+                if session_id in self.language_request_callbacks:
+                    try:
+                        callback = self.language_request_callbacks[session_id]
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback(language_code)
+                        else:
+                            callback(language_code)
+                    except Exception as e:
+                        logger.error(
+                            f"Error triggering language request callback for session {session_id}: {e}"
+                        )
 
             history = self.cache.get_history(session_id, language_code)
 
@@ -204,7 +254,7 @@ class ConnectionManager:
             if not self.is_session_active(session_id):
                 with log_step("CONN-MANAGER"):
                     logger.debug(
-                        f"Viewer disconnected from inactive session (Lang: {language_code})."
+                        f"Viewer disconnected from inactive/waiting session (Lang: {language_code})."
                     )
                 return
 

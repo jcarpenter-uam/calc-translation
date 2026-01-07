@@ -69,6 +69,7 @@ def create_viewer_router(viewer_manager: ConnectionManager) -> APIRouter:
             session_id=session_id,
             viewer_manager=viewer_manager,
             language_code=language_code,
+            user_id=cookie_user_id,
         )
 
     return router

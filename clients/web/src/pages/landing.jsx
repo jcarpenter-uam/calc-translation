@@ -1,18 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useAuth } from "../context/auth";
 import {
   IntegrationCard,
   ZoomForm,
-  TestForm,
 } from "../components/auth/integration-card.jsx";
 
-import { BiLogoZoom, BiSolidFlask } from "react-icons/bi";
+import { BiLogoZoom } from "react-icons/bi";
 
 export default function LandingPage() {
   const { t } = useTranslation();
-  const { user } = useAuth();
   const [integration, setIntegration] = useState("zoom");
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -100,55 +97,9 @@ export default function LandingPage() {
     }
   };
 
-  const handleTestSubmit = async ({ sessionId }) => {
-    setError(null);
-
-    if (!sessionId) {
-      setError(t("error_missing_session_id"));
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/auth/test", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          session_id: sessionId,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || t("error_test_auth_failed"));
-      }
-
-      const data = await response.json();
-      const returnedSessionId = data.meetinguuid;
-      const token = data.token;
-
-      if (!returnedSessionId) {
-        throw new Error(t("error_no_session_id"));
-      }
-
-      if (!token) {
-        throw new Error(t("error_no_token"));
-      }
-
-      handleJoin("test", returnedSessionId, token);
-    } catch (err) {
-      console.error("Test authentication failed:", err);
-      setError(err.message);
-    }
-  };
-
   const renderForm = () => {
     if (integration === "zoom") {
       return <ZoomForm onSubmit={handleZoomSubmit} />;
-    }
-    if (integration === "test") {
-      return <TestForm onSubmit={handleTestSubmit} />;
     }
     return null;
   };
@@ -168,15 +119,6 @@ export default function LandingPage() {
               selected={integration}
               onSelect={setIntegration}
             />
-            {user?.is_admin && (
-              <IntegrationCard
-                id="test"
-                title={t("integration_test")}
-                icon={<BiSolidFlask className="h-7 w-7 text-green-500" />}
-                selected={integration}
-                onSelect={setIntegration}
-              />
-            )}
           </div>
         </div>
 

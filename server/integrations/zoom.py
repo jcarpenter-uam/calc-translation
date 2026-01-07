@@ -1,5 +1,6 @@
 import base64
 import logging
+import re
 import time
 import urllib.parse
 from datetime import datetime, timezone
@@ -385,9 +386,8 @@ async def authenticate_zoom_session(
                                 f"Detected Readable ID {readable_id}. Fetching from Zoom..."
                             )
                             meeting_uuid = await get_meeting_data(
-                                meeting_identifier=readable_id,
+                                meeting_uuid=readable_id,
                                 user_id=user_id,
-                                is_waiting_room=True,
                             )
                             return meeting_uuid
                         except Exception as e:
@@ -421,9 +421,8 @@ async def authenticate_zoom_session(
                     if user_id:
                         try:
                             meeting_uuid = await get_meeting_data(
-                                meeting_identifier=request.meetingid,
+                                meeting_uuid=request.meetingid,
                                 user_id=user_id,
-                                is_waiting_room=True,
                             )
                             return meeting_uuid
                         except Exception as e:

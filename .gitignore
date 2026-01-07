@@ -19,10 +19,6 @@ integrations/zoom-rtms/logs/*
 !integrations/zoom-rtms/logs/README.md
 logs/node*
 
-# ----- test -----
-*.m4a
-*.mp4
-
 # Secrets
 .env
 ngrok-conf.yaml

@@ -1,19 +1,31 @@
 import asyncio
 import base64
+import io
 import os
-import random
+import urllib.request
 import uuid
+import wave
 from datetime import datetime, timedelta, timezone
 
 import aiohttp
 import jwt
 
 WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe")
+
 CHUNK_SIZE = 4096
+SAMPLE_RATE = 16000
+CHANNELS = 1
+SAMPLE_WIDTH = 2
+BYTES_PER_SECOND = SAMPLE_RATE * CHANNELS * SAMPLE_WIDTH
+CHUNK_DURATION = CHUNK_SIZE / BYTES_PER_SECOND
+
+SPEECH_URL = (
+    "https://raw.githubusercontent.com/ggerganov/whisper.cpp/master/samples/jfk.wav"
+)
 
 
 class ZoomRTMSBot:
-    def __init__(self, meeting_uuid=None, host_id=None, audio_file=None):
+    def __init__(self, meeting_uuid=None, host_id=None):
         self.meeting_uuid = meeting_uuid or f"test-{uuid.uuid4()}"
         self.host_id = host_id or f"host-{uuid.uuid4().hex[:8]}"
         self.stream_id = f"st_{uuid.uuid4().hex[:8]}"
@@ -22,39 +34,38 @@ class ZoomRTMSBot:
         self.session = None
         self.received_messages = []
         self.is_connected = False
-        self.audio_proc = None
 
-        if audio_file:
-            self.audio_file = audio_file
-        else:
-            self.audio_file = self._pick_random_audio_file()
+        self.audio_buffer = bytes()
+        self.audio_cursor = 0
+        self._prepare_audio_data()
 
         raw_key = os.getenv("PRIVATE_KEY", "")
         if not raw_key:
             raw_key = os.getenv("ZM_PRIVATE_KEY", "")
         self.private_key = self._format_private_key(raw_key)
 
-    def _pick_random_audio_file(self):
-        """Searches known directories for audio files and picks one at random."""
-        search_paths = [
-            "audio",
-        ]
+    def _prepare_audio_data(self):
+        """Downloads wav file to memory and strips headers to get raw PCM."""
+        print(f"[Bot] Downloading speech sample from {SPEECH_URL}...")
+        try:
+            with urllib.request.urlopen(SPEECH_URL) as response:
+                audio_data = response.read()
 
-        valid_extensions = [".m4a", ".mp3", ".wav", ".mp4", ".mkv"]
-        found_files = []
+            with wave.open(io.BytesIO(audio_data), "rb") as wav_file:
+                if wav_file.getnchannels() != 1 or wav_file.getframerate() != 16000:
+                    print(
+                        f"[Bot] WARNING: Sample is {wav_file.getframerate()}Hz/{wav_file.getnchannels()}ch. Expected 16000Hz/1ch."
+                    )
 
-        for path in search_paths:
-            if os.path.exists(path):
-                for root, dirs, files in os.walk(path):
-                    for file in files:
-                        if any(file.lower().endswith(ext) for ext in valid_extensions):
-                            found_files.append(os.path.join(root, file))
+                self.audio_buffer = wav_file.readframes(wav_file.getnframes())
+                print(
+                    f"[Bot] Audio loaded! {len(self.audio_buffer)} bytes of speech data."
+                )
 
-        if found_files:
-            selected = random.choice(found_files)
-            return selected
-
-        return None
+        except Exception as e:
+            print(f"[Bot] CRITICAL: Failed to download audio: {e}")
+            print("[Bot] Fallback: Generating loud noise so connection doesn't drop.")
+            self.audio_buffer = os.urandom(SAMPLE_RATE * 2)
 
     def _format_private_key(self, key_str):
         if not key_str:
@@ -122,86 +133,60 @@ class ZoomRTMSBot:
                 await self.session.close()
             return False
 
-    async def _start_ffmpeg(self):
-        if not self.audio_file or not os.path.exists(self.audio_file):
-            return
-
-        self.audio_proc = await asyncio.create_subprocess_exec(
-            "ffmpeg",
-            "-i",
-            self.audio_file,
-            "-f",
-            "s16le",
-            "-ar",
-            "16000",
-            "-ac",
-            "1",
-            "-loglevel",
-            "quiet",
-            "-",
-            stdout=asyncio.subprocess.PIPE,
-        )
-
     async def send_audio_chunk(self):
         if not self.ws or self.ws.closed:
             return
 
-        if self.audio_file:
-            if not self.audio_proc:
-                await self._start_ffmpeg()
+        end_pos = self.audio_cursor + CHUNK_SIZE
+        chunk_data = self.audio_buffer[self.audio_cursor : end_pos]
 
-            try:
-                if self.audio_proc and self.audio_proc.stdout:
-                    audio_data = await self.audio_proc.stdout.read(CHUNK_SIZE)
-                    if len(audio_data) == 0:
-                        try:
-                            self.audio_proc.terminate()
-                        except:
-                            pass
-                        await self._start_ffmpeg()
-                        if self.audio_proc and self.audio_proc.stdout:
-                            audio_data = await self.audio_proc.stdout.read(CHUNK_SIZE)
-                        else:
-                            audio_data = bytes(CHUNK_SIZE)
-                else:
-                    audio_data = bytes(CHUNK_SIZE)
-            except Exception:
-                audio_data = bytes(CHUNK_SIZE)
+        if len(chunk_data) < CHUNK_SIZE:
+            remainder = CHUNK_SIZE - len(chunk_data)
+            chunk_data += self.audio_buffer[:remainder]
+            self.audio_cursor = remainder
         else:
-            audio_data = os.urandom(CHUNK_SIZE)
+            self.audio_cursor = end_pos
 
-        encoded = base64.b64encode(audio_data).decode("utf-8")
+        encoded = base64.b64encode(chunk_data).decode("utf-8")
+
         await self.ws.send_json({"userName": "Test Bot", "audio": encoded})
 
     async def run_for(self, seconds):
         end_time = asyncio.get_event_loop().time() + seconds
+
         while asyncio.get_event_loop().time() < end_time:
             if not self.ws or self.ws.closed:
                 break
 
+            loop_start = asyncio.get_event_loop().time()
+
             await self.send_audio_chunk()
 
-            try:
-                msg = await self.ws.receive(timeout=0.1)
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    self.received_messages.append(msg.data)
-                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
-                    self.is_connected = False
-                    break
-            except asyncio.TimeoutError:
-                continue
+            elapsed = asyncio.get_event_loop().time() - loop_start
+            remaining_wait = CHUNK_DURATION - elapsed
+
+            if remaining_wait > 0:
+                try:
+                    msg = await self.ws.receive(timeout=remaining_wait)
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        self.received_messages.append(msg.data)
+                        print(f"[Bot] RX: {msg.data}")
+                    elif msg.type in (
+                        aiohttp.WSMsgType.CLOSED,
+                        aiohttp.WSMsgType.ERROR,
+                    ):
+                        self.is_connected = False
+                        break
+                except asyncio.TimeoutError:
+                    continue
+            else:
+                await asyncio.sleep(0.001)
 
     async def close(self):
-        if self.audio_proc:
-            try:
-                self.audio_proc.terminate()
-                await self.audio_proc.wait()
-            except:
-                pass
-
         if self.ws and not self.ws.closed:
             await self.ws.send_json({"type": "session_end"})
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
             await self.ws.close()
+
         if self.session:
             await self.session.close()

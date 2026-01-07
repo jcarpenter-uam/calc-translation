@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 import uuid
 from datetime import timedelta
 
@@ -10,6 +11,8 @@ from core.config import settings
 from core.database import (
     SQL_GET_TENANT_AUTH_BY_ID,
     SQL_GET_TENANT_BY_DOMAIN,
+    SQL_GET_USER_BY_ID,
+    SQL_UPSERT_INTEGRATION,
     SQL_UPSERT_USER,
 )
 from core.logging_setup import log_step
@@ -28,7 +31,7 @@ class EntraLoginRequest(BaseModel):
 
 
 REDIRECT_PATH = "/api/auth/entra/callback"
-SCOPE = ["User.Read"]
+SCOPE = ["User.Read", "Calendars.Read"]
 
 
 async def get_config_for_domain(domain: str) -> dict | None:
@@ -116,6 +119,85 @@ def _get_token_from_code(tenant_config: dict, code: str) -> dict:
     return app.acquire_token_by_authorization_code(
         code, scopes=SCOPE, redirect_uri=redirect_uri
     )
+
+
+async def get_valid_microsoft_token(user_id: str) -> str | None:
+    with log_step(LOG_STEP):
+        if not database.DB_POOL:
+            logger.error("Database not initialized.")
+            return None
+
+        async with database.DB_POOL.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, access_token, refresh_token, expires_at, platform_user_id FROM INTEGRATIONS WHERE user_id = $1 AND platform = 'microsoft'",
+                user_id,
+            )
+
+        if not row:
+            logger.warning(f"No Microsoft integration found for user {user_id}")
+            return None
+
+        integration_id = row["id"]
+        access_token = row["access_token"]
+        refresh_token = row["refresh_token"]
+        expires_at = row["expires_at"] or 0
+
+        if time.time() < (expires_at - 300):
+            return access_token
+
+        logger.info(f"Microsoft token for user {user_id} expired. Refreshing...")
+
+        if not refresh_token:
+            logger.error(f"No refresh token for integration {integration_id}")
+            return None
+
+        async with database.DB_POOL.acquire() as conn:
+            user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+
+        if not user_row or not user_row.get("email"):
+            logger.error(
+                f"User {user_id} not found or has no email. Cannot refresh token."
+            )
+            return None
+
+        try:
+            domain = user_row["email"].split("@")[1]
+            tenant_config = await get_config_for_domain(domain)
+        except Exception as e:
+            logger.error(f"Failed to determine domain/config for user {user_id}: {e}")
+            return None
+
+        if not tenant_config:
+            logger.error(f"No tenant config found for domain {domain}")
+            return None
+
+        app = _build_msal_app(tenant_config)
+        result = app.acquire_token_by_refresh_token(refresh_token, scopes=SCOPE)
+
+        if "error" in result:
+            logger.error(f"MSAL Refresh Error: {result.get('error_description')}")
+            return None
+
+        new_access_token = result.get("access_token")
+        new_refresh_token = result.get("refresh_token")
+        new_expires_in = result.get("expires_in", 3600)
+        new_expires_at = int(time.time()) + new_expires_in
+
+        async with database.DB_POOL.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE INTEGRATIONS 
+                SET access_token = $1, refresh_token = $2, expires_at = $3
+                WHERE id = $4
+                """,
+                new_access_token,
+                new_refresh_token,
+                new_expires_at,
+                integration_id,
+            )
+
+        logger.info(f"Successfully refreshed Microsoft token for user {user_id}")
+        return new_access_token
 
 
 async def handle_login(
@@ -222,6 +304,26 @@ async def handle_callback(request: Request) -> RedirectResponse:
             logger.debug(f"Upserted user: {user_email} (OID: {user_id})")
         except Exception as e:
             logger.error(f"Failed to upsert user {user_id}: {e}", exc_info=True)
+
+        access_token = token_response.get("access_token")
+        refresh_token = token_response.get("refresh_token")
+        expires_in = token_response.get("expires_in", 3599)
+        expires_at = int(time.time()) + expires_in
+
+        try:
+            async with database.DB_POOL.acquire() as conn:
+                await conn.execute(
+                    SQL_UPSERT_INTEGRATION,
+                    user_id,
+                    "microsoft",
+                    user_id,
+                    access_token,
+                    refresh_token,
+                    expires_at,
+                )
+            logger.debug(f"Stored Microsoft tokens for user {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to store Microsoft tokens: {e}")
 
         app_token = generate_jwt_token(
             user_id=user_id, session_id=None, expires_delta=timedelta(days=90)

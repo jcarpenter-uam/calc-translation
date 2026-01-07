@@ -103,6 +103,29 @@ async def init_db():
                         "CREATE INDEX IF NOT EXISTS idx_meetings_started_at ON MEETINGS(started_at);"
                     )
 
+                    # Calendar Events
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS CALENDAR_EVENTS (
+                            id TEXT PRIMARY KEY, -- Microsoft Event ID
+                            user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
+                            subject TEXT,
+                            body_content TEXT,
+                            start_time TIMESTAMPTZ,
+                            end_time TIMESTAMPTZ,
+                            location TEXT,
+                            join_url TEXT,
+                            web_link TEXT,
+                            organizer TEXT,
+                            is_cancelled BOOLEAN DEFAULT FALSE,
+                            full_event_data JSONB
+                        )
+                        """
+                    )
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_calendar_user_time ON CALENDAR_EVENTS(user_id, start_time);"
+                    )
+
                     # Transcripts
                     await conn.execute(
                         """
@@ -290,4 +313,40 @@ SQL_GET_TRANSCRIPT_BY_MEETING_ID = """
 SELECT file_name, creation_date 
 FROM TRANSCRIPTS 
 WHERE meeting_id = $1 AND language_code = $2;
+"""
+
+# --- CALENDAR EVENTS ---
+
+SQL_UPSERT_CALENDAR_EVENT = """
+INSERT INTO CALENDAR_EVENTS (
+    id, user_id, subject, body_content, start_time, end_time, location, 
+    join_url, web_link, organizer, is_cancelled, full_event_data
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
+ON CONFLICT (id) DO UPDATE SET
+    subject = excluded.subject,
+    body_content = excluded.body_content,
+    start_time = excluded.start_time,
+    end_time = excluded.end_time,
+    location = excluded.location,
+    join_url = excluded.join_url,
+    web_link = excluded.web_link,
+    organizer = excluded.organizer,
+    is_cancelled = excluded.is_cancelled,
+    full_event_data = excluded.full_event_data;
+"""
+
+SQL_GET_CALENDAR_EVENTS_BY_USER_ID = """
+SELECT * FROM CALENDAR_EVENTS 
+WHERE user_id = $1
+AND start_time >= CURRENT_DATE - INTERVAL '1 day'
+ORDER BY start_time ASC;
+"""
+
+SQL_GET_CALENDAR_EVENTS_FILTERED = """
+SELECT * FROM CALENDAR_EVENTS 
+WHERE user_id = $1
+AND ($2::timestamptz IS NULL OR start_time >= $2)
+AND ($3::timestamptz IS NULL OR start_time <= $3)
+ORDER BY start_time ASC;
 """

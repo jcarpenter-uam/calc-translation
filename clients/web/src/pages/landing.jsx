@@ -1,18 +1,43 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useCalendar } from "../hooks/use-calender.js";
 import {
   IntegrationCard,
   ZoomForm,
 } from "../components/auth/integration-card.jsx";
+import { CalendarView } from "../components/calender/view.jsx";
 
 import { BiLogoZoom } from "react-icons/bi";
+
+const getCurrentWorkWeek = () => {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+
+  const start = new Date(now);
+  start.setDate(diff);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 4);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+};
 
 export default function LandingPage() {
   const { t } = useTranslation();
   const [integration, setIntegration] = useState("zoom");
   const [error, setError] = useState(null);
+  const [dateRange, setDateRange] = useState(getCurrentWorkWeek());
   const navigate = useNavigate();
+  const {
+    events,
+    loading: calendarLoading,
+    error: calendarError,
+    syncCalendar,
+  } = useCalendar(dateRange.start, dateRange.end);
 
   useEffect(() => {
     const checkPendingZoomLink = async () => {
@@ -105,13 +130,13 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full">
-      <div className="max-w-md w-full space-y-8">
+    <div className="flex flex-col lg:flex-row items-start justify-center w-full min-h-[calc(100vh-4rem)] gap-8 p-6">
+      <div className="w-full lg:w-[400px] flex-shrink-0 space-y-8 lg:sticky lg:top-6">
         <div>
-          <h2 className="text-xl font-semibold mb-4 text-center">
+          <h2 className="text-xl font-semibold mb-4 text-center lg:text-left">
             {t("choose_integration")}
           </h2>
-          <div className="flex flex-wrap justify-center gap-4">
+          <div className="flex flex-col gap-4">
             <IntegrationCard
               id="zoom"
               title={t("integration_zoom")}
@@ -122,7 +147,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="transition-all">
+        <div className="transition-all bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm">
           {renderForm()}
           {error && (
             <p className="mt-4 text-center text-sm font-medium text-red-600">
@@ -130,6 +155,18 @@ export default function LandingPage() {
             </p>
           )}
         </div>
+      </div>
+
+      <div className="flex-1 w-full min-w-0">
+        <CalendarView
+          events={events}
+          loading={calendarLoading}
+          error={calendarError}
+          onSync={syncCalendar}
+          startDate={dateRange.start}
+          endDate={dateRange.end}
+          onDateChange={setDateRange}
+        />
       </div>
     </div>
   );

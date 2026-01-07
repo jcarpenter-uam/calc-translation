@@ -228,6 +228,11 @@ class StreamHandler:
         if self.service:
             await self.service.send_chunk(audio_chunk)
 
+    async def send_keepalive(self):
+        """Sends a keepalive JSON message to prevent Soniox timeout."""
+        if self.service:
+            await self.service.send_json({"type": "keepalive"})
+
     async def close(self):
         if self.service:
             await self.service.finalize_stream()
@@ -447,7 +452,26 @@ class MeetingSession:
                     f"Session {self.session_id} disconnected unexpectedly. "
                     f"Waiting {delay_seconds}s for reconnect..."
                 )
-                await asyncio.sleep(delay_seconds)
+
+                waited = 0
+                step = 10
+
+                while waited < delay_seconds:
+                    wait_time = min(step, delay_seconds - waited)
+                    await asyncio.sleep(wait_time)
+                    waited += wait_time
+
+                    if waited < delay_seconds:
+                        async with self.handlers_lock:
+                            for handler in self.active_handlers.values():
+                                try:
+                                    await handler.send_keepalive()
+                                    logger.debug("Sending keep-alive to soniox")
+                                except Exception as e:
+                                    logger.warning(
+                                        f"Failed to send keepalive for {handler.language_code}: {e}"
+                                    )
+
                 logger.warning(
                     f"Session {self.session_id} timed out waiting for reconnect. Destroying."
                 )

@@ -25,10 +25,11 @@ SPEECH_URL = (
 
 
 class ZoomRTMSBot:
-    def __init__(self, meeting_uuid=None, host_id=None):
+    def __init__(self, meeting_uuid=None, host_id=None, user_name="Test Bot"):
         self.meeting_uuid = meeting_uuid or f"test-{uuid.uuid4()}"
         self.host_id = host_id or f"host-{uuid.uuid4().hex[:8]}"
         self.stream_id = f"st_{uuid.uuid4().hex[:8]}"
+        self.user_name = user_name
 
         self.ws = None
         self.session = None
@@ -149,7 +150,7 @@ class ZoomRTMSBot:
 
         encoded = base64.b64encode(chunk_data).decode("utf-8")
 
-        await self.ws.send_json({"userName": "Test Bot", "audio": encoded})
+        await self.ws.send_json({"userName": self.user_name, "audio": encoded})
 
     async def run_for(self, seconds):
         end_time = asyncio.get_event_loop().time() + seconds

@@ -354,6 +354,11 @@ class SonioxService:
                     logger.error(f"Send chunk error: {e}")
                 self._is_connected = False
 
+    async def send_json(self, data: dict):
+        """Helper to send JSON control messages (like keepalives)."""
+        if self.ws:
+            await self.ws.send(json.dumps(data))
+
     async def finalize_stream(self):
         """
         * Signals the end of the *entire* audio stream (session end).

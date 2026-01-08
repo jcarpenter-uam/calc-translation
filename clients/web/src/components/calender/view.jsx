@@ -1,7 +1,6 @@
 import {
   BiCalendar,
   BiRefresh,
-  BiLinkExternal,
   BiVideo,
   BiXCircle,
   BiMap,
@@ -22,6 +21,7 @@ export function CalendarView({
   startDate,
   endDate,
   onDateChange,
+  onAppJoin,
 }) {
   const formatTime = (dateString) => {
     if (!dateString) return "";
@@ -285,36 +285,26 @@ export function CalendarView({
                     </div>
 
                     <div className="mt-4 sm:mt-0 flex items-center gap-2 sm:self-center">
-                      {event.web_link && (
+                      {hasJoinUrl && !isCancelled && !isEnded && (
                         <a
-                          href={event.web_link}
+                          href={event.join_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 text-zinc-400 hover:text-blue-600 dark:text-zinc-500 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
-                          title="View in Outlook"
+                          title={`Join on ${platformConfig.label}`}
                         >
-                          <BiLinkExternal className="w-5 h-5" />
+                          {platformConfig.icon}
                         </a>
                       )}
 
-                      {hasJoinUrl &&
-                        !isCancelled &&
-                        !isEnded &&
-                        (platformConfig.comingSoon ? (
-                          <span className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg cursor-not-allowed select-none opacity-80">
-                            Coming Soon
-                          </span>
-                        ) : (
-                          <a
-                            href={event.join_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-zinc-900 cursor-pointer"
-                          >
-                            Join
-                            <BiVideo className="w-4 h-4" />
-                          </a>
-                        ))}
+                      {!isCancelled && !isEnded && (
+                        <button
+                          onClick={() => onAppJoin && onAppJoin(event)}
+                          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer"
+                        >
+                          Start Transcription
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

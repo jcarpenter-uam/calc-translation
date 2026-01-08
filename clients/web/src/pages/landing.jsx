@@ -119,6 +119,43 @@ export default function LandingPage() {
     }
   };
 
+  const handleCalendarJoin = async (event) => {
+    try {
+      console.log("Sending Calendar Join Request:", {
+        meetingId: event.id,
+        joinUrl: event.join_url,
+        startTime: event.start_time,
+      });
+
+      const response = await fetch("/api/auth/calendar-join", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          meetingId: event.id,
+          joinUrl: event.join_url,
+          topic: event.subject,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to initialize session");
+      }
+
+      const data = await response.json();
+
+      const { sessionId, token, type } = data;
+
+      navigate(
+        `/sessions/${type}/${encodeURIComponent(sessionId)}?token=${token}`,
+      );
+    } catch (err) {
+      console.error("Failed to quick-join:", err);
+      setError("Failed to start assistant. Please try again.");
+    }
+  };
+
   const renderForm = () => {
     if (integration === "zoom") {
       return <ZoomForm onSubmit={handleZoomSubmit} />;
@@ -185,6 +222,7 @@ export default function LandingPage() {
           startDate={dateRange.start}
           endDate={dateRange.end}
           onDateChange={setDateRange}
+          onAppJoin={handleCalendarJoin}
         />
       </div>
     </div>

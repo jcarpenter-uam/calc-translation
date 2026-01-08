@@ -153,7 +153,11 @@ class StreamHandler:
                     self.is_new_utterance = True
                 return
 
-            if self.is_new_utterance and not result.is_final:
+            has_text = (result.transcription and result.transcription.strip()) or (
+                result.translation and result.translation.strip()
+            )
+
+            if self.is_new_utterance and not result.is_final and has_text:
                 self.utterance_count += 1
                 self.current_message_id = f"{self.utterance_count}_{self.language_code}"
                 self.is_new_utterance = False
@@ -320,8 +324,8 @@ class MeetingSession:
         with log_step("SESSION"):
             logger.info(f"Initializing session with languages: {waiting_languages}")
 
-        for lang in waiting_languages:
-            await self.add_language_stream(lang)
+        tasks = [self.add_language_stream(lang) for lang in waiting_languages]
+        await asyncio.gather(*tasks)
 
     async def _add_language_stream_wrapper(self, language_code: str):
         await self.add_language_stream(language_code)

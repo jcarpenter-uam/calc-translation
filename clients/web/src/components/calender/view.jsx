@@ -184,10 +184,11 @@ export function CalendarView({
         </div>
       )}
 
-      <div className="space-y-8">
+      {/* BUG: Mobile displays scrolled content beyond this div */}
+      <div className="space-y-8 max-h-[500px] overflow-y-auto scrollbar-none">
         {groupedEvents.map((group, groupIndex) => (
           <div key={group.date || groupIndex}>
-            <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm py-2 px-1 mb-3 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 py-2 px-1 mb-3 border-b border-zinc-100 dark:border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                 {group.date}
               </h3>

@@ -113,55 +113,54 @@ export function CalendarView({
 
   return (
     <div className="w-full h-full space-y-6 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 bg-white/50 dark:bg-zinc-900/50">
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-6 border-b border-zinc-200 dark:border-zinc-700">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <BiCalendar className="h-5 w-5 text-blue-600 dark:text-blue-500" />
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              Upcoming Meetings
-            </h2>
-          </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 ml-7">
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            Upcoming Meetings
+          </h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
             View and join your scheduled online meetings
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-sm">
-            <input
-              type="date"
-              value={formatDateForInput(startDate)}
-              onChange={(e) => {
-                const date = parseInputDate(e.target.value);
-                if (date) {
-                  date.setHours(0, 0, 0, 0);
-                  onDateChange((prev) => ({ ...prev, start: date }));
-                }
-              }}
-              className="px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
-            />
-            <span className="text-zinc-400">-</span>
-            <input
-              type="date"
-              value={formatDateForInput(endDate)}
-              onChange={(e) => {
-                const date = parseInputDate(e.target.value);
-                if (date) {
-                  date.setHours(23, 59, 59, 999);
-                  onDateChange((prev) => ({ ...prev, end: date }));
-                }
-              }}
-              className="px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
-            />
-          </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <input
+            type="date"
+            value={formatDateForInput(startDate)}
+            onChange={(e) => {
+              const date = parseInputDate(e.target.value);
+              if (date) {
+                date.setHours(0, 0, 0, 0);
+                onDateChange((prev) => ({ ...prev, start: date }));
+              }
+            }}
+            className="flex-1 min-w-0 px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+          />
+
+          <span className="text-zinc-400 text-xs sm:text-sm flex-shrink-0">
+            -
+          </span>
+
+          <input
+            type="date"
+            value={formatDateForInput(endDate)}
+            onChange={(e) => {
+              const date = parseInputDate(e.target.value);
+              if (date) {
+                date.setHours(23, 59, 59, 999);
+                onDateChange((prev) => ({ ...prev, end: date }));
+              }
+            }}
+            className="flex-1 min-w-0 px-2 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+          />
 
           <button
             onClick={onSync}
             disabled={loading}
-            className="flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-500 disabled:opacity-50 transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed"
+            title={loading ? "Syncing..." : "Sync Calendar"}
+            className="flex-shrink-0 p-1.5 sm:p-2 text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-500 disabled:opacity-50 transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed"
           >
-            <BiRefresh className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Syncing..." : "Sync"}
+            <BiRefresh className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>

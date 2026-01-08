@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 
+from core import database
 from core.authentication import generate_jwt_token, get_current_user_payload
 from core.config import settings
 from core.logging_setup import log_step, session_id_var
@@ -23,6 +24,18 @@ class UserResponse(BaseModel):
     id: str
     name: str | None
     email: str | None
+
+
+class CalendarJoinRequest(BaseModel):
+    meetingId: str
+    joinUrl: Optional[str] = None
+    startTime: Optional[str] = None
+
+
+class CalendarAuthResponse(BaseModel):
+    sessionId: str
+    token: str
+    type: str
 
 
 def create_auth_router() -> APIRouter:
@@ -67,6 +80,94 @@ def create_auth_router() -> APIRouter:
             user_id = user_payload.get("sub")
             logger.info(f"Handling logout for user: {user_id}")
             return await entra.handle_logout(response, user_payload)
+
+    @router.post("/calendar-join", response_model=CalendarAuthResponse)
+    async def calendar_join(
+        request: CalendarJoinRequest,
+        user_payload: dict = Depends(get_current_user_payload),
+    ):
+        """
+        Handles joining a meeting via a calendar event.
+        Verifies ownership of the event, detects platform, and creates session.
+        """
+        with log_step(LOG_STEP):
+            user_id = user_payload.get("sub")
+            logger.debug(
+                f"User {user_id} requesting calendar auth for event {request.meetingId}."
+            )
+
+            try:
+                async with database.DB_POOL.acquire() as conn:
+                    row = await conn.fetchrow(
+                        "SELECT join_url, subject FROM CALENDAR_EVENTS WHERE id = $1 AND user_id = $2",
+                        request.meetingId,
+                        user_id,
+                    )
+
+                    if not row:
+                        logger.warning(
+                            f"Calendar event {request.meetingId} not found for user {user_id}."
+                        )
+                        raise HTTPException(
+                            status_code=404,
+                            detail="Calendar event not found or access denied.",
+                        )
+
+                    join_url = row["join_url"] or request.joinUrl
+                    topic = row["subject"]
+
+                    if not join_url:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="No Join URL found for this calendar event.",
+                        )
+
+                session_id = None
+                platform_type = "unknown"
+
+                if "zoom.us" in join_url:
+                    platform_type = "zoom"
+                    logger.info(
+                        "Detected Zoom URL. Authenticating via Zoom integration."
+                    )
+
+                    zoom_req = ZoomAuthRequest(
+                        meetingid=None,
+                        meetingpass=None,
+                        join_url=join_url,
+                        topic=topic,
+                    )
+
+                    session_id = await authenticate_zoom_session(
+                        request=zoom_req, user_id=user_id
+                    )
+                else:
+                    logger.warning(f"Unsupported platform URL: {join_url}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="The meeting platform could not be determined or is not supported.",
+                    )
+
+                token = generate_jwt_token(user_id=user_id, session_id=session_id)
+
+                logger.info(
+                    f"Calendar join successful. Type: {platform_type}, Session: {session_id}"
+                )
+
+                return CalendarAuthResponse(
+                    sessionId=session_id, token=token, type=platform_type
+                )
+
+            except HTTPException as e:
+                raise e
+            except Exception as e:
+                logger.error(
+                    f"Unhandled error in calendar-join for user {user_id}: {e}",
+                    exc_info=True,
+                )
+                raise HTTPException(
+                    status_code=500, detail="An internal server error occurred."
+                )
 
     @router.post("/zoom", response_model=ZoomAuthResponse)
     async def handle_zoom_auth(

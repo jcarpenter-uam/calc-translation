@@ -121,12 +121,6 @@ export default function LandingPage() {
 
   const handleCalendarJoin = async (event) => {
     try {
-      console.log("Sending Calendar Join Request:", {
-        meetingId: event.id,
-        joinUrl: event.join_url,
-        startTime: event.start_time,
-      });
-
       const response = await fetch("/api/auth/calendar-join", {
         method: "POST",
         headers: {
@@ -135,7 +129,7 @@ export default function LandingPage() {
         body: JSON.stringify({
           meetingId: event.id,
           joinUrl: event.join_url,
-          topic: event.subject,
+          startTime: event.start_time,
         }),
       });
 

@@ -127,7 +127,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row items-start justify-center w-full gap-8 p-6">
+    <div className="flex flex-col lg:flex-row items-start justify-center w-full gap-8">
       {/* Left Column: Integration Tabs & Form */}
       <div className="w-full lg:w-[400px] flex-shrink-0 lg:sticky lg:top-6">
         <h2 className="text-xl font-semibold mb-4 text-center lg:text-left">
@@ -162,10 +162,13 @@ export default function LandingPage() {
       </div>
 
       {/* Vertical Divider */}
-      <div className="hidden lg:flex flex-col items-center self-stretch">
-        <span className="text-zinc-400 dark:text-zinc-500 text-xl font-semibold uppercase mb-4 mt-2">
-          {t("or_divider")}
-        </span>
+      <div className="hidden lg:flex flex-col items-center self-stretch mt-11 relative">
+        <div className="z-10 flex items-center justify-center w-8 h-8 mb-2">
+          <span className="text-md font-bold text-zinc-400 dark:text-zinc-500">
+            {t("or_divider")}
+          </span>
+        </div>
+
         <div className="w-px flex-1 bg-zinc-200 dark:bg-zinc-700"></div>
       </div>
 

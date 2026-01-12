@@ -38,6 +38,12 @@ class CalendarAuthResponse(BaseModel):
     type: str
 
 
+class ZoomAuthResponse(BaseModel):
+    sessionId: str
+    token: str
+    type: str
+
+
 def create_auth_router() -> APIRouter:
     """
     Creates the REST API router for auth.
@@ -199,7 +205,7 @@ def create_auth_router() -> APIRouter:
                 logger.info(
                     f"Successfully authenticated Zoom session {session_id} for user {user_id}."
                 )
-                return ZoomAuthResponse(meetinguuid=session_id, token=token)
+                return ZoomAuthResponse(sessionId=session_id, token=token, type="zoom")
 
             except HTTPException as e:
                 logger.warning(f"Zoom auth failed for user {user_id}: {e.detail}")

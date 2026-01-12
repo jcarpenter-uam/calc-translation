@@ -101,8 +101,8 @@ export default function LandingPage() {
       }
 
       const data = await response.json();
-      const sessionId = data.meetinguuid;
-      const token = data.token;
+
+      const { sessionId, token, type } = data;
 
       if (!sessionId) {
         throw new Error(t("error_no_session_id"));
@@ -112,7 +112,7 @@ export default function LandingPage() {
         throw new Error(t("error_no_token"));
       }
 
-      handleJoin("zoom", sessionId, token);
+      handleJoin(type, sessionId, token);
     } catch (err) {
       console.error("Authentication failed:", err);
       setError(err.message);

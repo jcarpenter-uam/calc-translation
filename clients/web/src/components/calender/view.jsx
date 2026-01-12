@@ -10,7 +10,7 @@ import {
   BiTime,
   BiCheckCircle,
 } from "react-icons/bi";
-
+import { useTranslation } from "react-i18next";
 import { SiGooglemeet } from "react-icons/si";
 
 export function CalendarView({
@@ -23,6 +23,8 @@ export function CalendarView({
   onDateChange,
   onAppJoin,
 }) {
+  const { t } = useTranslation();
+
   const formatTime = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleString([], {
@@ -102,7 +104,7 @@ export function CalendarView({
 
     return {
       icon: <BiVideo className="w-3.5 h-3.5" />,
-      label: location || "Online",
+      label: location || t("platform_online"),
       className:
         "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700",
       comingSoon: false,
@@ -116,10 +118,10 @@ export function CalendarView({
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-6 border-b border-zinc-200 dark:border-zinc-700">
         <div>
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            Upcoming Meetings
+            {t("calendar_title")}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            View and join your scheduled online meetings
+            {t("calendar_subtitle")}
           </p>
         </div>
 
@@ -157,7 +159,7 @@ export function CalendarView({
           <button
             onClick={onSync}
             disabled={loading}
-            title={loading ? "Syncing..." : "Sync Calendar"}
+            title={loading ? t("refreshing") : t("calendar_sync_btn")}
             className="flex-shrink-0 p-1.5 sm:p-2 text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-500 disabled:opacity-50 transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed"
           >
             <BiRefresh className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -176,10 +178,10 @@ export function CalendarView({
         <div className="text-center py-12 border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/50">
           <BiCalendar className="h-10 w-10 mx-auto text-zinc-400 mb-3" />
           <p className="text-zinc-500 dark:text-zinc-400 font-medium">
-            No upcoming events found
+            {t("calendar_no_events")}
           </p>
           <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-            Try adjusting the date filter or syncing
+            {t("calendar_no_events_hint")}
           </p>
         </div>
       )}
@@ -219,11 +221,12 @@ export function CalendarView({
                       <div className="flex items-center gap-2 mb-3">
                         {isCancelled ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800">
-                            Cancelled
+                            {t("status_cancelled")}
                           </span>
                         ) : isEnded ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                            <BiCheckCircle className="w-3 h-3" /> Ended
+                            <BiCheckCircle className="w-3 h-3" />{" "}
+                            {t("status_ended")}
                           </span>
                         ) : hasJoinUrl ? (
                           <span
@@ -236,7 +239,7 @@ export function CalendarView({
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                            Scheduled
+                            {t("status_scheduled")}
                           </span>
                         )}
 
@@ -254,7 +257,7 @@ export function CalendarView({
                             : "text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors"
                         } ${isCancelled ? "line-through" : ""}`}
                       >
-                        {event.subject || "No Subject"}
+                        {event.subject || t("no_subject")}
                       </h3>
 
                       <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-sm text-zinc-500 dark:text-zinc-400">
@@ -302,7 +305,7 @@ export function CalendarView({
                           onClick={() => onAppJoin && onAppJoin(event)}
                           className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg shadow-sm transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer"
                         >
-                          Start Transcription
+                          {t("start_transcription_btn")}
                         </button>
                       )}
                     </div>

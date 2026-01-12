@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const formatUptime = (seconds) => {
   const h = Math.floor(seconds / 3600);
@@ -8,6 +9,7 @@ const formatUptime = (seconds) => {
 };
 
 const SystemCard = ({ title, data }) => {
+  const { t } = useTranslation();
   if (!data || !data.system) return null;
 
   const { uptimeSeconds, managerMemoryMB, memoryMB, loadAverage, cpuPercent } =
@@ -26,7 +28,7 @@ const SystemCard = ({ title, data }) => {
         {/* Uptime */}
         <div>
           <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
-            Uptime
+            {t("metric_uptime")}
           </p>
           <p className="font-mono text-zinc-700 dark:text-zinc-200">
             {formatUptime(uptimeSeconds)}
@@ -37,9 +39,9 @@ const SystemCard = ({ title, data }) => {
         <div>
           <div className="flex items-center gap-1.5">
             <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
-              Memory (RSS)
+              {t("metric_memory")}
             </p>
-            <Tooltip text="Actual RAM used by the process (excluding swap)." />
+            <Tooltip text={t("tooltip_memory")} />
           </div>
           <p className="font-mono text-zinc-700 dark:text-zinc-200">{rss} MB</p>
         </div>
@@ -48,9 +50,9 @@ const SystemCard = ({ title, data }) => {
         <div>
           <div className="flex items-center gap-1.5">
             <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
-              CPU Usage
+              {t("metric_cpu")}
             </p>
-            <Tooltip text="Percentage of a single CPU core used by this specific container/process." />
+            <Tooltip text={t("tooltip_cpu")} />
           </div>
           <p
             className={`font-mono font-bold ${parseFloat(cpuDisplay) > 80 ? "text-red-600 dark:text-red-400" : "text-zinc-700 dark:text-zinc-200"}`}
@@ -63,9 +65,9 @@ const SystemCard = ({ title, data }) => {
         <div>
           <div className="flex items-center gap-1.5">
             <p className="text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-wider">
-              Host Load (1m)
+              {t("metric_load")}
             </p>
-            <Tooltip text="Global system load. High values affect all containers on this node." />
+            <Tooltip text={t("tooltip_load")} />
           </div>
           <p className="font-mono text-zinc-700 dark:text-zinc-200">
             {loadAverage && loadAverage.length > 0
@@ -168,6 +170,7 @@ export default function MetricsViewing({
   error,
   onRefresh,
 }) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("server");
 
   const safeParse = (data) => {
@@ -186,7 +189,7 @@ export default function MetricsViewing({
 
   const zoomStreamColumns = [
     {
-      header: "Role",
+      header: t("col_role"),
       key: "role",
       render: (stream) => (
         <span
@@ -200,9 +203,9 @@ export default function MetricsViewing({
         </span>
       ),
     },
-    { header: "Meeting UUID", key: "meetingUuid", className: "break-all" },
+    { header: t("col_uuid"), key: "meetingUuid", className: "break-all" },
     {
-      header: "Duration",
+      header: t("col_duration"),
       key: "durationSeconds",
       align: "right",
       render: (stream) => formatUptime(stream.durationSeconds),
@@ -211,13 +214,13 @@ export default function MetricsViewing({
 
   const serverSessionColumns = [
     {
-      header: "Session ID",
+      header: t("col_session_id"),
       key: "session_id",
       className: "break-all font-semibold",
     },
-    { header: "Integration", key: "integration" },
+    { header: t("col_integration"), key: "integration" },
     {
-      header: "Viewers",
+      header: t("col_viewers"),
       key: "viewers",
       align: "right",
       render: (session) => (
@@ -231,7 +234,7 @@ export default function MetricsViewing({
       ),
     },
     {
-      header: "Languages",
+      header: t("col_languages"),
       key: "viewer_languages",
       render: (session) => {
         if (
@@ -261,13 +264,13 @@ export default function MetricsViewing({
       {/* Header Area */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-          System Metrics
+          {t("system_metrics_title")}
         </h2>
         <button
           onClick={onRefresh}
           className="cursor-pointer text-xs px-3 py-1.5 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-colors border border-zinc-200 dark:border-zinc-700"
         >
-          Refresh Data
+          {t("refresh_data")}
         </button>
       </div>
 
@@ -295,7 +298,7 @@ export default function MetricsViewing({
                   }
                 `}
               >
-                Server
+                {t("tab_server")}
               </button>
               <button
                 onClick={() => setActiveTab("zoom")}
@@ -308,7 +311,7 @@ export default function MetricsViewing({
                   }
                 `}
               >
-                Zoom
+                {t("tab_zoom")}
               </button>
             </nav>
           </div>
@@ -317,24 +320,27 @@ export default function MetricsViewing({
           <div className="space-y-6 pt-2">
             {activeTab === "server" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <SystemCard title="Backend Server (Python)" data={serverData} />
+                <SystemCard
+                  title={t("server_backend_title")}
+                  data={serverData}
+                />
                 <ActiveItemsTable
-                  title="Active Transcription Sessions"
+                  title={t("server_sessions_title")}
                   items={serverData?.sessions || []}
                   columns={serverSessionColumns}
-                  emptyMessage="No active transcription sessions on the server."
+                  emptyMessage={t("server_no_sessions")}
                 />
               </div>
             )}
 
             {activeTab === "zoom" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <SystemCard title="Zoom Microservice (Node)" data={zoomData} />
+                <SystemCard title={t("zoom_service_title")} data={zoomData} />
                 <ActiveItemsTable
-                  title="Active Zoom Streams"
+                  title={t("zoom_streams_title")}
                   items={zoomData?.streams || []}
                   columns={zoomStreamColumns}
-                  emptyMessage="No active Zoom streams connected."
+                  emptyMessage={t("zoom_no_streams")}
                 />
               </div>
             )}

@@ -77,46 +77,42 @@ def create_sessions_router() -> APIRouter:
                 file_name = None
 
                 async with database.DB_POOL.acquire() as conn:
-                    row = await conn.fetchrow(
-                        SQL_GET_TRANSCRIPT_BY_MEETING_ID, session_id, language_code
+                    m_row = await conn.fetchrow(
+                        "SELECT readable_id, platform FROM MEETINGS WHERE id = $1",
+                        session_id,
                     )
 
-                    if row:
-                        file_name = row[0]
-                    else:
-                        logger.info(
-                            f"Transcript not found for {session_id}. Attempting fallback via readable_id."
+                    if m_row and m_row["readable_id"]:
+                        readable_id = m_row["readable_id"]
+                        platform = m_row["platform"]
+
+                        fallback_sql = """
+                            SELECT t.file_name, t.meeting_id
+                            FROM TRANSCRIPTS t
+                            JOIN MEETINGS m ON t.meeting_id = m.id
+                            WHERE m.readable_id = $1 
+                              AND t.language_code = $2
+                              AND m.platform = $3
+                            ORDER BY t.creation_date DESC
+                            LIMIT 1
+                        """
+                        t_row = await conn.fetchrow(
+                            fallback_sql, readable_id, language_code, platform
                         )
 
-                        m_row = await conn.fetchrow(
-                            "SELECT readable_id, platform FROM MEETINGS WHERE id = $1",
-                            session_id,
-                        )
-
-                        if m_row and m_row["readable_id"]:
-                            readable_id = m_row["readable_id"]
-                            platform = m_row["platform"]
-
-                            fallback_sql = """
-                                SELECT t.file_name, t.meeting_id
-                                FROM TRANSCRIPTS t
-                                JOIN MEETINGS m ON t.meeting_id = m.id
-                                WHERE m.readable_id = $1 
-                                  AND t.language_code = $2
-                                  AND m.platform = $3
-                                ORDER BY t.creation_date DESC
-                                LIMIT 1
-                            """
-                            t_row = await conn.fetchrow(
-                                fallback_sql, readable_id, language_code, platform
+                        if t_row:
+                            file_name = t_row["file_name"]
+                            resolved_session_id = t_row["meeting_id"]
+                            logger.info(
+                                f"Resolved latest transcript via readable_id: {session_id} -> {resolved_session_id}"
                             )
 
-                            if t_row:
-                                file_name = t_row["file_name"]
-                                resolved_session_id = t_row["meeting_id"]
-                                logger.info(
-                                    f"Fallback successful: Resolved {session_id} -> {resolved_session_id}"
-                                )
+                    if not file_name:
+                        row = await conn.fetchrow(
+                            SQL_GET_TRANSCRIPT_BY_MEETING_ID, session_id, language_code
+                        )
+                        if row:
+                            file_name = row[0]
 
                 if not file_name:
                     logger.warning(

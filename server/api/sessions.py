@@ -89,22 +89,26 @@ def create_sessions_router() -> APIRouter:
                         )
 
                         m_row = await conn.fetchrow(
-                            "SELECT readable_id FROM MEETINGS WHERE id = $1", session_id
+                            "SELECT readable_id, platform FROM MEETINGS WHERE id = $1",
+                            session_id,
                         )
 
                         if m_row and m_row["readable_id"]:
                             readable_id = m_row["readable_id"]
+                            platform = m_row["platform"]
 
                             fallback_sql = """
                                 SELECT t.file_name, t.meeting_id
                                 FROM TRANSCRIPTS t
                                 JOIN MEETINGS m ON t.meeting_id = m.id
-                                WHERE m.readable_id = $1 AND t.language_code = $2
+                                WHERE m.readable_id = $1 
+                                  AND t.language_code = $2
+                                  AND m.platform = $3
                                 ORDER BY t.creation_date DESC
                                 LIMIT 1
                             """
                             t_row = await conn.fetchrow(
-                                fallback_sql, readable_id, language_code
+                                fallback_sql, readable_id, language_code, platform
                             )
 
                             if t_row:

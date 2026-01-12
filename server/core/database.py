@@ -298,6 +298,17 @@ WHERE i.user_id = $1;
 SQL_UPDATE_MEETING_START = "UPDATE MEETINGS SET started_at = $1 WHERE id = $2;"
 SQL_UPDATE_MEETING_END = "UPDATE MEETINGS SET ended_at = $1 WHERE id = $2;"
 
+SQL_GET_LATEST_ACTIVE_SIBLING = """
+SELECT id 
+FROM MEETINGS 
+WHERE readable_id = $1 
+  AND platform = $2 
+  AND id != $3 
+  AND started_at IS NOT NULL 
+ORDER BY started_at DESC 
+LIMIT 1;
+"""
+
 # --- TRANSCRIPTS ---
 
 SQL_INSERT_TRANSCRIPT = """

@@ -1,7 +1,7 @@
 import logging
 
 from core import database
-from core.database import SQL_GET_MEETING_BY_ID
+from core.database import SQL_GET_LATEST_ACTIVE_SIBLING, SQL_GET_MEETING_BY_ID
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket, WebSocketDisconnect, status
 from integrations.zoom import get_meeting_data
@@ -36,6 +36,29 @@ async def handle_viewer_session(
                     row = await conn.fetchrow(SQL_GET_MEETING_BY_ID, session_id)
                     if row:
                         meeting_exists = True
+
+                        # TODO: START OF JANK SOLUTION
+                        # It needs to be improved when im not on a deadline
+                        readable_id = row.get("readable_id")
+                        platform = row.get("platform")
+
+                    if readable_id and platform:
+                        sibling = await conn.fetchrow(
+                            SQL_GET_LATEST_ACTIVE_SIBLING,
+                            readable_id,
+                            platform,
+                            session_id,
+                        )
+
+                        if sibling:
+                            candidate_session_id = sibling["id"]
+                            if viewer_manager.is_session_active(candidate_session_id):
+                                logger.info(
+                                    f"Found active sibling session. Redirecting {session_id} -> {candidate_session_id}"
+                                )
+                                resolved_session_id = candidate_session_id
+                                session_id_var.set(resolved_session_id)
+                        # TODO: END OF JANK SOLUTION
 
                 if not meeting_exists:
                     logger.info(

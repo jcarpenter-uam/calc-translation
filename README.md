@@ -48,6 +48,7 @@ services:
       - ZM_PUBLIC_KEY=${ZM_PUBLIC_KEY}
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
+      - ZM_METRICS_URL=http://zoom-rtms:8080/metrics
       - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
       - translation-logs:/app/logs
@@ -67,8 +68,6 @@ services:
       - ZM_WEBHOOK_SECRET=${ZM_WEBHOOK_SECRET}
       - ZM_PRIVATE_KEY=${ZM_PRIVATE_KEY}
       - BASE_SERVER_URL=ws://translation-server:8000/ws/transcribe
-    volumes:
-      - zoom_rtms-logs:/app/logs
     depends_on:
       - translation-server
     networks:
@@ -77,7 +76,6 @@ services:
 volumes:
   translation-logs:
   translation-vtts:
-  zoom_rtms-logs:
 
 networks:
   calc-translation:

@@ -142,7 +142,6 @@ LOGGING_LEVEL=INFO # Default if not set
 MAX_CACHE_MB=10 # Default if not set
 #
 # Endpoint for the zoom microservice metrics
-# This fetches the metrics and returns metrics for the admin page
-# Defaults to "http://localhost:8080/metrics" if not set
-ZM_METRICS_URL="http://localhost:8080/metrics"
+# This fetches the metrics and returns them for the admin page
+ZM_METRICS_URL="http://localhost:8080/metrics" # Default if not set
 ```

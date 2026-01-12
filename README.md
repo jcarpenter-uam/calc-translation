@@ -140,4 +140,9 @@ LOGGING_LEVEL=INFO # Default if not set
 # The max size (in MB) for each session's in-memory transcript cache.
 # Once exceeded, the oldest entries are evicted.
 MAX_CACHE_MB=10 # Default if not set
+#
+# Endpoint for the zoom microservice metrics
+# This fetches the metrics and returns metrics for the admin page
+# Defaults to "http://localhost:8080/metrics" if not set
+ZM_METRICS_URL="http://localhost:8080/metrics"
 ```

@@ -14,6 +14,7 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
   const [transcripts, setTranscripts] = useState([]);
   const [isDownloadable, setIsDownloadable] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState("connecting");
 
   const ws = useRef(null);
 
@@ -34,6 +35,7 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
       }
 
       setTranscripts([]);
+      setSessionStatus("connecting");
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onclose = (event) => {
@@ -79,6 +81,16 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
       ws.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+
+          if (data.type === "status") {
+            setSessionStatus(data.status);
+            return;
+          }
+
+          if (data.type === "session_start") {
+            setSessionStatus("active");
+            return;
+          }
 
           if (data.type === "session_end") {
             setIsDownloadable(true);
@@ -154,5 +166,5 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
     };
   }, [wsUrl, sessionId, onUnauthorized]);
 
-  return { transcripts, isDownloadable, isBackfilling };
+  return { transcripts, isDownloadable, isBackfilling, sessionStatus };
 }

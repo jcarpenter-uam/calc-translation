@@ -92,7 +92,8 @@ async def init_db():
                             meeting_time TIMESTAMPTZ,
                             join_url TEXT,
                             started_at TIMESTAMPTZ,
-                            ended_at TIMESTAMPTZ
+                            ended_at TIMESTAMPTZ,
+                            attendees TEXT[] DEFAULT '{}'
                         )
                         """
                     )
@@ -307,6 +308,13 @@ WHERE readable_id = $1
   AND started_at IS NOT NULL 
 ORDER BY started_at DESC 
 LIMIT 1;
+"""
+
+SQL_ADD_MEETING_ATTENDEE = """
+UPDATE MEETINGS
+SET attendees = array_append(COALESCE(attendees, '{}'), $1)
+WHERE id = $2
+  AND ($1 <> ALL(COALESCE(attendees, '{}'))); 
 """
 
 # --- TRANSCRIPTS ---

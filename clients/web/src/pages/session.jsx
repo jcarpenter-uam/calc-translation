@@ -6,6 +6,7 @@ import Transcript from "../components/session/transcript.jsx";
 import Unauthorized from "../components/auth/unauthorized.jsx";
 import Notification from "../components/misc/notification.jsx";
 import BackfillLoading from "../components/session/backfill-loading.jsx";
+import WaitingRoom from "../components/session/waiting.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 import { useSmartScroll } from "../hooks/use-smart-scroll.js";
 import { useLanguage } from "../context/language.jsx";
@@ -51,11 +52,8 @@ export default function SessionPage() {
     ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${language}`
     : null;
 
-  const { transcripts, isDownloadable, isBackfilling } = useTranscriptStream(
-    wsUrl,
-    sessionId,
-    handleAuthFailure,
-  );
+  const { transcripts, isDownloadable, isBackfilling, sessionStatus } =
+    useTranscriptStream(wsUrl, sessionId, handleAuthFailure);
 
   const lastTopTextRef = React.useRef(null);
   const notification = useSmartScroll(transcripts, lastTopTextRef);
@@ -66,6 +64,14 @@ export default function SessionPage() {
 
   if (!isAuthorized) {
     return null;
+  }
+
+  if (sessionStatus === "waiting") {
+    return (
+      <div className="max-w-3xl mx-auto w-full">
+        <WaitingRoom />
+      </div>
+    );
   }
 
   return (

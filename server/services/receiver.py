@@ -153,7 +153,11 @@ class StreamHandler:
                     self.is_new_utterance = True
                 return
 
-            if self.is_new_utterance and not result.is_final:
+            has_text = (result.transcription and result.transcription.strip()) or (
+                result.translation and result.translation.strip()
+            )
+
+            if self.is_new_utterance and not result.is_final and has_text:
                 self.utterance_count += 1
                 self.current_message_id = f"{self.utterance_count}_{self.language_code}"
                 self.is_new_utterance = False
@@ -277,6 +281,35 @@ class MeetingSession:
             self.session_id, self.integration
         )
 
+        try:
+            async with database.DB_POOL.acquire() as conn:
+                current_meeting = await conn.fetchrow(
+                    database.SQL_GET_MEETING_BY_ID, self.session_id
+                )
+
+                if current_meeting:
+                    readable_id = current_meeting.get("readable_id")
+
+                    if readable_id:
+                        siblings = await conn.fetch(
+                            """
+                            SELECT id FROM MEETINGS 
+                            WHERE readable_id = $1 AND platform = $2 AND id != $3
+                            """,
+                            readable_id,
+                            self.integration,
+                            self.session_id,
+                        )
+
+                        for row in siblings:
+                            old_uuid = row["id"]
+                            await self.viewer_manager.migrate_session(
+                                old_uuid, self.session_id
+                            )
+
+        except Exception as e:
+            logger.error(f"Failed to migrate waiting room sessions: {e}", exc_info=True)
+
         self.viewer_manager.register_language_callback(
             self.session_id, self._add_language_stream_wrapper
         )
@@ -284,7 +317,15 @@ class MeetingSession:
             self.session_id, self._remove_language_stream_wrapper
         )
 
-        await self.add_language_stream("en")
+        waiting_languages = self.viewer_manager.get_waiting_languages(self.session_id)
+
+        waiting_languages.add("en")
+
+        with log_step("SESSION"):
+            logger.info(f"Initializing session with languages: {waiting_languages}")
+
+        tasks = [self.add_language_stream(lang) for lang in waiting_languages]
+        await asyncio.gather(*tasks)
 
     async def _add_language_stream_wrapper(self, language_code: str):
         await self.add_language_stream(language_code)

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import UserManagement from "../components/admin/user-management.jsx";
 import TenantManagement from "../components/admin/tenant-management.jsx";
 import MetricsViewing from "../components/admin/metrics.jsx";
 import LogViewing from "../components/admin/log-viewing.jsx";
 
 export default function AdminPage() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -190,7 +192,7 @@ export default function AdminPage() {
     <div className="w-full">
       {isLoading ? (
         <div className="text-center text-zinc-500 dark:text-zinc-400">
-          Loading admin data...
+          {t("loading_admin")}
         </div>
       ) : error ? (
         <div className="text-center text-red-500">Error: {error}</div>

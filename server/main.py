@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"Configuration loaded. Log level set to: {settings.LOGGING_LEVEL}")
 
 from api.auth import create_auth_router
+from api.calender import create_calender_router
 from api.logs import create_logs_router
 from api.metrics import create_metrics_router
 from api.sessions import create_sessions_router
@@ -66,6 +67,9 @@ app.include_router(logs_router)
 
 metrics_router = create_metrics_router(viewer_manager=viewer_manager)
 app.include_router(metrics_router)
+
+calender_router = create_calender_router()
+app.include_router(calender_router)
 
 app.mount(
     "/icon.png",

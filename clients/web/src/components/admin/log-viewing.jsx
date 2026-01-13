@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function LogViewing({ logs = [], loading, error, onRefresh }) {
+  const { t } = useTranslation();
   const scrollRef = useRef(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -24,10 +26,10 @@ export default function LogViewing({ logs = [], loading, error, onRefresh }) {
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            Server Logs
+            {t("logs_title")}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            (Does not include RTMS container)
+            {t("logs_subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -38,21 +40,21 @@ export default function LogViewing({ logs = [], loading, error, onRefresh }) {
               onChange={(e) => setAutoScroll(e.target.checked)}
               className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
             />
-            Auto-scroll
+            {t("auto_scroll_label")}
           </label>
           <button
             onClick={onRefresh}
             disabled={loading}
             className="rounded-md bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
           >
-            {loading ? "Refreshing..." : "Refresh Now"}
+            {loading ? t("refreshing") : t("refresh_now")}
           </button>
         </div>
       </div>
 
       {error ? (
         <div className="rounded-md bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-          Error loading logs: {error}
+          {t("error_loading_logs")} {error}
         </div>
       ) : (
         <div className="relative">
@@ -62,7 +64,7 @@ export default function LogViewing({ logs = [], loading, error, onRefresh }) {
             className="h-[500px] w-full overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-950 p-4 font-mono text-xs text-zinc-300 shadow-inner dark:border-zinc-800"
           >
             {logs.length === 0 ? (
-              <div className="italic text-zinc-500">No logs available.</div>
+              <div className="italic text-zinc-500">{t("no_logs")}</div>
             ) : (
               logs.map((line, index) => (
                 <div

@@ -73,13 +73,46 @@ def create_sessions_router() -> APIRouter:
                 )
             try:
                 language_code = language
+                resolved_session_id = session_id
+                file_name = None
 
                 async with database.DB_POOL.acquire() as conn:
-                    row = await conn.fetchrow(
-                        SQL_GET_TRANSCRIPT_BY_MEETING_ID, session_id, language_code
+                    m_row = await conn.fetchrow(
+                        "SELECT readable_id, platform FROM MEETINGS WHERE id = $1",
+                        session_id,
                     )
 
-                    file_name = row[0] if row else None
+                    if m_row and m_row["readable_id"]:
+                        readable_id = m_row["readable_id"]
+                        platform = m_row["platform"]
+
+                        fallback_sql = """
+                            SELECT t.file_name, t.meeting_id
+                            FROM TRANSCRIPTS t
+                            JOIN MEETINGS m ON t.meeting_id = m.id
+                            WHERE m.readable_id = $1 
+                              AND t.language_code = $2
+                              AND m.platform = $3
+                            ORDER BY t.creation_date DESC
+                            LIMIT 1
+                        """
+                        t_row = await conn.fetchrow(
+                            fallback_sql, readable_id, language_code, platform
+                        )
+
+                        if t_row:
+                            file_name = t_row["file_name"]
+                            resolved_session_id = t_row["meeting_id"]
+                            logger.info(
+                                f"Resolved latest transcript via readable_id: {session_id} -> {resolved_session_id}"
+                            )
+
+                    if not file_name:
+                        row = await conn.fetchrow(
+                            SQL_GET_TRANSCRIPT_BY_MEETING_ID, session_id, language_code
+                        )
+                        if row:
+                            file_name = row[0]
 
                 if not file_name:
                     logger.warning(
@@ -90,7 +123,7 @@ def create_sessions_router() -> APIRouter:
                         detail=f"Transcript ({language_code}) not found. The session may be invalid or processing not complete.",
                     )
 
-                safe_session_id = urllib.parse.quote(session_id, safe="")
+                safe_session_id = urllib.parse.quote(resolved_session_id, safe="")
                 file_path = os.path.join(
                     OUTPUT_DIR, integration, safe_session_id, file_name
                 )

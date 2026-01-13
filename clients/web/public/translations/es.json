@@ -312,7 +312,6 @@
   "refreshing": "Actualizando...",
   "no_logs": "No hay registros disponibles.",
   "error_loading_logs": "Error al cargar registros: ",
-
   "system_metrics_title": "Métricas del sistema",
   "refresh_data": "Actualizar datos",
   "tab_server": "Servidor",

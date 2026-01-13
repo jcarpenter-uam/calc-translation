@@ -36,6 +36,16 @@ class Settings(BaseSettings):
 
     ZM_METRICS_URL: str = "http://localhost:8080/metrics"
 
+    SMTP_HOST: str = "smtp.gmail.com"
+
+    SMTP_PORT: int = 587
+
+    SMTP_USER: str
+
+    SMTP_PASSWORD: str
+
+    SYSTEM_MAILER_EMAIL: str
+
     LOGGING_LEVEL: str = "INFO"
 
 

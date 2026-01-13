@@ -172,6 +172,7 @@ SQL_GET_ALL_USERS = "SELECT * FROM USERS;"
 SQL_DELETE_USER_BY_ID = "DELETE FROM USERS WHERE id = $1;"
 SQL_SET_USER_ADMIN_STATUS = "UPDATE USERS SET is_admin = $1 WHERE id = $2;"
 SQL_UPDATE_USER_LANGUAGE = "UPDATE USERS SET language_code = $1 WHERE id = $2;"
+SQL_GET_USER_ID_BY_EMAIL = "SELECT id FROM USERS WHERE email = $1"
 
 # --- TENANTS ---
 
@@ -315,6 +316,13 @@ UPDATE MEETINGS
 SET attendees = array_append(COALESCE(attendees, '{}'), $1)
 WHERE id = $2
   AND ($1 <> ALL(COALESCE(attendees, '{}'))); 
+"""
+
+SQL_GET_MEETING_ATTENDEES_DETAILS = """
+SELECT u.email, u.language_code
+FROM USERS u
+JOIN MEETINGS m ON u.id = ANY(m.attendees)
+WHERE m.id = $1;
 """
 
 # --- TRANSCRIPTS ---

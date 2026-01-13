@@ -25,6 +25,7 @@ graph TD
 - **Soniox:** Used as the current transcription/translation model. An API key can be obtained [here](https://soniox.com/docs/)
 - **Qwen-MT-Turbo:** Used as the current backfill model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
 - **Ollama** Used for end of meeting summaries. This can be run locally or using Ollama Cloud. Details can be found [here](https://docs.ollama.com/cloud)
+- **Gmail Account** This account will be used as the sender address for meeting transcripts and summaries to attendees. Information on obtaining an app password can be found [here](https://support.google.com/mail/answer/185833?hl=en)
 
 ## Installation
 

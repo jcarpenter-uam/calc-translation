@@ -11,11 +11,22 @@ from core.logging_setup import log_step
 
 logger = logging.getLogger(__name__)
 
+LOG_STEP = "SUMMARY"
+
 
 class SummaryService:
     def __init__(self):
-        self.client = ollama.Client(host=settings.OLLAMA_BASE_URL)
-        self.model = settings.OLLAMA_MODEL
+        with log_step(LOG_STEP):
+            client_kwargs = {"host": settings.OLLAMA_BASE_URL}
+
+            if settings.OLLAMA_API_KEY:
+                client_kwargs["headers"] = {
+                    "Authorization": f"Bearer {settings.OLLAMA_API_KEY}"
+                }
+                logger.debug("Ollama Client initialized with Bearer Auth.")
+
+            self.client = ollama.Client(**client_kwargs)
+            self.model = settings.OLLAMA_MODEL
 
     def _clean_vtt_content(self, vtt_content: str) -> str:
         """Removes VTT headers and timestamps to extract pure dialogue."""
@@ -36,52 +47,58 @@ class SummaryService:
         self, source_text: str, target_lang: str, output_dir: str, session_id: str
     ):
         """Helper to run one Ollama generation task."""
-        try:
-            logger.info(f"Generating {target_lang} summary for session {session_id}...")
+        with log_step(LOG_STEP):
+            try:
+                logger.info(
+                    f"Generating {target_lang} summary for session {session_id} using {self.model}..."
+                )
 
-            response = self.client.chat(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            f"You are a helpful meeting assistant. "
-                            f"Summarize the following English meeting transcript in {target_lang}. "
-                            "Provide a concise summary with bullet points for key decisions and action items. "
-                            "Do not include timestamps."
-                        ),
-                    },
-                    {"role": "user", "content": source_text},
-                ],
-            )
+                response = self.client.chat(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                f"You are a helpful meeting assistant. "
+                                f"Summarize the following English meeting transcript in {target_lang}. "
+                                "Provide a concise summary with bullet points for key decisions and action items. "
+                                "Do not include timestamps."
+                            ),
+                        },
+                        {
+                            "role": "user",
+                            "content": source_text,
+                        },
+                    ],
+                )
 
-            summary_text = response["message"]["content"]
+                summary_text = response["message"]["content"]
 
-            filename = f"summary_{target_lang}.txt"
-            path = os.path.join(output_dir, filename)
+                filename = f"summary_{target_lang}.txt"
+                path = os.path.join(output_dir, filename)
 
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(summary_text)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(summary_text)
 
-            if database.DB_POOL:
-                async with database.DB_POOL.acquire() as conn:
-                    await conn.execute(
-                        SQL_INSERT_SUMMARY, session_id, target_lang, filename
-                    )
+                if database.DB_POOL:
+                    async with database.DB_POOL.acquire() as conn:
+                        await conn.execute(
+                            SQL_INSERT_SUMMARY, session_id, target_lang, filename
+                        )
 
-            logger.info(f"Completed {target_lang} summary for {session_id}.")
-            return True
+                logger.info(f"Completed {target_lang} summary for {session_id}.")
+                return True
 
-        except Exception as e:
-            logger.error(f"Failed to generate {target_lang} summary: {e}")
-            return False
+            except Exception as e:
+                logger.error(f"Failed to generate {target_lang} summary: {e}")
+                return False
 
     async def generate_summaries_for_attendees(self, session_id: str, integration: str):
         """
         Orchestrates summary generation based on attendee language preferences.
         Always uses the English transcript as the source.
         """
-        with log_step("SUMMARY"):
+        with log_step(LOG_STEP):
             try:
                 async with database.DB_POOL.acquire() as conn:
                     attendees = await conn.fetch(

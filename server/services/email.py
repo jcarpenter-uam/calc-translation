@@ -13,6 +13,8 @@ from core.logging_setup import log_step
 
 logger = logging.getLogger(__name__)
 
+LOG_STEP = "EMAIL"
+
 
 class EmailService:
     def __init__(self):
@@ -33,39 +35,40 @@ class EmailService:
         """
         Blocking SMTP function to be run in a separate thread.
         """
-        try:
-            msg = MIMEMultipart()
-            msg["From"] = self.sender_email
-            msg["To"] = to_email
-            msg["Subject"] = subject
+        with log_step(LOG_STEP):
+            try:
+                msg = MIMEMultipart()
+                msg["From"] = self.sender_email
+                msg["To"] = to_email
+                msg["Subject"] = subject
 
-            msg.attach(MIMEText(body_html, "html"))
+                msg.attach(MIMEText(body_html, "html"))
 
-            if attachment_path and os.path.exists(attachment_path):
-                try:
-                    with open(attachment_path, "rb") as f:
-                        part = MIMEBase("application", "octet-stream")
-                        part.set_payload(f.read())
+                if attachment_path and os.path.exists(attachment_path):
+                    try:
+                        with open(attachment_path, "rb") as f:
+                            part = MIMEBase("application", "octet-stream")
+                            part.set_payload(f.read())
 
-                    encoders.encode_base64(part)
-                    part.add_header(
-                        "Content-Disposition",
-                        f'attachment; filename="{attachment_name}"',
-                    )
-                    msg.attach(part)
-                except Exception as e:
-                    logger.error(f"Failed to attach file {attachment_path}: {e}")
+                        encoders.encode_base64(part)
+                        part.add_header(
+                            "Content-Disposition",
+                            f'attachment; filename="{attachment_name}"',
+                        )
+                        msg.attach(part)
+                    except Exception as e:
+                        logger.error(f"Failed to attach file {attachment_path}: {e}")
 
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
+                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                    server.starttls()
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.send_message(msg)
 
-            return True
+                return True
 
-        except Exception as e:
-            logger.error(f"SMTP Error sending to {to_email}: {e}")
-            return False
+            except Exception as e:
+                logger.error(f"SMTP Error sending to {to_email}: {e}")
+                return False
 
     async def send_session_transcripts(
         self, session_id: str, integration: str, attendees: list
@@ -77,7 +80,7 @@ class EmailService:
         if not attendees:
             return
 
-        with log_step("EMAIL-SERVICE"):
+        with log_step(LOG_STEP):
             safe_session_id = urllib.parse.quote(session_id, safe="")
             output_dir = os.path.join("output", integration, safe_session_id)
 

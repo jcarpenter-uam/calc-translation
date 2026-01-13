@@ -46,6 +46,12 @@ class Settings(BaseSettings):
 
     SYSTEM_MAILER_EMAIL: str
 
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+
+    OLLAMA_CLOUD_API_KEY: str = ""
+
+    OLLAMA_MODEL: str = "llama3:8b"
+
     LOGGING_LEVEL: str = "INFO"
 
 

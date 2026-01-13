@@ -30,6 +30,7 @@ from .soniox import (
     SonioxResult,
     SonioxService,
 )
+from .summary import SummaryService
 from .vtt import TimestampService
 
 logger = logging.getLogger(__name__)
@@ -477,6 +478,11 @@ class MeetingSession:
             task.cancel()
 
         await self.viewer_manager.cache.save_history_and_clear(
+            self.session_id, self.integration
+        )
+
+        summary_service = SummaryService()
+        await summary_service.generate_summaries_for_attendees(
             self.session_id, self.integration
         )
 

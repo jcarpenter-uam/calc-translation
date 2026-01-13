@@ -71,7 +71,8 @@ class EmailService:
         self, session_id: str, integration: str, attendees: list
     ):
         """
-        Iterates through attendees, finds their localized transcript, and emails them.
+        Iterates through attendees, finds their localized summary and transcript,
+        and emails them.
         """
         if not attendees:
             return
@@ -81,7 +82,7 @@ class EmailService:
             output_dir = os.path.join("output", integration, safe_session_id)
 
             logger.info(
-                f"Distributing transcripts to {len(attendees)} attendees for session {session_id}..."
+                f"Distributing transcripts and summaries to {len(attendees)} attendees for session {session_id}..."
             )
 
             loop = asyncio.get_running_loop()
@@ -94,26 +95,56 @@ class EmailService:
                 if not email:
                     continue
 
-                filename = f"transcript_{pref_lang}.vtt"
-                target_file = os.path.join(output_dir, filename)
+                vtt_filename = f"transcript_{pref_lang}.vtt"
+                vtt_path = os.path.join(output_dir, vtt_filename)
+                final_lang = pref_lang
 
-                if not os.path.exists(target_file):
-                    filename = "transcript_en.vtt"
-                    target_file = os.path.join(output_dir, filename)
-                    pref_lang = "en"
+                if not os.path.exists(vtt_path):
+                    vtt_filename = "transcript_en.vtt"
+                    vtt_path = os.path.join(output_dir, vtt_filename)
+                    final_lang = "en"
 
-                if os.path.exists(target_file):
-                    subject = f"Transcript: Meeting {session_id}"
+                summary_filename = f"summary_{pref_lang}.txt"
+                summary_path = os.path.join(output_dir, summary_filename)
+
+                if not os.path.exists(summary_path):
+                    summary_path = os.path.join(output_dir, "summary_en.txt")
+
+                summary_content = "<p><i>No summary available.</i></p>"
+
+                if os.path.exists(summary_path):
+                    try:
+                        with open(summary_path, "r", encoding="utf-8") as f:
+                            raw_summary = f.read()
+                        summary_content = raw_summary.replace("\n", "<br>")
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to read summary file {summary_path}: {e}"
+                        )
+
+                if os.path.exists(vtt_path):
+                    subject = f"Summary & Transcript: Meeting {session_id}"
                     body = f"""
                     <html>
-                    <body style="font-family: Arial, sans-serif;">
-                        <p>Thank you for using our app,</p>
-                        <p>Attached is the transcript for your previous meeting.</p>
-                        <p>Language: {pref_lang.upper()}</p>
-                        <br>
-                        <p style="font-size: 12px; color: #888;">
-                            Sent by Calc-Translation Automation
-                        </p>
+                    <body style="font-family: Arial, sans-serif; color: #333;">
+                        <div style="background-color: #f4f4f4; padding: 20px;">
+                            <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <h2 style="color: #2c3e50; margin-top: 0;">Meeting Summary</h2>
+                                <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #007bff; margin: 15px 0;">
+                                    {summary_content}
+                                </div>
+                                
+                                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                                
+                                <p>Hello,</p>
+                                <p>Attached is the full transcript for <strong>Meeting {session_id}</strong>.</p>
+                                <p><strong>Language:</strong> {final_lang.upper()}</p>
+                                <br>
+                                <p style="font-size: 12px; color: #888; text-align: center;">
+                                    Sent by Calc-Translation Automation
+                                </p>
+                            </div>
+                        </div>
                     </body>
                     </html>
                     """
@@ -124,13 +155,13 @@ class EmailService:
                         email,
                         subject,
                         body,
-                        target_file,
-                        filename,
+                        vtt_path,
+                        vtt_filename,
                     )
                     tasks.append(task)
                 else:
                     logger.warning(
-                        f"No transcript found for {email} (checked {pref_lang} & en)."
+                        f"No transcript found for {email} (checked {pref_lang} & en). Skipping email."
                     )
 
             if tasks:

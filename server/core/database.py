@@ -141,6 +141,20 @@ async def init_db():
                         """
                     )
 
+                    # Summaries
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS SUMMARIES (
+                            id SERIAL PRIMARY KEY,
+                            meeting_id TEXT REFERENCES MEETINGS(id) ON DELETE CASCADE,
+                            language_code TEXT NOT NULL,
+                            file_name TEXT NOT NULL,
+                            creation_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE (meeting_id, language_code)
+                        );
+                        """
+                    )
+
             with log_step(LOG_STEP):
                 logger.info(
                     "Database pool initialized successfully and schema verified."
@@ -376,4 +390,21 @@ WHERE user_id = $1
 AND ($2::timestamptz IS NULL OR start_time >= $2)
 AND ($3::timestamptz IS NULL OR start_time <= $3)
 ORDER BY start_time ASC;
+"""
+
+# --- SUMMARIES ---
+
+SQL_INSERT_SUMMARY = """
+INSERT INTO SUMMARIES (meeting_id, language_code, file_name)
+VALUES ($1, $2, $3)
+ON CONFLICT (meeting_id, language_code) 
+DO UPDATE SET 
+    file_name = excluded.file_name,
+    creation_date = CURRENT_TIMESTAMP;
+"""
+
+SQL_GET_SUMMARY_BY_MEETING_ID = """
+SELECT file_name, creation_date 
+FROM SUMMARIES 
+WHERE meeting_id = $1 AND language_code = $2;
 """

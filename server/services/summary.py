@@ -19,9 +19,9 @@ class SummaryService:
         with log_step(LOG_STEP):
             client_kwargs = {"host": settings.OLLAMA_BASE_URL}
 
-            if settings.OLLAMA_API_KEY:
+            if settings.OLLAMA_API_KEY and settings.OLLAMA_API_KEY.strip():
                 client_kwargs["headers"] = {
-                    "Authorization": f"Bearer {settings.OLLAMA_API_KEY}"
+                    "Authorization": f"Bearer {settings.OLLAMA_API_KEY.strip()}"
                 }
                 logger.debug("Ollama Client initialized with Bearer Auth.")
 

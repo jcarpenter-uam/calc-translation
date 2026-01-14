@@ -295,7 +295,7 @@
   "menu_admin": "Admin",
   "menu_logout": "Keluar",
   "user_menu_tooltip": "Masuk sebagai {{name}}. Klik untuk opsi.",
-  "download_transcript": "Sesi berakhir. Unduh transkrip",
+  "download_transcript": "Unduh transkrip",
   "downloading": "Mengunduh...",
   "loading_history": "Menerjemahkan riwayat percakapan...",
   "active_sessions_title": "Sesi Aktif",
@@ -351,5 +351,7 @@
   "waiting_desc": "Harap tetap di halaman ini. Transkripsi akan dimulai secara otomatis saat host memulai rapat.",
   "loading_admin": "Memuat data admin...",
   "manual_join": "Gabung Secara Manual",
-  "calendar_join": "Gabung dari Kalender"
+  "calendar_join": "Gabung dari Kalender",
+  "meeting_ended": "Rapat Berakhir",
+  "meeting_ended_description": "Transkrip dan ringkasan AI akan dikirimkan melalui email kepada Anda segera.\n\nAnda juga dapat mengunduh file transkrip langsung di sini."
 }

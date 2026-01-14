@@ -294,7 +294,7 @@
   "menu_admin": "管理",
   "menu_logout": "退出登录",
   "user_menu_tooltip": "已登录为 {{name}}。点击查看选项。",
-  "download_transcript": "会话已结束。下载文字记录",
+  "download_transcript": "下载文字记录",
   "downloading": "正在下载...",
   "loading_history": "正在翻译对话记录……",
   "active_sessions_title": "活跃会话",
@@ -350,5 +350,7 @@
   "waiting_desc": "请停留在本页面。当主持人开始会议时，转录将自动开始。",
   "loading_admin": "正在加载管理数据...",
   "manual_join": "手动加入",
-  "calendar_join": "从日历加入"
+  "calendar_join": "从日历加入",
+  "meeting_ended": "会议已结束",
+  "meeting_ended_description": "会议记录和人工智能摘要将很快通过电子邮件发送给您。\n\n您也可以在此处直接下载会议记录文件。"
 }

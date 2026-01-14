@@ -55,7 +55,6 @@ services:
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SYSTEM_MAILER_EMAIL=${SYSTEM_MAILER_EMAIL}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
@@ -146,7 +145,6 @@ SMTP_HOST="smtp.gmail.com" # Default if not set
 SMTP_PORT=587 # Default if not set
 SMTP_USER="your-email@gmail.com"
 SMTP_PASSWORD="your-16-digit-app-password-seperate-by-spaces"
-SYSTEM_MAILER_EMAIL="noreply@calc-translation.com"
 
 ## General Settings
 #

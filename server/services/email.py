@@ -22,7 +22,7 @@ class EmailService:
         self.smtp_port = settings.SMTP_PORT
         self.smtp_user = settings.SMTP_USER
         self.smtp_password = settings.SMTP_PASSWORD
-        self.sender_email = settings.SYSTEM_MAILER_EMAIL or self.smtp_user
+        self.sender_email = self.smtp_user
 
     def _send_sync(
         self,

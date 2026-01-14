@@ -44,8 +44,6 @@ class Settings(BaseSettings):
 
     SMTP_PASSWORD: str
 
-    SYSTEM_MAILER_EMAIL: str
-
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     OLLAMA_API_KEY: str = ""

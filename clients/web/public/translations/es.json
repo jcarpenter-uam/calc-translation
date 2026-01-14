@@ -295,7 +295,7 @@
   "menu_admin": "Admin",
   "menu_logout": "Cerrar sesión",
   "user_menu_tooltip": "Iniciado sesión como {{name}}. Haga clic para opciones.",
-  "download_transcript": "La sesión ha finalizado. Descargar transcripción.",
+  "download_transcript": "Descargar transcripción.",
   "downloading": "Descargando...",
   "loading_history": "Traduciendo el historial de conversaciones...",
   "active_sessions_title": "Sesiones Activas",
@@ -351,5 +351,7 @@
   "waiting_desc": "Por favor, permanezca en esta página. La transcripción comenzará automáticamente cuando el anfitrión inicie la reunión.",
   "loading_admin": "Cargando datos de administración...",
   "manual_join": "Unirse manualmente",
-  "calendar_join": "Unirse desde el calendario"
+  "calendar_join": "Unirse desde el calendario",
+  "meeting_ended": "Reunión finalizada",
+  "meeting_ended_description": "La transcripción y el resumen generado por IA se le enviarán por correo electrónico en breve.\n\nTambién puede descargar el archivo de transcripción directamente aquí."
 }

@@ -4,6 +4,8 @@ import threading
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Set
 
+from core import database
+from core.database import SQL_ADD_MEETING_ATTENDEE
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket
 
@@ -20,6 +22,7 @@ class ConnectionManager:
         self.sessions: Dict[str, List[WebSocket]] = {}
         self.active_transcription_sessions: Dict[str, Dict[str, Any]] = {}
         self.socket_languages: Dict[WebSocket, str] = {}
+        self.socket_users: Dict[WebSocket, str] = {}
 
         self.language_request_callbacks: Dict[str, Callable[[str], Any]] = {}
         self.language_removal_callbacks: Dict[str, Callable[[str], Any]] = {}
@@ -85,12 +88,26 @@ class ConnectionManager:
                     languages.add(lang)
         return languages
 
+    async def _record_attendee(self, session_id: str, user_id: str):
+        """
+        Helper to safely add a user to the meeting's attendee list in the DB.
+        """
+        if not user_id:
+            return
+        try:
+            async with database.DB_POOL.acquire() as conn:
+                await conn.execute(SQL_ADD_MEETING_ATTENDEE, user_id, session_id)
+                logger.debug(f"Recorded attendee {user_id} for session {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to record attendee {user_id} in DB: {e}")
+
     async def migrate_session(self, old_session_id: str, new_session_id: str):
         """
         Moves all viewer connections from an old session ID to a new one.
         Useful when a Waiting Room (scheduled UUID) transitions to a Live Meeting (new UUID).
         """
         session_token = session_id_var.set(new_session_id)
+        migrated_users = set()
         try:
             if old_session_id in self.sessions:
                 old_connections = self.sessions.pop(old_session_id)
@@ -99,6 +116,10 @@ class ConnectionManager:
                     self.sessions[new_session_id] = []
 
                 self.sessions[new_session_id].extend(old_connections)
+
+                for ws in old_connections:
+                    if ws in self.socket_users:
+                        migrated_users.add(self.socket_users[ws])
 
                 with log_step("CONN-MANAGER"):
                     logger.info(
@@ -112,6 +133,9 @@ class ConnectionManager:
                         logger.warning(
                             f"Failed to send status update during migration: {e}"
                         )
+
+                for user_id in migrated_users:
+                    asyncio.create_task(self._record_attendee(new_session_id, user_id))
 
         except Exception as e:
             logger.error(
@@ -165,7 +189,9 @@ class ConnectionManager:
             ):
                 del self.cleanup_tasks[session_id][language_code]
 
-    async def connect(self, websocket: WebSocket, session_id: str, language_code: str):
+    async def connect(
+        self, websocket: WebSocket, session_id: str, language_code: str, user_id: str
+    ):
         """
         Accepts a new connection, registers their language,
         and replays the transcript history for that specific language.
@@ -179,6 +205,7 @@ class ConnectionManager:
             self.sessions[session_id].append(websocket)
 
             self.socket_languages[websocket] = language_code
+            self.socket_users[websocket] = user_id
 
             if (
                 session_id in self.cleanup_tasks
@@ -199,6 +226,7 @@ class ConnectionManager:
                         logger.error(
                             f"Error triggering language request callback for session {session_id}: {e}"
                         )
+                asyncio.create_task(self._record_attendee(session_id, user_id))
 
             history = self.cache.get_history(session_id, language_code)
 
@@ -239,6 +267,9 @@ class ConnectionManager:
             language_code = None
             if websocket in self.socket_languages:
                 language_code = self.socket_languages.pop(websocket)
+
+            if websocket in self.socket_users:
+                del self.socket_users[websocket]
 
             if session_id in self.sessions:
                 if websocket in self.sessions[session_id]:

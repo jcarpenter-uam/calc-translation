@@ -36,6 +36,20 @@ class Settings(BaseSettings):
 
     ZM_METRICS_URL: str = "http://localhost:8080/metrics"
 
+    SMTP_HOST: str = "smtp.gmail.com"
+
+    SMTP_PORT: int = 587
+
+    SMTP_USER: str
+
+    SMTP_PASSWORD: str
+
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+
+    OLLAMA_API_KEY: str = ""
+
+    OLLAMA_MODEL: str = "llama3:8b"
+
     LOGGING_LEVEL: str = "INFO"
 
 

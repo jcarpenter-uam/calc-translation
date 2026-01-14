@@ -92,7 +92,8 @@ async def init_db():
                             meeting_time TIMESTAMPTZ,
                             join_url TEXT,
                             started_at TIMESTAMPTZ,
-                            ended_at TIMESTAMPTZ
+                            ended_at TIMESTAMPTZ,
+                            attendees TEXT[] DEFAULT '{}'
                         )
                         """
                     )
@@ -140,6 +141,20 @@ async def init_db():
                         """
                     )
 
+                    # Summaries
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS SUMMARIES (
+                            id SERIAL PRIMARY KEY,
+                            meeting_id TEXT REFERENCES MEETINGS(id) ON DELETE CASCADE,
+                            language_code TEXT NOT NULL,
+                            file_name TEXT NOT NULL,
+                            creation_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE (meeting_id, language_code)
+                        );
+                        """
+                    )
+
             with log_step(LOG_STEP):
                 logger.info(
                     "Database pool initialized successfully and schema verified."
@@ -171,6 +186,7 @@ SQL_GET_ALL_USERS = "SELECT * FROM USERS;"
 SQL_DELETE_USER_BY_ID = "DELETE FROM USERS WHERE id = $1;"
 SQL_SET_USER_ADMIN_STATUS = "UPDATE USERS SET is_admin = $1 WHERE id = $2;"
 SQL_UPDATE_USER_LANGUAGE = "UPDATE USERS SET language_code = $1 WHERE id = $2;"
+SQL_GET_USER_ID_BY_EMAIL = "SELECT id FROM USERS WHERE email = $1"
 
 # --- TENANTS ---
 
@@ -309,6 +325,20 @@ ORDER BY started_at DESC
 LIMIT 1;
 """
 
+SQL_ADD_MEETING_ATTENDEE = """
+UPDATE MEETINGS
+SET attendees = array_append(COALESCE(attendees, '{}'), $1)
+WHERE id = $2
+  AND ($1 <> ALL(COALESCE(attendees, '{}'))); 
+"""
+
+SQL_GET_MEETING_ATTENDEES_DETAILS = """
+SELECT u.email, u.language_code
+FROM USERS u
+JOIN MEETINGS m ON u.id = ANY(m.attendees)
+WHERE m.id = $1;
+"""
+
 # --- TRANSCRIPTS ---
 
 SQL_INSERT_TRANSCRIPT = """
@@ -360,4 +390,21 @@ WHERE user_id = $1
 AND ($2::timestamptz IS NULL OR start_time >= $2)
 AND ($3::timestamptz IS NULL OR start_time <= $3)
 ORDER BY start_time ASC;
+"""
+
+# --- SUMMARIES ---
+
+SQL_INSERT_SUMMARY = """
+INSERT INTO SUMMARIES (meeting_id, language_code, file_name)
+VALUES ($1, $2, $3)
+ON CONFLICT (meeting_id, language_code) 
+DO UPDATE SET 
+    file_name = excluded.file_name,
+    creation_date = CURRENT_TIMESTAMP;
+"""
+
+SQL_GET_SUMMARY_BY_MEETING_ID = """
+SELECT file_name, creation_date 
+FROM SUMMARIES 
+WHERE meeting_id = $1 AND language_code = $2;
 """

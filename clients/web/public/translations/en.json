@@ -337,7 +337,7 @@
   "menu_admin": "Admin",
   "menu_logout": "Logout",
   "user_menu_tooltip": "Logged in as {{name}}. Click for options.",
-  "download_transcript": "Session ended. Download transcript",
+  "download_transcript": "Download transcript",
   "downloading": "Downloading...",
   "loading_history": "Translating conversation history...",
   "active_sessions_title": "Active Sessions",
@@ -346,5 +346,7 @@
   "updated_at": "Updated: {{time}}",
   "no_active_sessions": "No active sessions found.",
   "live_status": "Live",
-  "started_label": "Started:"
+  "started_label": "Started:",
+  "meeting_ended": "Meeting Ended",
+  "meeting_ended_description": "The transcript and AI summary will be emailed to you shortly.\n\nYou can also download the transcript file directly here."
 }

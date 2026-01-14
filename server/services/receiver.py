@@ -6,7 +6,11 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from core import database
-from core.database import SQL_UPDATE_MEETING_END, SQL_UPDATE_MEETING_START
+from core.database import (
+    SQL_GET_MEETING_ATTENDEES_DETAILS,
+    SQL_UPDATE_MEETING_END,
+    SQL_UPDATE_MEETING_START,
+)
 from core.logging_setup import (
     add_session_log_handler,
     log_step,
@@ -18,6 +22,7 @@ from core.logging_setup import (
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .backfill import BackfillService
+from .email import EmailService
 from .soniox import (
     SonioxConnectionError,
     SonioxError,
@@ -25,6 +30,7 @@ from .soniox import (
     SonioxResult,
     SonioxService,
 )
+from .summary import SummaryService
 from .vtt import TimestampService
 
 logger = logging.getLogger(__name__)
@@ -478,9 +484,38 @@ class MeetingSession:
         end_payload = {"type": "session_end", "message": "Session concluded."}
         await self.viewer_manager.broadcast_to_session(self.session_id, end_payload)
 
+        summary_service = SummaryService()
+        await summary_service.generate_summaries_for_attendees(
+            self.session_id, self.integration
+        )
+
+        await self._email_attendees()
+
         self.viewer_manager.deregister_transcription_session(self.session_id)
         if self.session_log_handler:
             remove_session_log_handler(self.session_log_handler)
+
+    async def _email_attendees(self):
+        """Helper to fetch attendees and delegate email logic."""
+        try:
+            async with database.DB_POOL.acquire() as conn:
+                attendees = await conn.fetch(
+                    SQL_GET_MEETING_ATTENDEES_DETAILS, self.session_id
+                )
+
+            if not attendees:
+                logger.info(f"No attendees to email for session {self.session_id}.")
+                return
+
+            email_service = EmailService()
+            await email_service.send_session_transcripts(
+                session_id=self.session_id,
+                integration=self.integration,
+                attendees=attendees,
+            )
+
+        except Exception as e:
+            logger.error(f"Error in _email_attendees: {e}", exc_info=True)
 
     def schedule_cleanup(self, delay_seconds=15):
         """Schedules a forced close if no reconnect happens."""

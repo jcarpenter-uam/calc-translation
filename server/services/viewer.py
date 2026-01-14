@@ -87,7 +87,9 @@ async def handle_viewer_session(
                     )
                     session_id_var.set(resolved_session_id)
 
-            await viewer_manager.connect(websocket, resolved_session_id, language_code)
+            await viewer_manager.connect(
+                websocket, resolved_session_id, language_code, user_id
+            )
 
             status_msg = (
                 "active"

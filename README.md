@@ -24,6 +24,8 @@ graph TD
 
 - **Soniox:** Used as the current transcription/translation model. An API key can be obtained [here](https://soniox.com/docs/)
 - **Qwen-MT-Turbo:** Used as the current backfill model. An API key can be obtained [here](https://www.alibabacloud.com/help/en/model-studio/stream)
+- **Ollama** Used for end of meeting summaries. This can be run locally or using Ollama Cloud. Details can be found [here](https://docs.ollama.com/cloud)
+- **Gmail Account** This account will be used as the sender address for meeting transcripts and summaries to attendees. Information on obtaining an app password can be found [here](https://support.google.com/mail/answer/185833?hl=en)
 
 ## Installation
 
@@ -49,6 +51,13 @@ services:
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - ZM_METRICS_URL=http://zoom-rtms:8080/metrics
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
       - LOGGING_LEVEL=${LOGGING_LEVEL}
     volumes:
       - translation-logs:/app/logs
@@ -130,6 +139,12 @@ ZM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n<KEY_BODY>\n-----END PUBLIC KEY-----"
 #
 # Database URL
 DATABASE_URL="postgresql://user:password@localhost:5432/calc-translation"
+#
+# Senders Email
+SMTP_HOST="smtp.gmail.com" # Default if not set
+SMTP_PORT=587 # Default if not set
+SMTP_USER="your-email@gmail.com"
+SMTP_PASSWORD="your-16-digit-app-password-seperate-by-spaces"
 
 ## General Settings
 #
@@ -144,4 +159,10 @@ MAX_CACHE_MB=10 # Default if not set
 # Endpoint for the zoom microservice metrics
 # This fetches the metrics and returns them for the admin page
 ZM_METRICS_URL="http://localhost:8080/metrics" # Default if not set
+#
+# Ollama Summerization
+# This sends meeting summaries to each user in their language
+OLLAMA_BASE_URL="http://localhost:11434" # Default if not set
+OLLAMA_API_KEY="" # Default if not set
+OLLAMA_MODEL="llama3:8b" # Default if not set
 ```

@@ -53,21 +53,30 @@ class SummaryService:
                     f"Generating {target_lang} summary for session {session_id} using {self.model}..."
                 )
 
+                system_prompt = (
+                    "You are a professional meeting secretary. "
+                    "Your task is to analyze the provided English meeting transcript and generate a structured summary.\n\n"
+                    "### STRICT OUTPUT REQUIREMENTS:\n"
+                    f"1. **Language:** The ENTIRE output must be written in the language corresponding to the code '{target_lang}'. "
+                    "If the target language is NOT English, you must translate the summary content and the section headers.\n"
+                    "2. **Structure:** Your response must use the following structure (translated if necessary):\n"
+                    "   - **Key Points**\n"
+                    "   - **Decisions Made**\n"
+                    "   - **Action Items**\n"
+                    "3. **Tone:** Professional, concise, and objective.\n"
+                    "4. **Format:** Do NOT include timestamps or preamble. Start directly with the summary."
+                )
+
                 response = self.client.chat(
                     model=self.model,
                     messages=[
                         {
                             "role": "system",
-                            "content": (
-                                f"You are a helpful meeting assistant. "
-                                f"Summarize the following English meeting transcript in {target_lang}. "
-                                "Provide a concise summary with bullet points for key decisions and action items. "
-                                "Do not include timestamps."
-                            ),
+                            "content": system_prompt,
                         },
                         {
                             "role": "user",
-                            "content": source_text,
+                            "content": f"TRANSCRIPT:\n{source_text}",
                         },
                     ],
                 )

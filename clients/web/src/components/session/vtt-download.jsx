@@ -49,7 +49,7 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
       onClick={handleDownload}
       disabled={isLoading || !isDownloadable}
       className={`
-        px-5 py-2.5 text-sm font-semibold rounded-md shadow-sm 
+        px-3 py-2 text-xs font-medium rounded-md shadow-sm 
         focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-zinc-900 
         transition-colors cursor-pointer
         ${

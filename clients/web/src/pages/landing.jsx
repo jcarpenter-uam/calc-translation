@@ -131,6 +131,7 @@ export default function LandingPage() {
       }
 
       const responseData = await response.json();
+
       const { sessionId, token, type, joinUrl } = responseData;
 
       const isHost = integration === "standalone" && data.mode === "host";

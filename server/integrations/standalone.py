@@ -6,7 +6,11 @@ from urllib.parse import urlparse
 
 from core import database
 from core.config import settings
-from core.database import SQL_INSERT_MEETING, SQL_UPDATE_MEETING_START
+from core.database import (
+    SQL_GET_INTEGRATION,
+    SQL_INSERT_MEETING,
+    SQL_UPDATE_MEETING_START,
+)
 from core.logging_setup import log_step
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -72,10 +76,10 @@ async def authenticate_standalone_session(
             raise HTTPException(status_code=404, detail="Meeting not found.")
 
 
-async def create_standalone_session() -> tuple[str, str]:
+async def create_standalone_session(user_id: str) -> tuple[str, str]:
     """
     Creates a new standalone meeting record in the DB.
-    Generates and stores the Join URL.
+    Uses the host's existing 'microsoft' integration to link the meeting.
 
     Returns:
         tuple[str, str]: (meeting_uuid, join_url)
@@ -89,10 +93,25 @@ async def create_standalone_session() -> tuple[str, str]:
 
     with log_step(LOG_STEP):
         async with database.DB_POOL.acquire() as conn:
+            row_integration = await conn.fetchrow(
+                SQL_GET_INTEGRATION, user_id, "microsoft"
+            )
+
+            if not row_integration:
+                logger.error(
+                    f"User {user_id} has no Microsoft integration. Cannot create standalone session."
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail="User must be authenticated with Microsoft to host.",
+                )
+
+            integration_id = row_integration["id"]
+
             await conn.execute(
                 SQL_INSERT_MEETING,
                 meeting_uuid,
-                None,
+                integration_id,
                 None,
                 "standalone",
                 None,
@@ -102,6 +121,8 @@ async def create_standalone_session() -> tuple[str, str]:
 
             await conn.execute(SQL_UPDATE_MEETING_START, now, meeting_uuid)
 
-            logger.info(f"Created standalone meeting {meeting_uuid}")
+            logger.info(
+                f"Created standalone meeting {meeting_uuid} for host {user_id} (Linked to IntID: {integration_id})"
+            )
 
     return meeting_uuid, join_url

@@ -358,13 +358,13 @@ def create_auth_router() -> APIRouter:
 
             try:
                 if request.host:
-                    session_id, readable_id = await create_standalone_session()
+                    session_id, join_url = await create_standalone_session(user_id)
                     logger.info(
-                        f"Created new standalone session {session_id} (ID: {readable_id})"
+                        f"Created new standalone session {session_id} (JoinURL: {join_url})"
                     )
                 else:
                     session_id = await authenticate_standalone_session(request)
-                    readable_id = None
+                    join_url = None
                     logger.info(f"Authenticated for standalone session {session_id}")
 
                 token = generate_jwt_token(user_id=user_id, session_id=session_id)
@@ -373,7 +373,7 @@ def create_auth_router() -> APIRouter:
                     sessionId=session_id,
                     token=token,
                     type="standalone",
-                    readableId=readable_id,
+                    joinUrl=join_url,
                 )
 
             except HTTPException as e:

@@ -1,15 +1,12 @@
 import logging
-import random
 import uuid
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse
 
 from core import database
-from core.database import (
-    SQL_GET_MEETING_AUTH_BY_READABLE_ID,
-    SQL_INSERT_MEETING,
-    SQL_UPDATE_MEETING_START,
-)
+from core.config import settings
+from core.database import SQL_INSERT_MEETING, SQL_UPDATE_MEETING_START
 from core.logging_setup import log_step
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -22,8 +19,7 @@ LOG_STEP = "INT-STANDALONE"
 class StandaloneAuthRequest(BaseModel):
     """Matches the JSON body from the frontend for standalone auth"""
 
-    meeting_id: Optional[str] = None
-    passcode: Optional[str] = None
+    join_url: Optional[str] = None
     host: bool = False
 
 
@@ -33,88 +29,79 @@ class StandaloneAuthResponse(BaseModel):
     sessionId: str
     token: str
     type: str
-    readableId: Optional[str] = None
+    joinUrl: Optional[str] = None
 
 
 async def authenticate_standalone_session(
     request: StandaloneAuthRequest,
 ) -> str:
     """
-    Authenticates a standalone session against the database using
-    Meeting ID (readable) and Passcode.
-
-    Returns:
-        str: The meeting UUID if authentication is successful.
+    Authenticates a standalone session using the Join URL.
+    Parses the UUID from the URL and verifies it exists.
     """
-    if not request.meeting_id:
-        raise HTTPException(
-            status_code=400, detail="Meeting ID is required for joining."
-        )
+    search_id = None
+
+    if request.join_url:
+        try:
+            parsed = urlparse(request.join_url)
+            if parsed.path:
+                path_parts = parsed.path.strip("/").split("/")
+                search_id = path_parts[-1]
+            else:
+                search_id = request.join_url
+        except Exception:
+            search_id = request.join_url
+
+    if not search_id:
+        raise HTTPException(status_code=400, detail="A Join URL is required.")
 
     async with database.DB_POOL.acquire() as conn:
         with log_step(LOG_STEP):
-            logger.info(f"Authenticating via meeting_id: {request.meeting_id}")
-            row = await conn.fetchrow(
-                SQL_GET_MEETING_AUTH_BY_READABLE_ID,
-                "standalone",
-                request.meeting_id,
+            logger.info(f"Authenticating standalone via UUID: {search_id}")
+
+            row_by_uuid = await conn.fetchrow(
+                "SELECT id FROM MEETINGS WHERE id = $1 AND platform = 'standalone'",
+                search_id,
             )
 
-            if not row:
-                logger.warning(
-                    f"Auth failed: Meeting ID not found: {request.meeting_id}"
-                )
-                raise HTTPException(status_code=404, detail="Meeting ID not found.")
+            if row_by_uuid:
+                logger.info(f"Auth successful via UUID: {search_id}")
+                return row_by_uuid["id"]
 
-            meeting_uuid, stored_passcode = row[0], row[1]
-
-            if stored_passcode and stored_passcode != (request.passcode or ""):
-                logger.warning(
-                    f"Auth failed: Incorrect passcode for meeting {meeting_uuid}"
-                )
-                raise HTTPException(
-                    status_code=401, detail="Incorrect passcode for the meeting."
-                )
-
-            logger.info(f"Auth successful for standalone. UUID: {meeting_uuid}")
-            return meeting_uuid
+            logger.warning(f"Auth failed: Meeting not found for input: {search_id}")
+            raise HTTPException(status_code=404, detail="Meeting not found.")
 
 
 async def create_standalone_session() -> tuple[str, str]:
     """
     Creates a new standalone meeting record in the DB.
+    Generates and stores the Join URL.
 
     Returns:
-        tuple[str, str]: (meeting_uuid, readable_id)
+        tuple[str, str]: (meeting_uuid, join_url)
     """
     meeting_uuid = str(uuid.uuid4())
-    readable_id = str(random.randint(100000000, 999999999))
+
+    base_url = settings.APP_BASE_URL.rstrip("/")
+    join_url = f"{base_url}/sessions/standalone/{meeting_uuid}"
+
     now = datetime.now()
 
     with log_step(LOG_STEP):
         async with database.DB_POOL.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT id FROM MEETINGS WHERE platform = 'standalone' AND readable_id = $1",
-                readable_id,
-            )
-            if row:
-                readable_id = str(random.randint(100000000, 999999999))
-
             await conn.execute(
                 SQL_INSERT_MEETING,
                 meeting_uuid,
                 None,
-                "",
-                "standalone",
-                readable_id,
-                now,
                 None,
+                "standalone",
+                None,
+                now,
+                join_url,
             )
 
             await conn.execute(SQL_UPDATE_MEETING_START, now, meeting_uuid)
 
-            logger.info(
-                f"Created standalone meeting {meeting_uuid} (ID: {readable_id})"
-            )
+            logger.info(f"Created standalone meeting {meeting_uuid}")
 
-    return meeting_uuid, readable_id
+    return meeting_uuid, join_url

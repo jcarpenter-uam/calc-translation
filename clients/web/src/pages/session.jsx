@@ -8,7 +8,7 @@ import Notification from "../components/misc/notification.jsx";
 import BackfillLoading from "../components/session/backfill-loading.jsx";
 import WaitingRoom from "../components/session/waiting.jsx";
 import HostAudioSender from "../components/session/host-audio-sender.jsx";
-import ReadableIdDisplay from "../components/session/readable-id-display.jsx";
+import JoinURLDisplay from "../components/session/joinURL-display.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 import { useSmartScroll } from "../hooks/use-smart-scroll.js";
 import { useLanguage } from "../context/language.jsx";
@@ -29,7 +29,7 @@ export default function SessionPage() {
   const token = query.get("token");
 
   const isHost = query.get("isHost") === "true";
-  const readableId = location.state?.readableId;
+  const joinUrl = location.state?.joinUrl;
 
   const [isAuthorized, setIsAuthorized] = useState(!!token);
   const [showUnauthorized, setShowUnauthorized] = useState(false);
@@ -54,7 +54,6 @@ export default function SessionPage() {
 
   const encodedSessionId = isAuthorized ? encodeURIComponent(sessionId) : null;
 
-  // Viewer WebSocket URL
   const wsUrl = isAuthorized
     ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${language}`
     : null;
@@ -85,7 +84,7 @@ export default function SessionPage() {
     <>
       <div className="max-w-3xl mx-auto w-full relative pb-24">
         {/* Host Controls */}
-        {isHost && readableId && <ReadableIdDisplay id={readableId} />}
+        {isHost && joinUrl && <ReadableIdDisplay joinUrl={joinUrl} />}
         {isHost && (
           <HostAudioSender sessionId={sessionId} integration={integration} />
         )}

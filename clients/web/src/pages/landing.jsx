@@ -119,8 +119,7 @@ export default function LandingPage() {
             headers,
             body: JSON.stringify({
               host: data.mode === "host",
-              meeting_id: data.meetingId,
-              passcode: data.passcode,
+              join_url: data.joinUrl,
             }),
           });
         }
@@ -132,13 +131,13 @@ export default function LandingPage() {
       }
 
       const responseData = await response.json();
-      const { sessionId, token, type, readableId } = responseData;
+      const { sessionId, token, type, joinUrl } = responseData;
 
       const isHost = integration === "standalone" && data.mode === "host";
 
       navigate(
         `/sessions/${type}/${encodeURIComponent(sessionId)}?token=${token}${isHost ? "&isHost=true" : ""}`,
-        { state: { readableId } },
+        { state: { joinUrl } },
       );
     } catch (err) {
       console.error("Join failed:", err);

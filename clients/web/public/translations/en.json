@@ -348,5 +348,11 @@
   "live_status": "Live",
   "started_label": "Started:",
   "meeting_ended": "Meeting Ended",
-  "meeting_ended_description": "The transcript and AI summary will be emailed to you shortly.\n\nYou can also download the transcript file directly here."
+  "meeting_ended_description": "The transcript and AI summary will be emailed to you shortly.\n\nYou can also download the transcript file directly here.",
+  "integration_standalone": "Standalone",
+  "standalone_mode_description": "Standalone mode offers the functionality of translating a meeting in person",
+  "join_url_standalone_placeholder": "e.g., https://translator.my-uam.com/session/...",
+  "join_standalone_btn": "Join Standalone Meeting",
+  "host_mode_description": "Are you starting a meeting instead of joining one?",
+  "start_new_meeting_btn": "Start Standalone Meeting"
 }

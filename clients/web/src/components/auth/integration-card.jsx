@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BiLogoZoom } from "react-icons/bi";
+import { BiLogoZoom, BiPlay, BiLogIn } from "react-icons/bi";
 
 // --- Zoom-Specific Form ---
 export function ZoomForm({ onSubmit }) {
@@ -86,5 +86,106 @@ export function ZoomForm({ onSubmit }) {
         </a>
       </div>
     </form>
+  );
+}
+
+export function StandaloneForm({ onSubmit }) {
+  const { t } = useTranslation();
+  const [mode, setMode] = useState("join"); // 'join' | 'host'
+  const [meetingId, setMeetingId] = useState("");
+  const [passcode, setPasscode] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit({ meetingId, passcode, mode });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-900/50 p-1">
+        <button
+          type="button"
+          onClick={() => setMode("join")}
+          className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
+            mode === "join"
+              ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
+              : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          }`}
+        >
+          {t("mode_join_viewer")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("host")}
+          className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
+            mode === "host"
+              ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
+              : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          }`}
+        >
+          {t("mode_start_host")}
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {mode === "join" ? (
+          <>
+            <div>
+              <label
+                htmlFor="standaloneMeetingId"
+                className="block text-sm font-medium"
+              >
+                {t("meeting_id_label")}
+              </label>
+              <input
+                type="text"
+                id="standaloneMeetingId"
+                value={meetingId}
+                onChange={(e) => setMeetingId(e.target.value)}
+                placeholder={t("meeting_id_placeholder")}
+                className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+                required
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="standalonePasscode"
+                className="block text-sm font-medium"
+              >
+                {t("passcode_label")}
+              </label>
+              <input
+                type="password"
+                id="standalonePasscode"
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                placeholder={t("passcode_placeholder")}
+                className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+            >
+              <BiLogIn className="w-5 h-5" />
+              {t("join_standalone_btn")}
+            </button>
+          </>
+        ) : (
+          <div className="pt-2 text-center">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+              {t("host_mode_description")}
+            </p>
+            <button
+              type="submit"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer shadow-lg shadow-emerald-600/20"
+            >
+              <BiPlay className="w-6 h-6" />
+              {t("start_new_meeting_btn")}
+            </button>
+          </div>
+        )}
+      </form>
+    </div>
   );
 }

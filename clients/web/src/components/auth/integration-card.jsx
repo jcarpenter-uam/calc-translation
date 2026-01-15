@@ -25,7 +25,7 @@ export function ZoomForm({ onSubmit }) {
           id="joinUrl"
           value={joinUrl}
           onChange={(e) => setJoinUrl(e.target.value)}
-          placeholder={t("join_url_placeholder")}
+          placeholder={t("join_url_zoom_placeholder")}
           className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
         />
       </div>
@@ -91,101 +91,66 @@ export function ZoomForm({ onSubmit }) {
 
 export function StandaloneForm({ onSubmit }) {
   const { t } = useTranslation();
-  const [mode, setMode] = useState("join"); // 'join' | 'host'
-  const [meetingId, setMeetingId] = useState("");
-  const [passcode, setPasscode] = useState("");
+  const [joinUrl, setJoinUrl] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleJoinSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ meetingId, passcode, mode });
+    onSubmit({ joinUrl, mode: "join" });
+  };
+
+  const handleHostStart = () => {
+    onSubmit({ mode: "host" });
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-900/50 p-1">
+    <div className="space-y-6">
+      <form onSubmit={handleJoinSubmit} className="space-y-4">
+        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mb-3">
+          {t("standalone_mode_description")}
+        </p>
+        <div>
+          <label htmlFor="joinUrl" className="block text-sm font-medium">
+            {t("join_url_label")}
+          </label>
+          <input
+            type="url"
+            id="joinUrl"
+            value={joinUrl}
+            onChange={(e) => setJoinUrl(e.target.value)}
+            placeholder={t("join_url_standalone_placeholder")}
+            className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+          />
+        </div>
         <button
-          type="button"
-          onClick={() => setMode("join")}
-          className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
-            mode === "join"
-              ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
-              : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-          }`}
+          type="submit"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
         >
-          {t("mode_join_viewer")}
+          <BiLogIn className="w-5 h-5" />
+          {t("join_standalone_btn")}
         </button>
-        <button
-          type="button"
-          onClick={() => setMode("host")}
-          className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
-            mode === "host"
-              ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
-              : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-          }`}
-        >
-          {t("mode_start_host")}
-        </button>
+      </form>
+
+      <div className="flex items-center">
+        <div className="flex-grow border-t border-zinc-300 dark:border-zinc-700"></div>
+        <span className="flex-shrink mx-4 text-sm text-zinc-500 dark:text-zinc-400">
+          {t("or_divider")}
+        </span>
+        <div className="flex-grow border-t border-zinc-300 dark:border-zinc-700"></div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {mode === "join" ? (
-          <>
-            <div>
-              <label
-                htmlFor="standaloneMeetingId"
-                className="block text-sm font-medium"
-              >
-                {t("meeting_id_label")}
-              </label>
-              <input
-                type="text"
-                id="standaloneMeetingId"
-                value={meetingId}
-                onChange={(e) => setMeetingId(e.target.value)}
-                placeholder={t("meeting_id_placeholder")}
-                className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
-                required
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="standalonePasscode"
-                className="block text-sm font-medium"
-              >
-                {t("passcode_label")}
-              </label>
-              <input
-                type="password"
-                id="standalonePasscode"
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                placeholder={t("passcode_placeholder")}
-                className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
-            >
-              <BiLogIn className="w-5 h-5" />
-              {t("join_standalone_btn")}
-            </button>
-          </>
-        ) : (
-          <div className="pt-2 text-center">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-              {t("host_mode_description")}
-            </p>
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer shadow-lg shadow-emerald-600/20"
-            >
-              <BiPlay className="w-6 h-6" />
-              {t("start_new_meeting_btn")}
-            </button>
-          </div>
-        )}
-      </form>
+      <div className="text-center">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">
+          {t("host_mode_description")}
+        </p>
+        <button
+          type="button"
+          onClick={handleHostStart}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600/90 text-white font-semibold rounded-lg hover:bg-red-700/90 transition-colors cursor-pointer"
+        >
+          <BiPlay className="w-6 h-6" />
+          {t("start_new_meeting_btn")}
+        </button>
+      </div>
     </div>
   );
 }

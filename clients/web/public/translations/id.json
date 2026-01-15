@@ -8,7 +8,7 @@
   "continue": "Lanjutkan",
   "zoom_link_info": "Silakan masuk untuk menyelesaikan penautan akun Zoom baru Anda.",
   "join_url_label": "URL Gabung",
-  "join_url_placeholder": "mis., https://us02web.zoom.us/j/...",
+  "join_url_zoom_placeholder": "mis., https://us02web.zoom.us/j/...",
   "or_divider": "ATAU",
   "meeting_id_label": "ID Rapat",
   "meeting_id_placeholder": "mis., 800 1234 5678",

@@ -8,7 +8,7 @@
   "continue": "继续",
   "zoom_link_info": "请登录以完成新 Zoom 账号的关联。",
   "join_url_label": "加入链接",
-  "join_url_placeholder": "例如：https://us02web.zoom.us/j/...",
+  "join_url_zoom_placeholder": "例如：https://us02web.zoom.us/j/...",
   "or_divider": "或",
   "meeting_id_label": "会议号",
   "meeting_id_placeholder": "例如：800 1234 5678",

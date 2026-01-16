@@ -154,7 +154,7 @@ export function useHostAudio(sessionId, integration) {
 
         const meta = {
           meeting_uuid: sessionId,
-          streamId: `browser-${user?.id || "guest"}`,
+          streamId: "browser-guest",
           workerPid: "browser",
         };
 

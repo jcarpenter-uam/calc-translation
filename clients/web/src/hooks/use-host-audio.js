@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { useAuth } from "../context/auth.jsx";
 import { useTranslation } from "react-i18next";
 
 function floatTo16BitPCM(input) {
@@ -26,7 +25,6 @@ const SILENCE_PCM = floatTo16BitPCM(SILENCE_SAMPLES);
 const SILENCE_BASE64 = arrayBufferToBase64(SILENCE_PCM);
 
 export function useHostAudio(sessionId, integration) {
-  const { user } = useAuth();
   const { t } = useTranslation();
 
   const [isAudioInitialized, setIsAudioInitialized] = useState(false);
@@ -64,7 +62,6 @@ export function useHostAudio(sessionId, integration) {
         wsRef.current.send(
           JSON.stringify({
             audio: SILENCE_BASE64,
-            userName: user?.name || "Host",
           }),
         );
       }
@@ -212,7 +209,6 @@ export function useHostAudio(sessionId, integration) {
           wsRef.current.send(
             JSON.stringify({
               audio: base64Audio,
-              userName: user?.name || "Host",
             }),
           );
         }

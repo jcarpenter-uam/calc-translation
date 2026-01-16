@@ -6,11 +6,7 @@ from urllib.parse import urlparse
 
 from core import database
 from core.config import settings
-from core.database import (
-    SQL_GET_INTEGRATION,
-    SQL_INSERT_MEETING,
-    SQL_UPDATE_MEETING_START,
-)
+from core.database import SQL_GET_INTEGRATION, SQL_INSERT_MEETING
 from core.logging_setup import log_step
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -118,8 +114,6 @@ async def create_standalone_session(user_id: str) -> tuple[str, str]:
                 now,
                 join_url,
             )
-
-            await conn.execute(SQL_UPDATE_MEETING_START, now, meeting_uuid)
 
             logger.info(
                 f"Created standalone meeting {meeting_uuid} for host {user_id} (Linked to IntID: {integration_id})"

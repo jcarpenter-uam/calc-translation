@@ -354,5 +354,7 @@
   "join_url_standalone_placeholder": "e.g., https://translator.my-uam.com/session/...",
   "join_standalone_btn": "Join Standalone Meeting",
   "host_mode_description": "Are you starting a meeting instead of joining one?",
-  "start_new_meeting_btn": "Start Standalone Meeting"
+  "start_new_meeting_btn": "Start Standalone Meeting",
+  "join_link": "Join URL",
+  "copy_to_clipboard": "Copy to Clipboard"
 }

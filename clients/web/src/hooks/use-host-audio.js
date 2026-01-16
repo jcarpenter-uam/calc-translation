@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { useTranslation } from "react-i18next";
 
 function floatTo16BitPCM(input) {
   const output = new Int16Array(input.length);
@@ -25,8 +24,6 @@ const SILENCE_PCM = floatTo16BitPCM(SILENCE_SAMPLES);
 const SILENCE_BASE64 = arrayBufferToBase64(SILENCE_PCM);
 
 export function useHostAudio(sessionId, integration) {
-  const { t } = useTranslation();
-
   const [isAudioInitialized, setIsAudioInitialized] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [status, setStatus] = useState("disconnected");
@@ -90,7 +87,7 @@ export function useHostAudio(sessionId, integration) {
       }
       stopAudio();
     };
-  }, [integration, sessionId, user?.name]);
+  }, [integration, sessionId]);
 
   useEffect(() => {
     if (isAudioInitialized && canvasRef.current && analyserRef.current) {
@@ -223,7 +220,7 @@ export function useHostAudio(sessionId, integration) {
       isMutedRef.current = false;
     } catch (err) {
       console.error("Failed to start microphone", err);
-      alert(t("mic_access_error") || "Could not access microphone.");
+      alert("Could not access microphone.");
     }
   };
 

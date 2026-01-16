@@ -182,9 +182,9 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => setIntegration("standalone")}
-              className={`flex-1 py-4 flex items-center justify-center gap-2 font-semibold transition-colors ${
+              className={`cursor-pointer flex-1 flex items-center justify-center gap-2 py-4 text-lg font-bold transition-colors ${
                 integration === "standalone"
-                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                  ? "bg-white dark:bg-zinc-800 text-blue-600 border-b-2 border-blue-600"
                   : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               }`}
             >

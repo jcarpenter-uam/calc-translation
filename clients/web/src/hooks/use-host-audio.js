@@ -112,6 +112,10 @@ export function useHostAudio(sessionId, integration) {
     const canvas = canvasRef.current;
     const canvasCtx = canvas.getContext("2d");
     const analyser = analyserRef.current;
+
+    analyser.smoothingTimeConstant = 0.8;
+    analyser.fftSize = 32;
+
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
@@ -121,27 +125,27 @@ export function useHostAudio(sessionId, integration) {
       canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (isMutedRef.current) {
-        canvasCtx.fillStyle = "rgba(239, 68, 68, 0.2)";
-        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-        canvasCtx.lineWidth = 2;
-        canvasCtx.strokeStyle = "rgba(239, 68, 68, 0.8)";
-        canvasCtx.beginPath();
-        canvasCtx.moveTo(0, canvas.height / 2);
-        canvasCtx.lineTo(canvas.width, canvas.height / 2);
-        canvasCtx.stroke();
+        canvasCtx.fillStyle = "rgba(239, 68, 68, 0.1)";
+        canvasCtx.fillRect(0, canvas.height / 2 - 1, canvas.width, 2);
         return;
       }
 
-      const barWidth = (canvas.width / bufferLength) * 2.5;
-      let barHeight;
+      const barWidth = (canvas.width / bufferLength) * 0.6;
+      const gap = (canvas.width / bufferLength) * 0.4;
       let x = 0;
 
       for (let i = 0; i < bufferLength; i++) {
-        barHeight = dataArray[i] / 2;
-        canvasCtx.fillStyle = `rgb(50, ${barHeight + 100}, 50)`;
+        const percent = dataArray[i] / 255;
+        const barHeight = Math.max(4, percent * canvas.height);
         const y = (canvas.height - barHeight) / 2;
-        canvasCtx.fillRect(x, y, barWidth, barHeight);
-        x += barWidth + 1;
+
+        canvasCtx.fillStyle = `rgba(255, 255, 255, ${0.3 + percent * 0.7})`;
+
+        canvasCtx.beginPath();
+        canvasCtx.roundRect(x, y, barWidth, barHeight, 10);
+        canvasCtx.fill();
+
+        x += barWidth + gap;
       }
     };
     draw();

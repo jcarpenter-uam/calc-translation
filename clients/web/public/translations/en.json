@@ -356,5 +356,10 @@
   "host_mode_description": "Are you starting a meeting instead of joining one?",
   "start_new_meeting_btn": "Start Standalone Meeting",
   "join_link": "Join URL",
-  "copy_to_clipboard": "Copy to Clipboard"
+  "copy_to_clipboard": "Copy to Clipboard",
+  "audio_connection_error": "Audio Connection Error",
+  "join_audio": "Join w/Audio",
+  "unmute": "Unmute",
+  "mute": "Mute",
+  "end_broadcast": "End Broadcast"
 }

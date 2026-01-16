@@ -1,6 +1,6 @@
 import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import DownloadVttButton from "../components/session/vtt-download.jsx";
 import Transcript from "../components/session/transcript.jsx";
 import Unauthorized from "../components/auth/unauthorized.jsx";
@@ -68,7 +68,10 @@ export default function SessionPage() {
     useTranscriptStream(wsUrl, sessionId, handleAuthFailure);
 
   const lastTopTextRef = React.useRef(null);
-  const notification = useSmartScroll(transcripts, lastTopTextRef);
+  const scrollDependencies = useMemo(() => {
+    return [transcripts, isDownloadable];
+  }, [transcripts, isDownloadable]);
+  const notification = useSmartScroll(scrollDependencies, lastTopTextRef);
 
   if (showUnauthorized) {
     return <Unauthorized message={t("access_denied_session_message")} />;
@@ -100,11 +103,18 @@ export default function SessionPage() {
             <Transcript
               key={t.id}
               {...t}
-              topTextRef={index === array.length - 1 ? lastTopTextRef : null}
+              topTextRef={
+                !isDownloadable && index === array.length - 1
+                  ? lastTopTextRef
+                  : null
+              }
             />
           ))}
         {isDownloadable && (
-          <div className="mt-8 mb-8 mx-4 sm:mx-0 p-6 rounded-lg bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 shadow-sm text-center">
+          <div
+            ref={lastTopTextRef}
+            className="mt-8 mx-4 sm:mx-0 p-6 rounded-lg bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 shadow-sm text-center"
+          >
             <div className="flex flex-col items-center justify-center space-y-3">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {t("meeting_ended")}

@@ -494,12 +494,22 @@ class MeetingSession:
         end_payload = {"type": "session_end", "message": "Session concluded."}
         await self.viewer_manager.broadcast_to_session(self.session_id, end_payload)
 
-        summary_service = SummaryService()
-        await summary_service.generate_summaries_for_attendees(
-            self.session_id, self.integration
-        )
+        async def run_post_processing():
+            try:
+                summary_service = SummaryService()
+                await summary_service.generate_summaries_for_attendees(
+                    self.session_id, self.integration
+                )
 
-        await self._email_attendees()
+                await self._email_attendees()
+
+            except Exception as e:
+                logger.error(
+                    f"Post-processing error for session {self.session_id}: {e}",
+                    exc_info=True,
+                )
+
+        asyncio.create_task(run_post_processing())
 
         self.viewer_manager.deregister_transcription_session(self.session_id)
         if self.session_log_handler:

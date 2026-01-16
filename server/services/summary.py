@@ -25,7 +25,7 @@ class SummaryService:
                 }
                 logger.debug("Ollama Client initialized with Bearer Auth.")
 
-            self.client = ollama.Client(**client_kwargs)
+            self.client = ollama.AsyncClient(**client_kwargs)
             self.model = settings.OLLAMA_MODEL
 
     def _clean_vtt_content(self, vtt_content: str) -> str:
@@ -67,7 +67,7 @@ class SummaryService:
                     "4. **Format:** Do NOT include timestamps or preamble. Start directly with the summary."
                 )
 
-                response = self.client.chat(
+                response = await self.client.chat(
                     model=self.model,
                     messages=[
                         {

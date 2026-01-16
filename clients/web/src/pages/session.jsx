@@ -12,6 +12,7 @@ import JoinURLDisplay from "../components/session/joinURL-display.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 import { useSmartScroll } from "../hooks/use-smart-scroll.js";
 import { useLanguage } from "../context/language.jsx";
+import { useHostAudio } from "../hooks/use-host-audio.js";
 import { useTranslation } from "react-i18next";
 
 function useQuery() {
@@ -35,6 +36,11 @@ export default function SessionPage() {
   const [showUnauthorized, setShowUnauthorized] = useState(false);
   const { language } = useLanguage();
   const { t } = useTranslation();
+
+  const hostAudioProps = useHostAudio(
+    isHost ? sessionId : null,
+    isHost ? integration : null,
+  );
 
   const handleAuthFailure = useCallback(() => {
     setIsAuthorized(false);
@@ -85,9 +91,7 @@ export default function SessionPage() {
       <div className="max-w-3xl mx-auto w-full relative pb-24">
         {/* Host Controls */}
         {isHost && joinUrl && <JoinURLDisplay joinUrl={joinUrl} />}
-        {isHost && (
-          <HostAudioSender sessionId={sessionId} integration={integration} />
-        )}
+        {isHost && <HostAudioSender {...hostAudioProps} />}
 
         {isBackfilling && <BackfillLoading />}
         {transcripts

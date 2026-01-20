@@ -145,33 +145,22 @@ def create_calender_router() -> APIRouter:
                         body_data = event.get("body") or {}
                         body_content = body_data.get("content")
 
-                        online_meeting = event.get("onlineMeeting") or {}
-                        join_url = online_meeting.get("joinUrl")
+                        join_url = None
 
-                        if (
-                            not join_url
-                            and location
-                            and (
-                                location.startswith("http://")
-                                or location.startswith("https://")
-                            )
-                        ):
+                        if location and "zoom.us" in location:
                             join_url = location
 
                         if not join_url:
-                            continue
-
-                        is_zoom = "zoom.us" in join_url
-
-                        if not (is_zoom):
+                            logger.debug(
+                                f"Skipping event '{subject}': Location does not contain Zoom link."
+                            )
                             continue
 
                         if location and (
                             location.startswith("http://")
                             or location.startswith("https://")
                         ):
-                            if "zoom.us" in location:
-                                location = "Zoom Meeting"
+                            location = "Zoom Meeting"
 
                         full_event_json = json.dumps(event)
 

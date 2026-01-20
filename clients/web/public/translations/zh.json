@@ -352,5 +352,18 @@
   "manual_join": "手动加入",
   "calendar_join": "从日历加入",
   "meeting_ended": "会议已结束",
-  "meeting_ended_description": "会议记录和人工智能摘要将很快通过电子邮件发送给您。\n\n您也可以在此处直接下载会议记录文件。"
+  "meeting_ended_description": "会议记录和人工智能摘要将很快通过电子邮件发送给您。\n\n您也可以在此处直接下载会议记录文件。",
+  "integration_standalone": "独立模式",
+  "standalone_mode_description": "独立模式提供面对面会议的翻译功能",
+  "join_url_standalone_placeholder": "例如：https://translator.my-uam.com/session/...",
+  "join_standalone_btn": "加入独立会议",
+  "host_mode_description": "您是要开始会议而不是加入会议吗？",
+  "start_new_meeting_btn": "开始独立会议",
+  "join_link": "加入链接",
+  "copy_to_clipboard": "复制到剪贴板",
+  "audio_connection_error": "音频连接错误",
+  "join_audio": "连接音频",
+  "unmute": "解除静音",
+  "mute": "静音",
+  "end_broadcast": "结束广播"
 }

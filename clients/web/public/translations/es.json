@@ -353,5 +353,18 @@
   "manual_join": "Unirse manualmente",
   "calendar_join": "Unirse desde el calendario",
   "meeting_ended": "Reunión finalizada",
-  "meeting_ended_description": "La transcripción y el resumen generado por IA se le enviarán por correo electrónico en breve.\n\nTambién puede descargar el archivo de transcripción directamente aquí."
+  "meeting_ended_description": "La transcripción y el resumen generado por IA se le enviarán por correo electrónico en breve.\n\nTambién puede descargar el archivo de transcripción directamente aquí.",
+  "integration_standalone": "Independiente",
+  "standalone_mode_description": "El modo independiente ofrece la funcionalidad de traducir una reunión en persona",
+  "join_url_standalone_placeholder": "ej., https://translator.my-uam.com/session/...",
+  "join_standalone_btn": "Unirse a reunión independiente",
+  "host_mode_description": "¿Desea iniciar una reunión en lugar de unirse a una?",
+  "start_new_meeting_btn": "Iniciar reunión independiente",
+  "join_link": "Enlace para unirse",
+  "copy_to_clipboard": "Copiar al portapapeles",
+  "audio_connection_error": "Error de conexión de audio",
+  "join_audio": "Unirse con audio",
+  "unmute": "Reactivar audio",
+  "mute": "Silenciar",
+  "end_broadcast": "Finalizar transmisión"
 }

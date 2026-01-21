@@ -290,6 +290,9 @@ class MeetingSession:
         self.viewer_manager.register_transcription_session(
             self.session_id, self.integration
         )
+        await self.viewer_manager.broadcast_to_session(
+            self.session_id, {"type": "status", "status": "active"}
+        )
         self.session_log_handler = add_session_log_handler(
             self.session_id, self.integration
         )

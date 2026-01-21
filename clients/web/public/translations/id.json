@@ -358,13 +358,18 @@
   "standalone_mode_description": "Mode mandiri menawarkan fungsi penerjemahan rapat tatap muka",
   "join_url_standalone_placeholder": "cth. https://translator.my-uam.com/session/...",
   "join_standalone_btn": "Gabung Rapat Mandiri",
-  "host_mode_description": "Apakah Anda ingin memulai rapat, bukan bergabung?",
+  "host_mode_description": "Apakah Anda memulai rapat dan bukan bergabung?",
   "start_new_meeting_btn": "Mulai Rapat Mandiri",
-  "join_link": "Tautan Gabung",
+  "join_link": "URL Gabung",
   "copy_to_clipboard": "Salin ke Papan Klip",
   "audio_connection_error": "Kesalahan Koneksi Audio",
   "join_audio": "Gabung dgn Audio",
   "unmute": "Bunyikan",
   "mute": "Bisukan",
-  "end_broadcast": "Akhiri Siaran"
+  "end_broadcast": "Akhiri Rapat",
+  "copy_join_link": "Salin URL Gabung",
+  "help": "Bantuan",
+  "host_controls": "Kontrol Tuan Rumah",
+  "mute_toggle": "Alihkan Bisukan",
+  "copy_link_desc": "Bagikan ini kepada orang lain yang akan bergabung dengan rapat Anda."
 }

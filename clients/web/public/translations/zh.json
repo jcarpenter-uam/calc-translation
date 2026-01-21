@@ -357,13 +357,18 @@
   "standalone_mode_description": "独立模式提供面对面会议的翻译功能",
   "join_url_standalone_placeholder": "例如：https://translator.my-uam.com/session/...",
   "join_standalone_btn": "加入独立会议",
-  "host_mode_description": "您是要开始会议而不是加入会议吗？",
+  "host_mode_description": "您是要发起会议而不是加入会议吗？",
   "start_new_meeting_btn": "开始独立会议",
   "join_link": "加入链接",
   "copy_to_clipboard": "复制到剪贴板",
   "audio_connection_error": "音频连接错误",
-  "join_audio": "连接音频",
-  "unmute": "解除静音",
+  "join_audio": "加入音频",
+  "unmute": "取消静音",
   "mute": "静音",
-  "end_broadcast": "结束广播"
+  "end_broadcast": "结束会议",
+  "copy_join_link": "复制加入链接",
+  "help": "帮助",
+  "host_controls": "主持人控制",
+  "mute_toggle": "切换静音",
+  "copy_link_desc": "与将要加入会议的其他人分享此链接。"
 }

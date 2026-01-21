@@ -358,13 +358,18 @@
   "standalone_mode_description": "El modo independiente ofrece la funcionalidad de traducir una reunión en persona",
   "join_url_standalone_placeholder": "ej., https://translator.my-uam.com/session/...",
   "join_standalone_btn": "Unirse a reunión independiente",
-  "host_mode_description": "¿Desea iniciar una reunión en lugar de unirse a una?",
+  "host_mode_description": "¿Está iniciando una reunión en lugar de unirse a una?",
   "start_new_meeting_btn": "Iniciar reunión independiente",
-  "join_link": "Enlace para unirse",
+  "join_link": "URL de unión",
   "copy_to_clipboard": "Copiar al portapapeles",
   "audio_connection_error": "Error de conexión de audio",
   "join_audio": "Unirse con audio",
-  "unmute": "Reactivar audio",
+  "unmute": "Activar sonido",
   "mute": "Silenciar",
-  "end_broadcast": "Finalizar transmisión"
+  "end_broadcast": "Finalizar reunión",
+  "copy_join_link": "Copiar URL de unión",
+  "help": "Ayuda",
+  "host_controls": "Controles del anfitrióno",
+  "mute_toggle": "Alternar silencio",
+  "copy_link_desc": "Comparta esto con otras personas que se unirán a su reunión."
 }

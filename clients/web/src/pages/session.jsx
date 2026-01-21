@@ -1,6 +1,6 @@
 import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import DownloadVttButton from "../components/session/vtt-download.jsx";
 import Transcript from "../components/session/transcript.jsx";
 import Unauthorized from "../components/auth/unauthorized.jsx";
@@ -8,7 +8,6 @@ import Notification from "../components/misc/notification.jsx";
 import BackfillLoading from "../components/session/backfill-loading.jsx";
 import WaitingRoom from "../components/session/waiting.jsx";
 import HostAudioSender from "../components/session/host-audio-sender.jsx";
-import JoinURLDisplay from "../components/session/joinURL-display.jsx";
 import { useTranscriptStream } from "../hooks/use-transcript-stream.js";
 import { useSmartScroll } from "../hooks/use-smart-scroll.js";
 import { useLanguage } from "../context/language.jsx";
@@ -93,8 +92,7 @@ export default function SessionPage() {
     <>
       <div className="max-w-3xl mx-auto w-full">
         {/* Host Controls */}
-        {isHost && joinUrl && <JoinURLDisplay joinUrl={joinUrl} />}
-        {isHost && <HostAudioSender {...hostAudioProps} />}
+        {isHost && <HostAudioSender {...hostAudioProps} joinUrl={joinUrl} />}
 
         {isBackfilling && <BackfillLoading />}
         {transcripts

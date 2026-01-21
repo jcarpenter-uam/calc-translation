@@ -361,5 +361,10 @@
   "join_audio": "Join w/Audio",
   "unmute": "Unmute",
   "mute": "Mute",
-  "end_broadcast": "End Broadcast"
+  "end_broadcast": "End Meeting",
+  "copy_join_link": "Copy Join URL",
+  "help": "Help",
+  "host_controls": "Host Controls",
+  "mute_toggle": "Toggle Mute",
+  "copy_link_desc": "Share this with others who will join your meeting."
 }

@@ -19,7 +19,37 @@ function arrayBufferToBase64(buffer) {
   return window.btoa(binary);
 }
 
+// Simple downsampler to convert from system rate (e.g. 48000) to 16000
+function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
+  if (outputSampleRate === inputSampleRate) {
+    return buffer;
+  }
+  const sampleRateRatio = inputSampleRate / outputSampleRate;
+  const newLength = Math.round(buffer.length / sampleRateRatio);
+  const result = new Float32Array(newLength);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+    let accum = 0,
+      count = 0;
+
+    // Simple averaging to prevent aliasing (box filter)
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+      accum += buffer[i];
+      count++;
+    }
+
+    result[offsetResult] = count > 0 ? accum / count : 0;
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+}
+
 const SILENCE_SAMPLES = new Float32Array(4096).fill(0);
+// Note: We pre-calculate silence for 16k assuming downsampling will happen dynamically or just use this base
 const SILENCE_PCM = floatTo16BitPCM(SILENCE_SAMPLES);
 const SILENCE_BASE64 = arrayBufferToBase64(SILENCE_PCM);
 
@@ -56,6 +86,8 @@ export function useHostAudio(sessionId, integration) {
         wsRef.current?.readyState === WebSocket.OPEN &&
         !isAudioInitializedRef.current
       ) {
+        // Sending generic silence. The backend might expect 16k packets.
+        // Usually silence packets are small and standard.
         wsRef.current.send(
           JSON.stringify({
             audio: SILENCE_BASE64,
@@ -169,13 +201,14 @@ export function useHostAudio(sessionId, integration) {
       }
 
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioContext({ sampleRate: 16000 });
+      // FIX 1: Allow system default sample rate (e.g., 44.1k or 48k)
+      const ctx = new AudioContext();
       audioContextRef.current = ctx;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 16000,
+          // FIX 2: Remove strict sampleRate constraint so getUserMedia matches the system/context
           echoCancellation: true,
           noiseSuppression: true,
         },
@@ -189,6 +222,7 @@ export function useHostAudio(sessionId, integration) {
       source.connect(analyser);
       analyserRef.current = analyser;
 
+      // Create processor
       const processor = ctx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
@@ -196,11 +230,21 @@ export function useHostAudio(sessionId, integration) {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           let inputData;
           if (isMutedRef.current) {
-            inputData = SILENCE_SAMPLES;
+            // Send silence (using the precalc silence is likely fine if backend is robust,
+            // or generate correct length silence)
+            inputData = new Float32Array(4096).fill(0);
           } else {
             inputData = e.inputBuffer.getChannelData(0);
           }
-          const pcmBuffer = floatTo16BitPCM(inputData);
+
+          // FIX 3: Downsample from Context Rate (e.g. 48k) to Target Rate (16k)
+          const downsampledData = downsampleBuffer(
+            inputData,
+            ctx.sampleRate,
+            16000,
+          );
+
+          const pcmBuffer = floatTo16BitPCM(downsampledData);
           const base64Audio = arrayBufferToBase64(pcmBuffer);
 
           wsRef.current.send(

@@ -1,6 +1,6 @@
 # CALC Translation
 
-[Checkout the Desktop App](https://github.com/jcarpenter-uam/calc-translation-desktop)
+[**Desktop App**](https://github.com/jcarpenter-uam/calc-translation-desktop) | [**Deployment Guide**](./HOW-TO.md)
 
 ## About This Project
 

@@ -16,45 +16,4 @@ This project is a comprehensive real-time transcription and translation platform
 
 ## How It Works
 
-```mermaid
-graph LR
-    subgraph Inputs
-        style Inputs fill:#ffffff,stroke:#333,stroke-dasharray: 5 5
-        A["Zoom RTMS<br>(WebSocket 16-bit PCM)"]:::input
-        B["Standalone Mode<br>(Browser Microphone)"]:::input
-    end
-
-    subgraph Core_Server
-        style Core_Server fill:#f0f4c3,stroke:#827717,stroke-width:2px
-        C{"Audio Receiver"}:::core
-        D["Soniox Service<br>(Live Transcription)"]:::core
-        E[("Transcript Cache<br>(Session History)")]:::db
-        F["Backfill Service<br>(Qwen LLM)"]:::ai
-    end
-
-    subgraph Output
-        style Output fill:#ffffff,stroke:#333,stroke-dasharray: 5 5
-        G["Connection Manager<br>(WS Broadcast)"]:::core
-        H["Frontend Client<br>(Web / Desktop)"]:::client
-    end
-
-    %% Data Flow
-    A --> C
-    B --> C
-    C --> D
-    D --> G
-    D -- "Save" --> E
-
-    %% Client Interactions
-    H -. "1. Listen" .-> G
-    H -- "2. Switch Lang" --> F
-    F -- "Fetch" --> E
-    F -- "Translate" --> G
-
-    %% High Visibility Styling
-    classDef input fill:#ffccbc,stroke:#bf360c,stroke-width:2px,color:#000;
-    classDef core fill:#b3e5fc,stroke:#01579b,stroke-width:2px,color:#000;
-    classDef db fill:#c8e6c9,stroke:#1b5e20,stroke-width:2px,color:#000;
-    classDef ai fill:#e1bee7,stroke:#4a148c,stroke-width:2px,color:#000;
-    classDef client fill:#f5f5f5,stroke:#212121,stroke-width:2px,color:#000;
-```
+<img width="2552" height="1594" alt="mermaid-diagram-2026-01-21-164458" src="https://github.com/user-attachments/assets/3e9d4e38-d6a1-4087-a465-5b2bf1c5a63b" />

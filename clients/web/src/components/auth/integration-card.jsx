@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BiLogoZoom } from "react-icons/bi";
+import { BiLogoZoom, BiPlay, BiLogIn } from "react-icons/bi";
 
 // --- Zoom-Specific Form ---
 export function ZoomForm({ onSubmit }) {
@@ -25,7 +25,7 @@ export function ZoomForm({ onSubmit }) {
           id="joinUrl"
           value={joinUrl}
           onChange={(e) => setJoinUrl(e.target.value)}
-          placeholder={t("join_url_placeholder")}
+          placeholder={t("join_url_zoom_placeholder")}
           className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
         />
       </div>
@@ -86,5 +86,71 @@ export function ZoomForm({ onSubmit }) {
         </a>
       </div>
     </form>
+  );
+}
+
+export function StandaloneForm({ onSubmit }) {
+  const { t } = useTranslation();
+  const [joinUrl, setJoinUrl] = useState("");
+
+  const handleJoinSubmit = (e) => {
+    e.preventDefault();
+    onSubmit({ joinUrl, mode: "join" });
+  };
+
+  const handleHostStart = () => {
+    onSubmit({ mode: "host" });
+  };
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={handleJoinSubmit} className="space-y-4">
+        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mb-3">
+          {t("standalone_mode_description")}
+        </p>
+        <div>
+          <label htmlFor="joinUrl" className="block text-sm font-medium">
+            {t("join_url_label")}
+          </label>
+          <input
+            type="url"
+            id="joinUrl"
+            value={joinUrl}
+            onChange={(e) => setJoinUrl(e.target.value)}
+            placeholder={t("join_url_standalone_placeholder")}
+            className="mt-1 block w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+          />
+        </div>
+        <button
+          type="submit"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+        >
+          <BiLogIn className="w-5 h-5" />
+          {t("join_standalone_btn")}
+        </button>
+      </form>
+
+      <div className="flex items-center">
+        <div className="flex-grow border-t border-zinc-300 dark:border-zinc-700"></div>
+        <span className="flex-shrink mx-4 text-sm text-zinc-500 dark:text-zinc-400">
+          {t("or_divider")}
+        </span>
+        <div className="flex-grow border-t border-zinc-300 dark:border-zinc-700"></div>
+      </div>
+
+      <div className="text-center">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">
+          {t("host_mode_description")}
+        </p>
+        <button
+          type="button"
+          onClick={handleHostStart}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600/90 text-white font-semibold rounded-lg hover:bg-red-700/90 transition-colors cursor-pointer"
+        >
+          <BiPlay className="w-6 h-6" />
+          {t("start_new_meeting_btn")}
+        </button>
+      </div>
+    </div>
   );
 }

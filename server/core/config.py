@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     OLLAMA_API_KEY: str = ""
 
-    OLLAMA_MODEL: str = "llama3:8b"
+    OLLAMA_MODEL: str = "llama3.1:8b"
 
     LOGGING_LEVEL: str = "INFO"
 

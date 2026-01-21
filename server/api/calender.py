@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import List, Optional
 
 import core.database as database
@@ -61,7 +61,12 @@ def create_calender_router() -> APIRouter:
                     detail="Microsoft account not linked or token expired. Please login again.",
                 )
 
-            start_dt = datetime.now(timezone.utc)
+            today_date = datetime.now(timezone.utc).date()
+
+            start_dt = datetime.combine(today_date, time.min).replace(
+                tzinfo=timezone.utc
+            )
+
             end_dt = start_dt + timedelta(days=30)
 
             start_str = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -144,6 +149,9 @@ def create_calender_router() -> APIRouter:
 
                         body_data = event.get("body") or {}
                         body_content = body_data.get("content")
+
+                        online_meeting = event.get("onlineMeeting") or {}
+                        join_url = online_meeting.get("joinUrl")
 
                         join_url = None
 

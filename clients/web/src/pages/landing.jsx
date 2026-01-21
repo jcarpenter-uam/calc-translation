@@ -2,10 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useCalendar } from "../hooks/use-calender.js";
-import { ZoomForm } from "../components/auth/integration-card.jsx";
+import {
+  ZoomForm,
+  StandaloneForm,
+} from "../components/auth/integration-card.jsx";
 import { CalendarView } from "../components/calender/view.jsx";
 
-import { BiLogoZoom } from "react-icons/bi";
+import { BiLogoZoom, BiUser } from "react-icons/bi";
 
 const getCurrentWorkWeek = () => {
   const now = new Date();
@@ -81,93 +84,79 @@ export default function LandingPage() {
     checkPendingZoomLink();
   }, [t]);
 
-  const handleJoin = (type, sessionId, token) => {
-    navigate(
-      `/sessions/${type}/${encodeURIComponent(sessionId)}?token=${token}`,
-    );
-  };
-
-  const handleZoomSubmit = async ({ meetingId, password, joinUrl }) => {
+  const handleJoin = async (data, source = "manual") => {
     setError(null);
-
-    if (!joinUrl && !meetingId) {
-      setError(t("error_missing_zoom_input"));
-      return;
-    }
-
     try {
-      const response = await fetch("/api/auth/zoom", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          meetingid: meetingId || null,
-          meetingpass: password || null,
-          join_url: joinUrl || null,
-        }),
-      });
+      let response;
+      const headers = {
+        "Content-Type": "application/json",
+      };
+
+      if (source === "calendar") {
+        response = await fetch("/api/auth/calendar-join", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            meetingId: data.id,
+            joinUrl: data.join_url,
+            startTime: data.start_time,
+          }),
+        });
+      } else {
+        if (integration === "zoom") {
+          response = await fetch("/api/auth/zoom", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              meetingid: data.meetingId,
+              meetingpass: data.password,
+              join_url: data.joinUrl,
+            }),
+          });
+        } else if (integration === "standalone") {
+          response = await fetch("/api/auth/standalone", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              host: data.mode === "host",
+              join_url: data.joinUrl,
+            }),
+          });
+        }
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || t("error_auth_failed"));
+        throw new Error(errorData.detail || t("login_error_generic"));
       }
 
-      const data = await response.json();
+      const responseData = await response.json();
 
-      const { sessionId, token, type } = data;
+      const { sessionId, token, type, joinUrl } = responseData;
 
-      if (!sessionId) {
-        throw new Error(t("error_no_session_id"));
-      }
-
-      if (!token) {
-        throw new Error(t("error_no_token"));
-      }
-
-      handleJoin(type, sessionId, token);
-    } catch (err) {
-      console.error("Authentication failed:", err);
-      setError(err.message);
-    }
-  };
-
-  const handleCalendarJoin = async (event) => {
-    try {
-      const response = await fetch("/api/auth/calendar-join", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          meetingId: event.id,
-          joinUrl: event.join_url,
-          startTime: event.start_time,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to initialize session");
-      }
-
-      const data = await response.json();
-
-      const { sessionId, token, type } = data;
+      const isHost = integration === "standalone" && data.mode === "host";
 
       navigate(
-        `/sessions/${type}/${encodeURIComponent(sessionId)}?token=${token}`,
+        `/sessions/${type}/${encodeURIComponent(sessionId)}?token=${token}${isHost ? "&isHost=true" : ""}`,
+        { state: { joinUrl } },
       );
     } catch (err) {
-      console.error("Failed to quick-join:", err);
-      setError("Failed to start assistant. Please try again.");
+      console.error("Join failed:", err);
+      setError(err.message || t("login_error_generic"));
     }
   };
 
   const renderForm = () => {
-    if (integration === "zoom") {
-      return <ZoomForm onSubmit={handleZoomSubmit} />;
+    switch (integration) {
+      case "zoom":
+        return <ZoomForm onSubmit={(data) => handleJoin(data, "manual")} />;
+      case "standalone":
+        return (
+          <StandaloneForm onSubmit={(data) => handleJoin(data, "manual")} />
+        );
+      default:
+        return null;
     }
-    return null;
   };
 
   return (
@@ -190,6 +179,17 @@ export default function LandingPage() {
             >
               <BiLogoZoom className="h-5 w-5" />
               {t("integration_zoom")}
+            </button>
+            <button
+              onClick={() => setIntegration("standalone")}
+              className={`cursor-pointer flex-1 flex items-center justify-center gap-2 py-4 text-lg font-bold transition-colors ${
+                integration === "standalone"
+                  ? "bg-white dark:bg-zinc-800 text-blue-600 border-b-2 border-blue-600"
+                  : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <BiUser className="h-5 w-5" />
+              {t("integration_standalone")}
             </button>
           </div>
 
@@ -229,7 +229,7 @@ export default function LandingPage() {
           startDate={dateRange.start}
           endDate={dateRange.end}
           onDateChange={setDateRange}
-          onAppJoin={handleCalendarJoin}
+          onAppJoin={(event) => handleJoin(event, "calendar")}
         />
       </div>
     </div>

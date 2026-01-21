@@ -47,6 +47,7 @@ class SonioxResult:
     is_final: bool
     source_language: Optional[str] = None
     target_language: Optional[str] = None
+    speaker: Optional[str] = None
 
 
 class SonioxService:
@@ -63,6 +64,7 @@ class SonioxService:
         loop: asyncio.AbstractEventLoop,
         target_language: str = "en",
         session_id: Optional[str] = None,
+        enable_speaker_diarization: bool = False,
     ):
         self.api_key = settings.SONIOX_API_KEY
 
@@ -72,6 +74,7 @@ class SonioxService:
         self.loop = loop
         self.target_language = target_language
         self.session_id = session_id
+        self.enable_speaker_diarization = enable_speaker_diarization
         self.current_speaker: Optional[str] = "Unknown"
         self.ws = None
         self.receive_task = None
@@ -83,6 +86,7 @@ class SonioxService:
 
         self.final_source_language: Optional[str] = None
         self.final_translation_language: Optional[str] = None
+        self.final_speaker: Optional[str] = None
 
     def _get_config(self) -> dict:
         """
@@ -101,7 +105,7 @@ class SonioxService:
             #
             # Enable speaker diarization. Each token will include a "speaker" field.
             # See: soniox.com/docs/stt/concepts/speaker-diarization
-            "enable_speaker_diarization": False,
+            "enable_speaker_diarization": self.enable_speaker_diarization,
             #
             # **IMPORTANT: Enable Soniox endpoint detection.**
             # This allows Soniox to detect utterances automatically.
@@ -157,6 +161,7 @@ class SonioxService:
 
                     non_final_source_lang: Optional[str] = None
                     non_final_target_lang: Optional[str] = None
+                    non_final_speaker: Optional[str] = None
 
                     for token in res.get("tokens", []):
                         text = token.get("text")
@@ -171,6 +176,10 @@ class SonioxService:
                             token.get("translation_status") == "translation"
                         )
                         lang = token.get("language")
+                        spk = token.get("speaker")
+
+                        if spk is not None and self.enable_speaker_diarization:
+                            spk = f"Speaker {spk}"
 
                         if token.get("is_final"):
                             if is_translation:
@@ -181,6 +190,8 @@ class SonioxService:
                                 self.final_transcription_tokens.append(text)
                                 if not self.final_source_language and lang:
                                     self.final_source_language = lang
+                                if spk:
+                                    self.final_speaker = str(spk)
                         else:
                             if is_translation:
                                 non_final_translation_tokens.append(text)
@@ -190,6 +201,8 @@ class SonioxService:
                                 non_final_transcription_tokens.append(text)
                                 if not non_final_source_lang and lang:
                                     non_final_source_lang = lang
+                                if spk:
+                                    non_final_speaker = str(spk)
 
                     final_transcription = "".join(self.final_transcription_tokens)
                     non_final_transcription = "".join(non_final_transcription_tokens)
@@ -213,6 +226,8 @@ class SonioxService:
                     if not target_lang_to_send:
                         target_lang_to_send = self.target_language
 
+                    speaker_to_send = self.final_speaker or non_final_speaker
+
                     await self.on_message_callback(
                         SonioxResult(
                             transcription=full_transcription,
@@ -220,6 +235,7 @@ class SonioxService:
                             is_final=False,
                             source_language=source_lang_to_send,
                             target_language=target_lang_to_send,
+                            speaker=speaker_to_send,
                         )
                     )
 
@@ -245,12 +261,14 @@ class SonioxService:
                                 is_final=True,
                                 source_language=final_source_lang,
                                 target_language=final_target_lang,
+                                speaker=self.final_speaker,
                             )
                         )
                         self.final_transcription_tokens = []
                         self.final_translation_tokens = []
                         self.final_source_language = None
                         self.final_translation_language = None
+                        self.final_speaker = None
 
                     if res.get("finished"):
                         with log_step("SONIOX"):
@@ -267,6 +285,7 @@ class SonioxService:
                                 source_language=self.final_source_language,
                                 target_language=self.final_translation_language
                                 or self.target_language,
+                                speaker=self.final_speaker,
                             )
                         )
                         break

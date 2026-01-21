@@ -7,6 +7,12 @@ from core.config import settings
 from core.logging_setup import log_step, session_id_var
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
+from integrations.standalone import (
+    StandaloneAuthRequest,
+    StandaloneAuthResponse,
+    authenticate_standalone_session,
+    create_standalone_session,
+)
 from integrations.zoom import (
     ZoomAuthRequest,
     ZoomAuthResponse,
@@ -332,6 +338,54 @@ def create_auth_router() -> APIRouter:
                 raise HTTPException(
                     status_code=500,
                     detail="An internal error occurred while linking Zoom",
+                )
+
+    @router.post("/standalone", response_model=StandaloneAuthResponse)
+    async def handle_standalone_auth(
+        request: StandaloneAuthRequest,
+        user_payload: dict = Depends(get_current_user_payload),
+    ):
+        """
+        Handles Standalone authentication for both joining and creating sessions.
+        If 'host' is True, a new session is created.
+        Otherwise, it attempts to join an existing session.
+        """
+        with log_step(LOG_STEP):
+            user_id = user_payload.get("sub")
+            logger.info(
+                f"User {user_id} requesting Standalone auth (Host: {request.host})."
+            )
+
+            try:
+                if request.host:
+                    session_id, join_url = await create_standalone_session(user_id)
+                    logger.info(
+                        f"Created new standalone session {session_id} (JoinURL: {join_url})"
+                    )
+                else:
+                    session_id = await authenticate_standalone_session(request)
+                    join_url = None
+                    logger.info(f"Authenticated for standalone session {session_id}")
+
+                token = generate_jwt_token(user_id=user_id, session_id=session_id)
+
+                return StandaloneAuthResponse(
+                    sessionId=session_id,
+                    token=token,
+                    type="standalone",
+                    joinUrl=join_url,
+                )
+
+            except HTTPException as e:
+                logger.warning(f"Standalone auth failed for user {user_id}: {e.detail}")
+                raise e
+            except Exception as e:
+                logger.error(
+                    f"Unhandled error in POST /api/auth/standalone for user {user_id}: {e}",
+                    exc_info=True,
+                )
+                raise HTTPException(
+                    status_code=500, detail="An internal server error occurred."
                 )
 
     return router

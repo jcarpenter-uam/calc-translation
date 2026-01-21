@@ -52,6 +52,7 @@ class StreamHandler:
         loop,
         session_start_time: datetime,
         initial_utterance_count: int = 0,
+        enable_diarization: bool = False,
     ):
         self.language_code = language_code
         self.session_id = session_id
@@ -60,6 +61,7 @@ class StreamHandler:
 
         self.service: Optional[SonioxService] = None
         self.utterance_count = initial_utterance_count
+        self.enable_diarization = enable_diarization
 
         self.is_new_utterance = True
         self.await_next_utterance = False
@@ -195,13 +197,17 @@ class StreamHandler:
                         self.current_message_id
                     )
 
+                final_speaker_name = (
+                    result.speaker if result.speaker else self.current_speaker
+                )
+
                 payload = {
                     "message_id": self.current_message_id,
                     "transcription": result.transcription,
                     "translation": result.translation,
                     "source_language": result.source_language,
                     "target_language": result.target_language,
-                    "speaker": self.current_speaker,
+                    "speaker": final_speaker_name,
                     "type": payload_type,
                     "isfinalize": result.is_final,
                     "vtt_timestamp": vtt_timestamp,
@@ -230,6 +236,7 @@ class StreamHandler:
             loop=self.loop,
             target_language=self.language_code,
             session_id=self.session_id,
+            enable_speaker_diarization=self.enable_diarization,
         )
         self.connect_time = datetime.now()
         await self.service.connect()
@@ -282,6 +289,9 @@ class MeetingSession:
         """Called only once when the session is first created."""
         self.viewer_manager.register_transcription_session(
             self.session_id, self.integration
+        )
+        await self.viewer_manager.broadcast_to_session(
+            self.session_id, {"type": "status", "status": "active"}
         )
         self.session_log_handler = add_session_log_handler(
             self.session_id, self.integration
@@ -347,6 +357,8 @@ class MeetingSession:
             if language_code in self.active_handlers:
                 return
 
+        should_enable_diarization = self.integration == "standalone"
+
         handler = StreamHandler(
             language_code=language_code,
             session_id=self.session_id,
@@ -354,6 +366,7 @@ class MeetingSession:
             loop=self.loop,
             session_start_time=self.start_time,
             initial_utterance_count=0,
+            enable_diarization=should_enable_diarization,
         )
 
         try:
@@ -484,12 +497,22 @@ class MeetingSession:
         end_payload = {"type": "session_end", "message": "Session concluded."}
         await self.viewer_manager.broadcast_to_session(self.session_id, end_payload)
 
-        summary_service = SummaryService()
-        await summary_service.generate_summaries_for_attendees(
-            self.session_id, self.integration
-        )
+        async def run_post_processing():
+            try:
+                summary_service = SummaryService()
+                await summary_service.generate_summaries_for_attendees(
+                    self.session_id, self.integration
+                )
 
-        await self._email_attendees()
+                await self._email_attendees()
+
+            except Exception as e:
+                logger.error(
+                    f"Post-processing error for session {self.session_id}: {e}",
+                    exc_info=True,
+                )
+
+        asyncio.create_task(run_post_processing())
 
         self.viewer_manager.deregister_transcription_session(self.session_id)
         if self.session_log_handler:

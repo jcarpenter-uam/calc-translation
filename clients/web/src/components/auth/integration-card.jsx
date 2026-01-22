@@ -145,7 +145,7 @@ export function StandaloneForm({ onSubmit }) {
         <button
           type="button"
           onClick={handleHostStart}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600/90 text-white font-semibold rounded-lg hover:bg-red-700/90 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600/90 text-white font-semibold rounded-lg hover:bg-green-700/90 transition-colors cursor-pointer"
         >
           <BiPlay className="w-6 h-6" />
           {t("start_new_meeting_btn")}

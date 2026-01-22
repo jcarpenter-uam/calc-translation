@@ -366,5 +366,6 @@
   "help": "Help",
   "host_controls": "Host Controls",
   "mute_toggle": "Toggle Mute",
-  "copy_link_desc": "Share this with others who will join your meeting."
+  "copy_link_desc": "Share this with others who will join your meeting.",
+  "translate_ui": "Translate UI"
 }

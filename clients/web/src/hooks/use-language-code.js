@@ -1,21 +1,13 @@
-import { useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import { useAuth } from "../context/auth";
 import { useLanguage } from "../context/language";
 
 export function useLanguageCode() {
   const { user, setUser } = useAuth();
-  const { language, setLanguage: setLocalLanguage } = useLanguage();
+  const { language: uiLanguage, setLanguage: setUiLanguage } = useLanguage();
 
-  useEffect(() => {
-    if (user?.language_code && user.language_code !== language) {
-      setLocalLanguage(user.language_code);
-    }
-  }, [user]);
-
-  const setLanguage = useCallback(
+  const setLanguageCode = useCallback(
     (newLang) => {
-      setLocalLanguage(newLang);
-
       if (user) {
         setUser({ ...user, language_code: newLang });
 
@@ -28,8 +20,13 @@ export function useLanguageCode() {
         });
       }
     },
-    [user, setUser, setLocalLanguage],
+    [user, setUser],
   );
 
-  return { language, setLanguage };
+  return {
+    languageCode: user?.language_code || "en",
+    setLanguageCode,
+    uiLanguage,
+    setUiLanguage,
+  };
 }

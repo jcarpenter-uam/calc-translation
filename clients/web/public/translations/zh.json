@@ -370,5 +370,6 @@
   "help": "帮助",
   "host_controls": "主持人控制",
   "mute_toggle": "切换静音",
-  "copy_link_desc": "与将要加入会议的其他人分享此链接。"
+  "copy_link_desc": "与将要加入会议的其他人分享此链接。",
+  "translate_ui": "翻译界面"
 }

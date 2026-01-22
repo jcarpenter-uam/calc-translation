@@ -371,5 +371,6 @@
   "help": "Ayuda",
   "host_controls": "Controles del anfitrióno",
   "mute_toggle": "Alternar silencio",
-  "copy_link_desc": "Comparta esto con otras personas que se unirán a su reunión."
+  "copy_link_desc": "Comparta esto con otras personas que se unirán a su reunión.",
+  "translate_ui": "Traducir interfaz"
 }

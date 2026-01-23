@@ -1,14 +1,12 @@
 import asyncio
+import base64
 import logging
 import os
-import smtplib
 import urllib.parse
 from datetime import datetime
-from email import encoders
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
+import httpx
+import msal
 from core.config import settings
 from core.logging_setup import log_step
 
@@ -19,16 +17,40 @@ LOG_STEP = "EMAIL"
 
 class EmailService:
     def __init__(self):
-        self.smtp_host = settings.SMTP_HOST
-        self.smtp_port = settings.SMTP_PORT
-        self.smtp_user = settings.SMTP_USER
-        self.smtp_password = settings.SMTP_PASSWORD
-        self.sender_email = settings.SMTP_USER
+        self.client_id = settings.MAILER_CLIENT_ID
+        self.client_secret = settings.MAILER_CLIENT_SECRET
+        self.tenant_id = settings.MAILER_TENANT_ID
+        self.sender_email = settings.MAILER_SENDER_EMAIL
+
+        self.authority = f"https://login.microsoftonline.com/{self.tenant_id}"
+        self.scope = ["https://graph.microsoft.com/.default"]
 
         self.logo_url = "https://github.com/jcarpenter-uam/calc-translation/raw/master/clients/web/public/icon.png"
         self.website_url = settings.APP_BASE_URL
 
-    def _send_sync(
+        self.app = msal.ConfidentialClientApplication(
+            self.client_id,
+            authority=self.authority,
+            client_credential=self.client_secret,
+        )
+
+    def _get_access_token(self):
+        """
+        Acquires a token for the Graph API using Client Credentials.
+        """
+        result = self.app.acquire_token_silent(self.scope, account=None)
+
+        if not result:
+            result = self.app.acquire_token_for_client(scopes=self.scope)
+
+        if "access_token" in result:
+            return result["access_token"]
+        else:
+            error = result.get("error")
+            desc = result.get("error_description")
+            raise Exception(f"Could not acquire token: {error} - {desc}")
+
+    async def _send_graph_email(
         self,
         to_email: str,
         subject: str,
@@ -37,49 +59,70 @@ class EmailService:
         attachment_name: str = None,
     ):
         """
-        Blocking SMTP function to be run in a separate thread.
+        Async function to send email via Microsoft Graph API.
         """
         with log_step(LOG_STEP):
             try:
-                msg = MIMEMultipart()
-                msg["From"] = self.sender_email
-                msg["To"] = to_email
-                msg["Subject"] = subject
+                token = self._get_access_token()
+                endpoint = f"https://graph.microsoft.com/v1.0/users/{self.sender_email}/sendMail"
 
-                msg.attach(MIMEText(body_html, "html"))
+                message = {
+                    "subject": subject,
+                    "body": {"contentType": "HTML", "content": body_html},
+                    "from": {"emailAddress": {"address": self.sender_email}},
+                    "sender": {"emailAddress": {"address": self.sender_email}},
+                    "toRecipients": [{"emailAddress": {"address": to_email}}],
+                }
 
                 if attachment_path and os.path.exists(attachment_path):
                     try:
                         with open(attachment_path, "rb") as f:
-                            part = MIMEBase("application", "octet-stream")
-                            part.set_payload(f.read())
+                            file_content = f.read()
 
-                        encoders.encode_base64(part)
-                        part.add_header(
-                            "Content-Disposition",
-                            f'attachment; filename="{attachment_name}"',
-                        )
-                        msg.attach(part)
+                        content_bytes = base64.b64encode(file_content).decode("utf-8")
+
+                        message["attachments"] = [
+                            {
+                                "@odata.type": "#microsoft.graph.fileAttachment",
+                                "name": attachment_name,
+                                "contentType": "text/vtt",
+                                "contentBytes": content_bytes,
+                            }
+                        ]
                     except Exception as e:
-                        logger.error(f"Failed to attach file {attachment_path}: {e}")
+                        logger.error(
+                            f"Failed to process attachment {attachment_path}: {e}"
+                        )
 
-                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                    server.starttls()
-                    server.login(self.smtp_user, self.smtp_password)
-                    server.send_message(msg)
+                payload = {"message": message, "saveToSentItems": False}
 
-                return True
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                }
+
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        endpoint, json=payload, headers=headers
+                    )
+
+                    if response.status_code == 202:
+                        return True
+                    else:
+                        logger.error(
+                            f"Graph API Error ({response.status_code}): {response.text}"
+                        )
+                        return False
 
             except Exception as e:
-                logger.error(f"SMTP Error sending to {to_email}: {e}")
+                logger.exception(f"CRITICAL FAILURE sending to {to_email}")
                 return False
 
     async def send_session_transcripts(
         self, session_id: str, integration: str, attendees: list
     ):
         """
-        Iterates through attendees, finds their localized summary and transcript,
-        and emails them.
+        Iterates through attendees and emails them using the Graph API.
         """
         if not attendees:
             return
@@ -170,16 +213,15 @@ class EmailService:
                     </html>
                     """
 
-                    task = loop.run_in_executor(
-                        None,
-                        self._send_sync,
-                        email,
-                        subject,
-                        body,
-                        vtt_path,
-                        vtt_filename,
+                    tasks.append(
+                        self._send_graph_email(
+                            email,
+                            subject,
+                            body,
+                            vtt_path,
+                            vtt_filename,
+                        )
                     )
-                    tasks.append(task)
                 else:
                     logger.warning(
                         f"No transcript found for {email} (checked {pref_lang} & en). Skipping email."

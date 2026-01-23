@@ -25,29 +25,20 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     ENCRYPTION_KEY: str
-
     JWT_SECRET_KEY: str
 
     ZM_PUBLIC_KEY: str
-
     ZM_RTMS_CLIENT: str
-
     ZM_RTMS_SECRET: str
-
     ZM_METRICS_URL: str = "http://localhost:8080/metrics"
 
-    SMTP_HOST: str = "smtp.gmail.com"
-
-    SMTP_PORT: int = 587
-
-    SMTP_USER: str
-
-    SMTP_PASSWORD: str
+    MAILER_TENANT_ID: str
+    MAILER_CLIENT_ID: str
+    MAILER_CLIENT_SECRET: str
+    MAILER_SENDER_EMAIL: str
 
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-
     OLLAMA_API_KEY: str = ""
-
     OLLAMA_MODEL: str = "llama3.1:8b"
 
     LOGGING_LEVEL: str = "INFO"

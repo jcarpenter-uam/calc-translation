@@ -29,10 +29,10 @@ services:
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
       - ZM_METRICS_URL=http://zoom-rtms:8080/metrics
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - MAILER_TENANT_ID=${MAILER_TENANT_ID}
+      - MAILER_CLIENT_ID=${MAILER_CLIENT_ID}
+      - MAILER_CLIENT_SECRET=${MAILER_CLIENT_SECRET}
+      - MAILER_SENDER_EMAIL=${MAILER_SENDER_EMAIL}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
@@ -119,10 +119,12 @@ ZM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n<KEY_BODY>\n-----END PUBLIC KEY-----"
 DATABASE_URL="postgresql://user:password@localhost:5432/calc-translation"
 #
 # Senders Email
-SMTP_HOST="smtp.gmail.com" # Default if not set
-SMTP_PORT=587 # Default if not set
-SMTP_USER="your-email@gmail.com"
-SMTP_PASSWORD="your-16-digit-app-password-seperate-by-spaces"
+# The email you want summaries & transcripts to be sent as
+# It is best to setup a seperate app for the Mail Send permissions
+MAILER_TENANT_ID=
+MAILER_CLIENT_ID=
+MAILER_CLIENT_SECRET=
+MAILER_SENDER_EMAIL="translation@your-domain.com"
 
 ## General Settings
 #

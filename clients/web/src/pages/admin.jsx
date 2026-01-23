@@ -5,6 +5,7 @@ import TenantManagement from "../components/admin/tenant-management.jsx";
 import MetricsViewing from "../components/admin/metrics.jsx";
 import LogViewing from "../components/admin/log-viewing.jsx";
 import { useMetrics } from "../hooks/use-metrics";
+import { useLogs } from "../hooks/use-logs.js";
 
 export default function AdminPage() {
   const { t } = useTranslation();
@@ -12,9 +13,6 @@ export default function AdminPage() {
   const [tenants, setTenants] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [logs, setLogs] = useState([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logsError, setLogsError] = useState(null);
 
   const {
     serverMetrics,
@@ -23,6 +21,13 @@ export default function AdminPage() {
     error: metricsError,
     refetch: fetchMetrics,
   } = useMetrics(15000);
+
+  const {
+    logs,
+    loading: logsLoading,
+    error: logsError,
+    refetch: fetchLogs,
+  } = useLogs(3000);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -50,25 +55,6 @@ export default function AdminPage() {
     };
 
     fetchData();
-  }, []);
-
-  const fetchLogs = async () => {
-    try {
-      const response = await fetch("/api/logs/?lines=200");
-      if (!response.ok) throw new Error("Failed to fetch logs");
-
-      const data = await response.json();
-      setLogs(data.logs || []);
-      setLogsError(null);
-    } catch (err) {
-      console.error("Log fetch failed", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchMetrics();
-    const interval = setInterval(fetchMetrics, 15000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleToggleUserAdmin = async (userId, isAdmin) => {

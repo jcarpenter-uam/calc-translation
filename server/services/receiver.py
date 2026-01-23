@@ -8,6 +8,7 @@ from typing import Dict, Optional
 from core import database
 from core.database import (
     SQL_GET_MEETING_ATTENDEES_DETAILS,
+    SQL_GET_MEETING_BY_ID,
     SQL_UPDATE_MEETING_END,
     SQL_UPDATE_MEETING_START,
 )
@@ -526,15 +527,29 @@ class MeetingSession:
                     SQL_GET_MEETING_ATTENDEES_DETAILS, self.session_id
                 )
 
+                meeting_details = await conn.fetchrow(
+                    SQL_GET_MEETING_BY_ID, self.session_id
+                )
+
             if not attendees:
                 logger.info(f"No attendees to email for session {self.session_id}.")
                 return
 
+            topic = meeting_details.get("topic") if meeting_details else None
+
+            platform = (
+                meeting_details.get("platform") if meeting_details else self.integration
+            )
+
+            started_at = meeting_details.get("started_at") if meeting_details else None
+
             email_service = EmailService()
             await email_service.send_session_transcripts(
                 session_id=self.session_id,
-                integration=self.integration,
+                integration=platform,
                 attendees=attendees,
+                topic=topic,
+                meeting_start_time=started_at,
             )
 
         except Exception as e:

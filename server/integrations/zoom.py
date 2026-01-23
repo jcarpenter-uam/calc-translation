@@ -296,6 +296,7 @@ async def get_meeting_data(
             start_time_str = meeting_data.get("created_at")
             join_url = meeting_data.get("join_url")
             passcode = meeting_data.get("pstn_password", "")
+            topic = meeting_data.get("topic", "")
 
             parsed_start_time = None
             if start_time_str:
@@ -312,6 +313,7 @@ async def get_meeting_data(
                         str(meeting_id),
                         parsed_start_time,
                         join_url,
+                        topic,
                     )
 
             logger.info(
@@ -337,6 +339,7 @@ async def get_meeting_data(
                             "zoom",
                             real_uuid,
                             datetime.now(),
+                            None,
                             None,
                         )
 

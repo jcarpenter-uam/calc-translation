@@ -113,6 +113,7 @@ async def create_standalone_session(user_id: str) -> tuple[str, str]:
                 None,
                 now,
                 join_url,
+                None,
             )
 
             logger.info(

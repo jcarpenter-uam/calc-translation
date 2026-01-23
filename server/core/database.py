@@ -91,6 +91,7 @@ async def init_db():
                             readable_id TEXT,
                             meeting_time TIMESTAMPTZ,
                             join_url TEXT,
+                            topic TEXT,
                             started_at TIMESTAMPTZ,
                             ended_at TIMESTAMPTZ,
                             attendees TEXT[] DEFAULT '{}'
@@ -274,8 +275,8 @@ SQL_DELETE_INTEGRATION = (
 # --- MEETINGS ---
 
 SQL_INSERT_MEETING = """
-INSERT INTO MEETINGS (id, integration_id, passcode, platform, readable_id, meeting_time, join_url)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO MEETINGS (id, integration_id, passcode, platform, readable_id, meeting_time, join_url, topic)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT(id) DO NOTHING;
 """
 

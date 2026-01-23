@@ -4,6 +4,7 @@ import UserManagement from "../components/admin/user-management.jsx";
 import TenantManagement from "../components/admin/tenant-management.jsx";
 import MetricsViewing from "../components/admin/metrics.jsx";
 import LogViewing from "../components/admin/log-viewing.jsx";
+import { useMetrics } from "../hooks/use-metrics";
 
 export default function AdminPage() {
   const { t } = useTranslation();
@@ -14,10 +15,14 @@ export default function AdminPage() {
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState(null);
-  const [serverMetrics, setServerMetrics] = useState(null);
-  const [zoomMetrics, setZoomMetrics] = useState(null);
-  const [metricsLoading, setMetricsLoading] = useState(false);
-  const [metricsError, setMetricsError] = useState(null);
+
+  const {
+    serverMetrics,
+    zoomMetrics,
+    loading: metricsLoading,
+    error: metricsError,
+    refetch: fetchMetrics,
+  } = useMetrics(15000);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -57,42 +62,6 @@ export default function AdminPage() {
       setLogsError(null);
     } catch (err) {
       console.error("Log fetch failed", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchMetrics = async () => {
-    setMetricsLoading(true);
-    try {
-      const [serverRes, zoomRes] = await Promise.all([
-        fetch("/api/metrics/server"),
-        fetch("/api/metrics/zoom"),
-      ]);
-
-      if (serverRes.ok) {
-        const text = await serverRes.text();
-        setServerMetrics(text);
-      } else {
-        console.error("Failed to fetch server metrics");
-      }
-
-      if (zoomRes.ok) {
-        const text = await zoomRes.text();
-        setZoomMetrics(text);
-      } else {
-        console.error("Failed to fetch zoom metrics");
-      }
-
-      setMetricsError(null);
-    } catch (err) {
-      setMetricsError(err.message);
-    } finally {
-      setMetricsLoading(false);
     }
   };
 

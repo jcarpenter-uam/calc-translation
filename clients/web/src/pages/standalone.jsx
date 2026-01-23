@@ -1,13 +1,11 @@
-import OneWay from "../components/standalone/one-way";
+import TranslationModes from "../components/standalone/modes";
 import SupportedLangs from "../components/standalone/supported-langs";
-import TwoWay from "../components/standalone/two-way";
 
 export default function StandalonePage() {
   return (
     <>
       <SupportedLangs />
-      <OneWay />
-      <TwoWay />
+      <TranslationModes />
     </>
   );
 }

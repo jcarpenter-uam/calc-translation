@@ -10,6 +10,7 @@ import Terms from "./pages/terms";
 import ScrollToTop from "./components/misc/scroll-to-top";
 import AdminPage from "./pages/admin";
 import NotFound from "./pages/not-found";
+import StandalonePage from "./pages/standalone";
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
 
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<LandingPage />} />
+              <Route path="/standalone/host" element={<StandalonePage />} />
               <Route
                 path="/sessions/:integration/*"
                 element={<SessionPage />}

@@ -3,16 +3,17 @@ import { useTranslation } from "react-i18next";
 
 const LanguageContext = createContext();
 
-const STORAGE_KEY = "app-language";
+const STORAGE_KEY_UI = "app-ui-language";
+const STORAGE_KEY_TARGET = "app-target-language";
 
-function getInitialLanguage() {
+function getInitialLanguage(storageKey) {
   try {
-    const storedLanguage = window.localStorage.getItem(STORAGE_KEY);
+    const storedLanguage = window.localStorage.getItem(storageKey);
     if (storedLanguage) {
       return storedLanguage;
     }
   } catch (error) {
-    console.error("Error reading from localStorage", error);
+    console.error(`Error reading ${storageKey} from localStorage`, error);
   }
 
   const browserLang = window.navigator.language;
@@ -24,25 +25,43 @@ function getInitialLanguage() {
 }
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguageState] = useState(getInitialLanguage);
+  const [uiLanguage, setUiLanguageState] = useState(() =>
+    getInitialLanguage(STORAGE_KEY_UI),
+  );
+  const [targetLanguage, setTargetLanguageState] = useState(() =>
+    getInitialLanguage(STORAGE_KEY_TARGET),
+  );
+
   const { i18n } = useTranslation();
 
   useEffect(() => {
-    i18n.changeLanguage(language);
-  }, []);
+    i18n.changeLanguage(uiLanguage);
+  }, [uiLanguage, i18n]);
 
-  const setLanguage = (newLang) => {
-    setLanguageState(newLang);
-    i18n.changeLanguage(newLang);
-
+  const setUiLanguage = (newLang) => {
+    setUiLanguageState(newLang);
     try {
-      window.localStorage.setItem(STORAGE_KEY, newLang);
+      window.localStorage.setItem(STORAGE_KEY_UI, newLang);
     } catch (error) {
-      console.error("Error writing to localStorage", error);
+      console.error("Error writing uiLanguage to localStorage", error);
     }
   };
 
-  const value = { language, setLanguage };
+  const setTargetLanguage = (newLang) => {
+    setTargetLanguageState(newLang);
+    try {
+      window.localStorage.setItem(STORAGE_KEY_TARGET, newLang);
+    } catch (error) {
+      console.error("Error writing targetLanguage to localStorage", error);
+    }
+  };
+
+  const value = {
+    uiLanguage,
+    setUiLanguage,
+    targetLanguage,
+    setTargetLanguage,
+  };
 
   return (
     <LanguageContext.Provider value={value}>

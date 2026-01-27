@@ -4,10 +4,13 @@ import { useLanguage } from "../context/language";
 
 export function useLanguageCode() {
   const { user, setUser } = useAuth();
-  const { language: uiLanguage, setLanguage: setUiLanguage } = useLanguage();
+  const { uiLanguage, setUiLanguage, targetLanguage, setTargetLanguage } =
+    useLanguage();
 
   const setLanguageCode = useCallback(
     (newLang) => {
+      setTargetLanguage(newLang);
+
       if (user) {
         setUser({ ...user, language_code: newLang });
 
@@ -20,7 +23,7 @@ export function useLanguageCode() {
         });
       }
     },
-    [user, setUser],
+    [user, setUser, setTargetLanguage],
   );
 
   return {
@@ -28,5 +31,7 @@ export function useLanguageCode() {
     setLanguageCode,
     uiLanguage,
     setUiLanguage,
+    targetLanguage,
+    setTargetLanguage,
   };
 }

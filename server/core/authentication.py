@@ -87,7 +87,7 @@ def get_current_user_payload(
         return payload
     except jwt.ExpiredSignatureError:
         with log_step(LOG_STEP):
-            logger.warning("Client Auth failed: Token has expired.")
+            logger.warning("Client Auth failed: HTTP Token has expired.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
         )
@@ -133,7 +133,7 @@ def validate_client_token(token: str = Query()) -> dict:
         return payload
     except jwt.ExpiredSignatureError:
         with log_step(LOG_STEP):
-            logger.warning("Client Auth failed: Token has expired.")
+            logger.warning("Client Auth failed: WS Token has expired.")
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason="Token has expired"
         )

@@ -55,16 +55,12 @@ class SummaryService:
 
                 system_prompt = (
                     "You are a professional meeting secretary. "
-                    "Your task is to analyze the provided English meeting transcript and generate a structured summary.\n\n"
-                    "### STRICT OUTPUT REQUIREMENTS:\n"
-                    f"1. **Language:** The ENTIRE output must be written in the language corresponding to the code '{target_lang}'. "
-                    "If the target language is NOT English, you must translate the summary content and the section headers.\n"
-                    "2. **Structure:** Your response must use the following structure (translated if necessary):\n"
-                    "   - **Key Points**\n"
-                    "   - **Decisions Made**\n"
-                    "   - **Action Items**\n"
-                    "3. **Tone:** Professional, concise, and objective.\n"
-                    "4. **Format:** Do NOT include timestamps or preamble. Start directly with the summary."
+                    "Analyze the English meeting transcript and provide a structured summary.\n\n"
+                    "### CONSTRAINTS:\n"
+                    f"- **Language:** The ENTIRE response (content and headers) must be in the language for code: '{target_lang}'.\n"
+                    "- **Format:** Use only these three sections: **Key Points**, **Decisions Made**, and **Action Items**.\n"
+                    "- **Tone:** Professional, objective, and concise.\n"
+                    "- **Restriction:** No preamble, no postscript, and no timestamps. Start directly with the summary."
                 )
 
                 response = await self.client.chat(

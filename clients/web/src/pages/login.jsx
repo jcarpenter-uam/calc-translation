@@ -38,6 +38,7 @@ export default function Login() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error("Validation Error Details:", errorData);
         throw new Error(errorData.detail || "An unknown error occurred.");
       }
 

@@ -30,28 +30,21 @@ async def init_db():
             async with DB_POOL.acquire() as conn:
                 async with conn.transaction():
 
-                    # Users & Tenants
+                    # Users
                     await conn.execute(
                         """
                         CREATE TABLE IF NOT EXISTS USERS (
-                            id TEXT PRIMARY KEY, -- EntraID User ID
+                            id TEXT PRIMARY KEY,
                             name TEXT,
                             email TEXT,
                             language_code TEXT,
                             is_admin BOOLEAN DEFAULT FALSE
+                            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                         )
                         """
                     )
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS TENANTS (
-                            tenant_id TEXT PRIMARY KEY,
-                            client_id TEXT NOT NULL,
-                            client_secret_encrypted TEXT NOT NULL,
-                            organization_name TEXT
-                        )
-                        """
-                    )
+
+                    # Tenant Domains
                     await conn.execute(
                         """
                         CREATE TABLE IF NOT EXISTS TENANT_DOMAINS (
@@ -60,6 +53,25 @@ async def init_db():
                         )
                         """
                     )
+
+                    # Tenant Auth Configs
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS TENANT_AUTH_CONFIGS (
+                            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE,
+                            provider_type TEXT NOT NULL, -- 'microsoft' or 'google'
+                            client_id TEXT NOT NULL,
+                            client_secret_encrypted TEXT NOT NULL,
+                            tenant_hint TEXT, -- Stores Entra Tenant ID or Google Customer ID
+                            UNIQUE(tenant_id, provider_type)
+                        )
+                        """
+                    )
+
+                    # --- START TEMPORARY MIGRATION LOGIC ---
+                    await migrate_legacy_entra_data(conn)
+                    # --- END TEMPORARY MIGRATION LOGIC ---
 
                     # Integrations
                     await conn.execute(
@@ -165,6 +177,55 @@ async def init_db():
                 logger.error(f"Failed to initialize database pool: {e}", exc_info=True)
             DB_POOL = None
             raise
+
+
+# --- START TEMPORARY MIGRATION FUNCTION ---
+async def migrate_legacy_entra_data(conn):
+    """
+    TEMPORARY: Migrates legacy tenant data to the new polymorphic auth structure.
+    """
+    legacy_check = await conn.fetchval(
+        """
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='tenants' AND column_name='client_id'
+        )
+    """
+    )
+
+    if legacy_check:
+        logger.info("Migrating legacy tenant credentials to TENANT_AUTH_CONFIGS...")
+
+        await conn.execute(
+            """
+            INSERT INTO TENANT_AUTH_CONFIGS (tenant_id, provider_type, client_id, client_secret_encrypted, tenant_hint)
+            SELECT tenant_id, 'microsoft', client_id, client_secret_encrypted, tenant_id
+            FROM TENANTS
+            ON CONFLICT DO NOTHING
+        """
+        )
+
+        domains_table_exists = await conn.fetchval(
+            """
+            SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='domains')
+        """
+        )
+        if domains_table_exists:
+            await conn.execute(
+                """
+                INSERT INTO TENANT_DOMAINS (domain, tenant_id) 
+                SELECT domain, tenant_id FROM domains 
+                ON CONFLICT DO NOTHING
+            """
+            )
+            await conn.execute("DROP TABLE domains")
+
+        await conn.execute("ALTER TABLE TENANTS DROP COLUMN client_id")
+        await conn.execute("ALTER TABLE TENANTS DROP COLUMN client_secret_encrypted")
+        logger.info("Legacy migration complete.")
+
+
+# --- END TEMPORARY MIGRATION FUNCTION ---
 
 
 # ==============================================================================

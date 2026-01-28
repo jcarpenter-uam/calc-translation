@@ -12,7 +12,7 @@ export default function Login() {
 
   const [infoMessageKey, setInfoMessageKey] = useState(null);
 
-  const { language } = useLanguage();
+  const { uiLanguage } = useLanguage();
 
   useEffect(() => {
     const reason = searchParams.get("reason");
@@ -33,7 +33,10 @@ export default function Login() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, language }),
+        body: JSON.stringify({
+          email,
+          language: uiLanguage,
+        }),
       });
 
       if (!response.ok) {

@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
  */
 function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
   const [isLoading, setIsLoading] = useState(false);
-  const { language } = useLanguage();
+  const { targetLanguage } = useLanguage();
   const { t } = useTranslation();
 
   const handleDownload = async () => {
@@ -17,7 +17,7 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
     setIsLoading(true);
 
     const encodedSessionId = encodeURIComponent(sessionId);
-    const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt?token=${token}&language=${language}`;
+    const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt?token=${token}&language=${targetLanguage}`;
 
     try {
       const response = await fetch(downloadUrl, {
@@ -32,7 +32,7 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.setAttribute("download", `meeting_transcript_${language}.vtt`);
+      link.setAttribute("download", `meeting_transcript_${targetLanguage}.vtt`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

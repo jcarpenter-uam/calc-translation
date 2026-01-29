@@ -300,14 +300,29 @@ SELECT
     t.tenant_id, 
     t.organization_name,
     COALESCE(array_agg(DISTINCT td.domain) FILTER (WHERE td.domain IS NOT NULL), '{}') as domains,
-    (SELECT COUNT(*) FROM TENANT_AUTH_CONFIGS ac WHERE ac.tenant_id = t.tenant_id) > 0 as has_secret
+    jsonb_object_agg(ac.provider_type, jsonb_build_object(
+        'client_id', ac.client_id,
+        'has_secret', (ac.client_secret_encrypted IS NOT NULL),
+        'tenant_hint', ac.tenant_hint
+    )) FILTER (WHERE ac.provider_type IS NOT NULL) as auth_methods
 FROM TENANTS t
 LEFT JOIN TENANT_DOMAINS td ON t.tenant_id = td.tenant_id
+LEFT JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
 GROUP BY t.tenant_id, t.organization_name;
 """
 
 SQL_DELETE_TENANT_BY_ID = "DELETE FROM TENANTS WHERE tenant_id = $1;"
 SQL_DELETE_DOMAINS_BY_TENANT_ID = "DELETE FROM TENANT_DOMAINS WHERE tenant_id = $1;"
+
+SQL_DELETE_TENANT_AUTH_CONFIG = """
+DELETE FROM TENANT_AUTH_CONFIGS 
+WHERE tenant_id = $1 AND provider_type = $2
+"""
+
+SQL_COUNT_TENANT_AUTH_CONFIGS = """
+SELECT COUNT(*) FROM TENANT_AUTH_CONFIGS 
+WHERE tenant_id = $1
+"""
 
 
 # --- INTEGRATIONS ---

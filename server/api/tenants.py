@@ -1,12 +1,14 @@
 import json
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import asyncpg
 import core.database as database
 from core.authentication import encrypt, get_admin_user_payload
 from core.database import (
+    SQL_COUNT_TENANT_AUTH_CONFIGS,
     SQL_DELETE_DOMAINS_BY_TENANT_ID,
+    SQL_DELETE_TENANT_AUTH_CONFIG,
     SQL_DELETE_TENANT_BY_ID,
     SQL_GET_ALL_TENANTS,
     SQL_GET_TENANT_BY_ID,
@@ -46,6 +48,7 @@ class TenantUpdate(BaseModel):
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
     organization_name: Optional[str] = None
+    tenant_hint: Optional[str] = None
     provider_type: Optional[str] = "microsoft"
 
 
@@ -54,6 +57,9 @@ class TenantResponse(TenantBase):
 
     tenant_id: str
     has_secret: bool = Field(..., description="True if a client secret is set")
+    auth_methods: Optional[Dict[str, Any]] = Field(
+        default=None, description="Configuration status for all providers"
+    )
 
     class Config:
         from_attributes = True
@@ -64,15 +70,6 @@ def map_row_to_response(row, provider="microsoft") -> TenantResponse:
     Helper to convert the DB result back into the flat TenantResponse
     expected by the frontend.
     """
-    if "auth_methods" not in row:
-        return TenantResponse(
-            tenant_id=row["tenant_id"],
-            organization_name=row["organization_name"] or "",
-            domains=row["domains"] or [],
-            client_id="",
-            has_secret=row.get("has_secret", False),
-        )
-
     auth_methods = row.get("auth_methods")
     if isinstance(auth_methods, str):
         auth_methods = json.loads(auth_methods)
@@ -95,6 +92,7 @@ def map_row_to_response(row, provider="microsoft") -> TenantResponse:
         domains=row["domains"] or [],
         client_id=config.get("client_id", ""),
         has_secret=config.get("has_secret", False),
+        auth_methods=auth_methods,
     )
 
 
@@ -251,6 +249,8 @@ def create_tenant_router() -> APIRouter:
                 auth_updates["client_secret_encrypted"] = encrypt(
                     update_data.pop("client_secret")
                 )
+            if "tenant_hint" in update_data:
+                auth_updates["tenant_hint"] = update_data.pop("tenant_hint")
 
             tenant_updates = update_data
 
@@ -269,15 +269,41 @@ def create_tenant_router() -> APIRouter:
                             await conn.execute(query, *q_vals)
 
                         if auth_updates:
-                            q_parts = [
-                                f"{k} = ${i+1}"
-                                for i, k in enumerate(auth_updates.keys())
-                            ]
-                            q_vals = list(auth_updates.values())
-                            q_vals.append(tenant_id)
-                            q_vals.append(provider)
-                            query = f"UPDATE TENANT_AUTH_CONFIGS SET {', '.join(q_parts)} WHERE tenant_id = ${len(q_vals)-1} AND provider_type = ${len(q_vals)}"
-                            await conn.execute(query, *q_vals)
+                            exists = await conn.fetchval(
+                                "SELECT 1 FROM TENANT_AUTH_CONFIGS WHERE tenant_id=$1 AND provider_type=$2",
+                                tenant_id,
+                                provider,
+                            )
+
+                            if exists:
+                                q_parts = [
+                                    f"{k} = ${i+1}"
+                                    for i, k in enumerate(auth_updates.keys())
+                                ]
+                                q_vals = list(auth_updates.values())
+                                q_vals.append(tenant_id)
+                                q_vals.append(provider)
+                                query = f"UPDATE TENANT_AUTH_CONFIGS SET {', '.join(q_parts)} WHERE tenant_id = ${len(q_vals)-1} AND provider_type = ${len(q_vals)}"
+                                await conn.execute(query, *q_vals)
+                            else:
+                                c_id = auth_updates.get("client_id")
+                                c_secret = auth_updates.get("client_secret_encrypted")
+                                t_hint = auth_updates.get("tenant_hint", tenant_id)
+
+                                if not c_id or not c_secret:
+                                    raise HTTPException(
+                                        status_code=status.HTTP_400_BAD_REQUEST,
+                                        detail=f"Client ID and Secret are required when adding a new {provider} configuration.",
+                                    )
+
+                                await conn.execute(
+                                    SQL_INSERT_TENANT_AUTH,
+                                    tenant_id,
+                                    provider,
+                                    c_id,
+                                    c_secret,
+                                    t_hint,
+                                )
 
                         if new_domains is not None:
                             await conn.execute(
@@ -332,5 +358,49 @@ def create_tenant_router() -> APIRouter:
                 )
 
             return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    # NOTE: Admin only
+    @router.delete(
+        "/{tenant_id}/auth/{provider_type}",
+        dependencies=[Depends(get_admin_user_payload)],
+    )
+    async def delete_tenant_auth_method(tenant_id: str, provider_type: str):
+        """
+        Deletes a specific authentication method (e.g., 'microsoft' or 'google').
+        If no authentication methods remain for the tenant, the tenant itself is deleted.
+        """
+        with log_step(LOG_STEP):
+            logger.debug(
+                f"Request to delete auth method {provider_type} for tenant {tenant_id}"
+            )
+
+            if provider_type not in ["microsoft", "google"]:
+                raise HTTPException(status_code=400, detail="Invalid provider type.")
+
+            if not database.DB_POOL:
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            async with database.DB_POOL.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        SQL_DELETE_TENANT_AUTH_CONFIG, tenant_id, provider_type
+                    )
+
+                    count = await conn.fetchval(
+                        SQL_COUNT_TENANT_AUTH_CONFIGS, tenant_id
+                    )
+
+                    if count == 0:
+                        logger.info(
+                            f"No auth methods remaining for {tenant_id}. Deleting tenant."
+                        )
+                        await conn.execute(SQL_DELETE_TENANT_BY_ID, tenant_id)
+                        return Response(status_code=status.HTTP_204_NO_CONTENT)
+                    else:
+                        row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
+                        if not row:
+                            return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+                        return map_row_to_response(row)
 
     return router

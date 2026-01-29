@@ -39,7 +39,6 @@ async def init_db():
                             email TEXT,
                             language_code TEXT,
                             is_admin BOOLEAN DEFAULT FALSE
-                            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                         )
                         """
                     )
@@ -181,10 +180,7 @@ async def init_db():
 
 # --- START TEMPORARY MIGRATION FUNCTION ---
 async def migrate_legacy_entra_data(conn):
-    """
-    TEMPORARY: Migrates legacy tenant data to the new polymorphic auth structure.
-    """
-    legacy_check = await conn.fetchval(
+    legacy_columns_exist = await conn.fetchval(
         """
         SELECT EXISTS (
             SELECT 1 FROM information_schema.columns 
@@ -193,9 +189,8 @@ async def migrate_legacy_entra_data(conn):
     """
     )
 
-    if legacy_check:
-        logger.info("Migrating legacy tenant credentials to TENANT_AUTH_CONFIGS...")
-
+    if legacy_columns_exist:
+        logger.info("Migrating legacy tenant credentials...")
         await conn.execute(
             """
             INSERT INTO TENANT_AUTH_CONFIGS (tenant_id, provider_type, client_id, client_secret_encrypted, tenant_hint)
@@ -205,12 +200,8 @@ async def migrate_legacy_entra_data(conn):
         """
         )
 
-        domains_table_exists = await conn.fetchval(
-            """
-            SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='domains')
-        """
-        )
-        if domains_table_exists:
+        table_exists = await conn.fetchval("SELECT to_regclass('domains') IS NOT NULL")
+        if table_exists:
             await conn.execute(
                 """
                 INSERT INTO TENANT_DOMAINS (domain, tenant_id) 
@@ -218,11 +209,12 @@ async def migrate_legacy_entra_data(conn):
                 ON CONFLICT DO NOTHING
             """
             )
-            await conn.execute("DROP TABLE domains")
+            await conn.execute("DROP TABLE IF EXISTS domains")
 
-        await conn.execute("ALTER TABLE TENANTS DROP COLUMN client_id")
-        await conn.execute("ALTER TABLE TENANTS DROP COLUMN client_secret_encrypted")
-        logger.info("Legacy migration complete.")
+        await conn.execute("ALTER TABLE TENANTS DROP COLUMN IF EXISTS client_id")
+        await conn.execute(
+            "ALTER TABLE TENANTS DROP COLUMN IF EXISTS client_secret_encrypted"
+        )
 
 
 # --- END TEMPORARY MIGRATION FUNCTION ---

@@ -8,13 +8,7 @@ import core.database as database
 import msal
 from core.authentication import decrypt, generate_jwt_token
 from core.config import settings
-from core.database import (
-    SQL_GET_TENANT_AUTH_BY_ID,
-    SQL_GET_TENANT_BY_DOMAIN,
-    SQL_GET_USER_BY_ID,
-    SQL_UPSERT_INTEGRATION,
-    SQL_UPSERT_USER,
-)
+from core.database import SQL_GET_USER_BY_ID, SQL_UPSERT_INTEGRATION, SQL_UPSERT_USER
 from core.logging_setup import log_step
 from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -34,26 +28,51 @@ REDIRECT_PATH = "/api/auth/entra/callback"
 SCOPE = ["User.Read", "Calendars.Read"]
 
 
+SQL_GET_ENTRA_CONFIG_BY_DOMAIN = """
+SELECT 
+    t.tenant_id, 
+    ac.client_id, 
+    ac.client_secret_encrypted,
+    ac.tenant_hint
+FROM TENANT_DOMAINS td
+JOIN TENANTS t ON td.tenant_id = t.tenant_id
+JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
+WHERE td.domain = $1 AND ac.provider_type = 'microsoft';
+"""
+
+SQL_GET_ENTRA_CONFIG_BY_ID = """
+SELECT 
+    t.tenant_id, 
+    ac.client_id, 
+    ac.client_secret_encrypted,
+    ac.tenant_hint
+FROM TENANTS t
+JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
+WHERE t.tenant_id = $1 AND ac.provider_type = 'microsoft';
+"""
+
+
 async def get_config_for_domain(domain: str) -> dict | None:
     with log_step(LOG_STEP):
-        logger.debug(f"Checking DB for config for domain: {domain}")
+        logger.debug(f"Checking DB for Entra config for domain: {domain}")
         if not database.DB_POOL:
             logger.error("Database not initialized during get_config_for_domain.")
             raise HTTPException(status_code=503, detail="Database not initialized.")
 
         try:
             async with database.DB_POOL.acquire() as conn:
-                row = await conn.fetchrow(SQL_GET_TENANT_BY_DOMAIN, domain)
+                row = await conn.fetchrow(SQL_GET_ENTRA_CONFIG_BY_DOMAIN, domain)
 
             if not row:
-                logger.warning(f"No tenant config found for domain: {domain}")
+                logger.warning(f"No Entra tenant config found for domain: {domain}")
                 return None
 
-            logger.debug(f"Found config for domain: {domain}")
+            logger.debug(f"Found Entra config for domain: {domain}")
             return {
-                "tenant_id": row["tenant_id"],
+                "tenant_id": row["tenant_hint"],
                 "client_id": row["client_id"],
                 "client_secret": decrypt(row["client_secret_encrypted"]),
+                "internal_id": row["tenant_id"],
             }
         except Exception as e:
             logger.error(
@@ -73,15 +92,15 @@ async def get_config_for_tenant(tenant_id: str) -> dict | None:
 
         try:
             async with database.DB_POOL.acquire() as conn:
-                row = await conn.fetchrow(SQL_GET_TENANT_AUTH_BY_ID, tenant_id)
+                row = await conn.fetchrow(SQL_GET_ENTRA_CONFIG_BY_ID, tenant_id)
 
             if not row:
-                logger.warning(f"No tenant config found for tenant_id: {tenant_id}")
+                logger.warning(f"No Entra config found for tenant_id: {tenant_id}")
                 return None
 
             logger.debug(f"Found config for tenant_id: {tenant_id}")
             return {
-                "tenant_id": row["tenant_id"],
+                "tenant_id": row["tenant_hint"],
                 "client_id": row["client_id"],
                 "client_secret": decrypt(row["client_secret_encrypted"]),
             }
@@ -224,9 +243,10 @@ async def handle_login(
             )
 
         state = str(uuid.uuid4())
+
         auth_data = {
             "state": state,
-            "tenant_id": tenant_config["tenant_id"],
+            "tenant_id": tenant_config.get("internal_id") or tenant_config["tenant_id"],
             "language": request.language,
         }
 
@@ -262,6 +282,7 @@ async def handle_callback(request: Request) -> RedirectResponse:
             raise HTTPException(status_code=400, detail="Auth state mismatch.")
 
         tenant_id = cookie_data.get("tenant_id")
+
         tenant_config = await get_config_for_tenant(tenant_id)
         if not tenant_config:
             logger.error(

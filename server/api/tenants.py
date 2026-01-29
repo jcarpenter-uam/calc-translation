@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import List, Optional
 
@@ -10,7 +11,8 @@ from core.database import (
     SQL_GET_ALL_TENANTS,
     SQL_GET_TENANT_BY_ID,
     SQL_INSERT_DOMAIN,
-    SQL_INSERT_TENANT,
+    SQL_INSERT_TENANT_AUTH,
+    SQL_INSERT_TENANT_BASE,
 )
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -32,6 +34,9 @@ class TenantCreate(TenantBase):
 
     tenant_id: str = Field(..., description="The Entra ID (Directory) Tenant ID")
     client_secret: str = Field(..., description="The plaintext client secret")
+    provider_type: str = Field(
+        default="microsoft", description="The auth provider (default: microsoft)"
+    )
 
 
 class TenantUpdate(BaseModel):
@@ -41,6 +46,7 @@ class TenantUpdate(BaseModel):
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
     organization_name: Optional[str] = None
+    provider_type: Optional[str] = "microsoft"
 
 
 class TenantResponse(TenantBase):
@@ -51,6 +57,45 @@ class TenantResponse(TenantBase):
 
     class Config:
         from_attributes = True
+
+
+def map_row_to_response(row, provider="microsoft") -> TenantResponse:
+    """
+    Helper to convert the DB result back into the flat TenantResponse
+    expected by the frontend.
+    """
+    if "auth_methods" not in row:
+        return TenantResponse(
+            tenant_id=row["tenant_id"],
+            organization_name=row["organization_name"] or "",
+            domains=row["domains"] or [],
+            client_id="",
+            has_secret=row.get("has_secret", False),
+        )
+
+    auth_methods = row.get("auth_methods")
+    if isinstance(auth_methods, str):
+        auth_methods = json.loads(auth_methods)
+
+    if not auth_methods:
+        auth_methods = {}
+
+    config = auth_methods.get(provider)
+    if not config and "microsoft" in auth_methods:
+        config = auth_methods["microsoft"]
+    elif not config and auth_methods:
+        config = list(auth_methods.values())[0]
+
+    if not config:
+        config = {"client_id": "", "has_secret": False}
+
+    return TenantResponse(
+        tenant_id=row["tenant_id"],
+        organization_name=row["organization_name"] or "",
+        domains=row["domains"] or [],
+        client_id=config.get("client_id", ""),
+        has_secret=config.get("has_secret", False),
+    )
 
 
 def create_tenant_router() -> APIRouter:
@@ -87,11 +132,18 @@ def create_tenant_router() -> APIRouter:
                 async with database.DB_POOL.acquire() as conn:
                     async with conn.transaction():
                         await conn.execute(
-                            SQL_INSERT_TENANT,
+                            SQL_INSERT_TENANT_BASE,
                             tenant.tenant_id,
+                            tenant.organization_name,
+                        )
+
+                        await conn.execute(
+                            SQL_INSERT_TENANT_AUTH,
+                            tenant.tenant_id,
+                            tenant.provider_type,
                             tenant.client_id,
                             encrypted_secret,
-                            tenant.organization_name,
+                            tenant.tenant_id,
                         )
 
                         await conn.execute(
@@ -104,11 +156,10 @@ def create_tenant_router() -> APIRouter:
                                     SQL_INSERT_DOMAIN, domain, tenant.tenant_id
                                 )
 
-                        new_tenant_row = await conn.fetchrow(
+                        row = await conn.fetchrow(
                             SQL_GET_TENANT_BY_ID, tenant.tenant_id
                         )
-
-                return TenantResponse.model_validate(dict(new_tenant_row))
+                        return map_row_to_response(row, tenant.provider_type)
 
             except asyncpg.exceptions.UniqueViolationError:
                 logger.warning(f"Failed to create tenant: Unique violation occurred.")
@@ -140,7 +191,7 @@ def create_tenant_router() -> APIRouter:
             async with database.DB_POOL.acquire() as conn:
                 rows = await conn.fetch(SQL_GET_ALL_TENANTS)
 
-            return [TenantResponse.model_validate(dict(row)) for row in rows]
+            return [map_row_to_response(row) for row in rows]
 
     # NOTE: Admin only
     @router.get(
@@ -166,7 +217,7 @@ def create_tenant_router() -> APIRouter:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Tenant with ID '{tenant_id}' not found.",
                 )
-            return TenantResponse.model_validate(dict(row))
+            return map_row_to_response(row)
 
     # NOTE: Admin only
     @router.patch(
@@ -177,7 +228,6 @@ def create_tenant_router() -> APIRouter:
     async def patch_tenant(tenant_id: str, patch: TenantUpdate):
         """
         Update one or more fields of an existing tenant configuration.
-        Only fields provided in the request body will be updated.
         """
         with log_step(LOG_STEP):
             logger.debug(f"Request to update tenant: {tenant_id}")
@@ -188,57 +238,46 @@ def create_tenant_router() -> APIRouter:
                 raise HTTPException(status_code=503, detail="Database not initialized.")
 
             update_data = patch.model_dump(exclude_unset=True)
+            provider = update_data.pop("provider_type", "microsoft")
 
             new_domains = None
             if "domains" in update_data:
                 new_domains = update_data.pop("domains")
 
+            auth_updates = {}
+            if "client_id" in update_data:
+                auth_updates["client_id"] = update_data.pop("client_id")
             if "client_secret" in update_data:
-                update_data["client_secret_encrypted"] = encrypt(
+                auth_updates["client_secret_encrypted"] = encrypt(
                     update_data.pop("client_secret")
                 )
 
-            if not update_data and new_domains is None:
-                logger.warning(f"Update called for tenant {tenant_id} with no data.")
-                async with database.DB_POOL.acquire() as conn:
-                    row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
-                if not row:
-                    logger.warning(f"Tenant not found: {tenant_id} (on no-op patch)")
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Tenant with ID '{tenant_id}' not found.",
-                    )
-                return TenantResponse.model_validate(dict(row))
+            tenant_updates = update_data
 
             try:
                 async with database.DB_POOL.acquire() as conn:
                     async with conn.transaction():
 
-                        if update_data:
-                            query_parts = []
-                            query_args = []
-                            arg_counter = 1
+                        if tenant_updates:
+                            q_parts = [
+                                f"{k} = ${i+1}"
+                                for i, k in enumerate(tenant_updates.keys())
+                            ]
+                            q_vals = list(tenant_updates.values())
+                            q_vals.append(tenant_id)
+                            query = f"UPDATE TENANTS SET {', '.join(q_parts)} WHERE tenant_id = ${len(q_vals)}"
+                            await conn.execute(query, *q_vals)
 
-                            for key, value in update_data.items():
-                                query_parts.append(f"{key} = ${arg_counter}")
-                                query_args.append(value)
-                                arg_counter += 1
-
-                            query_args.append(tenant_id)
-
-                            set_clause = ", ".join(query_parts)
-                            query = f"UPDATE TENANTS SET {set_clause} WHERE tenant_id = ${arg_counter}"
-
-                            result = await conn.execute(query, *query_args)
-
-                            if result == "UPDATE 0":
-                                logger.warning(
-                                    f"Tenant not found during update attempt: {tenant_id}"
-                                )
-                                raise HTTPException(
-                                    status_code=status.HTTP_404_NOT_FOUND,
-                                    detail=f"Tenant with ID '{tenant_id}' not found.",
-                                )
+                        if auth_updates:
+                            q_parts = [
+                                f"{k} = ${i+1}"
+                                for i, k in enumerate(auth_updates.keys())
+                            ]
+                            q_vals = list(auth_updates.values())
+                            q_vals.append(tenant_id)
+                            q_vals.append(provider)
+                            query = f"UPDATE TENANT_AUTH_CONFIGS SET {', '.join(q_parts)} WHERE tenant_id = ${len(q_vals)-1} AND provider_type = ${len(q_vals)}"
+                            await conn.execute(query, *q_vals)
 
                         if new_domains is not None:
                             await conn.execute(
@@ -250,15 +289,15 @@ def create_tenant_router() -> APIRouter:
                         row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
 
                 if not row:
-                    logger.error(
-                        f"Tenant {tenant_id} not found after update, this should not happen."
+                    logger.warning(
+                        f"Tenant not found after update attempt: {tenant_id}"
                     )
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Tenant with ID '{tenant_id}' not found after update.",
+                        detail=f"Tenant with ID '{tenant_id}' not found.",
                     )
 
-                return TenantResponse.model_validate(dict(row))
+                return map_row_to_response(row, provider)
 
             except Exception as e:
                 logger.error(f"Error updating tenant {tenant_id}: {e}", exc_info=True)

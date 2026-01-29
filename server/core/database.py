@@ -244,19 +244,19 @@ SQL_GET_USER_ID_BY_EMAIL = "SELECT id FROM USERS WHERE email = $1"
 
 # --- TENANTS ---
 
-SQL_GET_TENANT_AUTH_BY_ID = """
-SELECT tenant_id, client_id, client_secret_encrypted
-FROM TENANTS
-WHERE tenant_id = $1;
+SQL_INSERT_TENANT_BASE = """
+INSERT INTO TENANTS (tenant_id, organization_name)
+VALUES ($1, $2)
+ON CONFLICT (tenant_id) DO UPDATE SET organization_name = EXCLUDED.organization_name;
 """
 
-SQL_INSERT_TENANT = """
-INSERT INTO TENANTS (tenant_id, client_id, client_secret_encrypted, organization_name)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT(tenant_id) DO UPDATE SET
-    client_id = excluded.client_id,
-    client_secret_encrypted = excluded.client_secret_encrypted,
-    organization_name = excluded.organization_name;
+SQL_INSERT_TENANT_AUTH = """
+INSERT INTO TENANT_AUTH_CONFIGS (tenant_id, provider_type, client_id, client_secret_encrypted, tenant_hint)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (tenant_id, provider_type) DO UPDATE SET
+    client_id = EXCLUDED.client_id,
+    client_secret_encrypted = EXCLUDED.client_secret_encrypted,
+    tenant_hint = EXCLUDED.tenant_hint;
 """
 
 SQL_INSERT_DOMAIN = """
@@ -266,35 +266,44 @@ ON CONFLICT(domain) DO UPDATE SET tenant_id = excluded.tenant_id;
 """
 
 SQL_GET_TENANT_BY_DOMAIN = """
-SELECT t.tenant_id, t.client_id, t.client_secret_encrypted
-FROM TENANTS t
-JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
-WHERE d.domain = $1;
+SELECT 
+    t.tenant_id, 
+    ac.provider_type, 
+    ac.client_id, 
+    ac.client_secret_encrypted,
+    ac.tenant_hint
+FROM TENANT_DOMAINS td
+JOIN TENANTS t ON td.tenant_id = t.tenant_id
+JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
+WHERE td.domain = $1;
 """
 
 SQL_GET_TENANT_BY_ID = """
 SELECT 
     t.tenant_id, 
-    t.client_id, 
-    t.organization_name, 
-    (t.client_secret_encrypted IS NOT NULL AND t.client_secret_encrypted != '') as has_secret,
-    COALESCE(array_agg(d.domain) FILTER (WHERE d.domain IS NOT NULL), '{}') as domains
+    t.organization_name,
+    COALESCE(array_agg(DISTINCT td.domain) FILTER (WHERE td.domain IS NOT NULL), '{}') as domains,
+    jsonb_object_agg(ac.provider_type, jsonb_build_object(
+        'client_id', ac.client_id,
+        'has_secret', (ac.client_secret_encrypted IS NOT NULL),
+        'tenant_hint', ac.tenant_hint
+    )) FILTER (WHERE ac.provider_type IS NOT NULL) as auth_methods
 FROM TENANTS t
-LEFT JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
+LEFT JOIN TENANT_DOMAINS td ON t.tenant_id = td.tenant_id
+LEFT JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
 WHERE t.tenant_id = $1
-GROUP BY t.tenant_id;
+GROUP BY t.tenant_id, t.organization_name;
 """
 
 SQL_GET_ALL_TENANTS = """
 SELECT 
     t.tenant_id, 
-    t.client_id, 
-    t.organization_name, 
-    (t.client_secret_encrypted IS NOT NULL AND t.client_secret_encrypted != '') as has_secret,
-    COALESCE(array_agg(d.domain) FILTER (WHERE d.domain IS NOT NULL), '{}') as domains
+    t.organization_name,
+    COALESCE(array_agg(DISTINCT td.domain) FILTER (WHERE td.domain IS NOT NULL), '{}') as domains,
+    (SELECT COUNT(*) FROM TENANT_AUTH_CONFIGS ac WHERE ac.tenant_id = t.tenant_id) > 0 as has_secret
 FROM TENANTS t
-LEFT JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
-GROUP BY t.tenant_id;
+LEFT JOIN TENANT_DOMAINS td ON t.tenant_id = td.tenant_id
+GROUP BY t.tenant_id, t.organization_name;
 """
 
 SQL_DELETE_TENANT_BY_ID = "DELETE FROM TENANTS WHERE tenant_id = $1;"

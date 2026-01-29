@@ -15,17 +15,18 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
   const [isDownloadable, setIsDownloadable] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [sessionStatus, setSessionStatus] = useState("connecting");
+  const [isStopped, setIsStopped] = useState(false);
 
   const ws = useRef(null);
 
   useEffect(() => {
-    if (!wsUrl) {
-      return;
-    }
+    if (!wsUrl || isStopped) return;
 
     let reconnectTimeoutId;
 
     function connect() {
+      if (isStopped || !wsUrl) return;
+
       if (typeof wsUrl !== "string") {
         return;
       }
@@ -41,11 +42,10 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
       ws.current.onclose = (event) => {
         const code = event.code;
 
-        if (code === 1008 || code === 403) {
+        if (code === 1008 || code === 403 || code === 1006) {
           console.warn("WebSocket authorization failed.");
-          if (onUnauthorized) {
-            onUnauthorized();
-          }
+          setIsStopped(true);
+          if (onUnauthorized) onUnauthorized();
           return;
         }
 
@@ -164,7 +164,7 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
         ws.current.close();
       }
     };
-  }, [wsUrl, sessionId, onUnauthorized]);
+  }, [wsUrl, sessionId, onUnauthorized, isStopped]);
 
   return { transcripts, isDownloadable, isBackfilling, sessionStatus };
 }

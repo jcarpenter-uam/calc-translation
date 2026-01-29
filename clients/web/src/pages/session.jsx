@@ -44,25 +44,24 @@ export default function SessionPage() {
   const handleAuthFailure = useCallback(() => {
     setIsAuthorized(false);
     setShowUnauthorized(true);
-    window.location.replace("/");
   }, []);
 
   useEffect(() => {
-    if (!isAuthorized) {
-      setShowUnauthorized(true);
+    if (showUnauthorized || !isAuthorized) {
       const timer = setTimeout(() => {
-        navigate("/");
+        navigate("/", { replace: true });
       }, 5000);
 
       return () => clearTimeout(timer);
     }
-  }, [isAuthorized, navigate]);
+  }, [isAuthorized, showUnauthorized, navigate]);
 
   const encodedSessionId = isAuthorized ? encodeURIComponent(sessionId) : null;
 
-  const wsUrl = isAuthorized
-    ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${targetLanguage}`
-    : null;
+  const wsUrl =
+    isAuthorized && !showUnauthorized
+      ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${targetLanguage}`
+      : null;
 
   const { transcripts, isDownloadable, isBackfilling, sessionStatus } =
     useTranscriptStream(wsUrl, sessionId, handleAuthFailure);

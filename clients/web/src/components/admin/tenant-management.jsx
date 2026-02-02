@@ -47,7 +47,6 @@ function CreateTenantForm({ onCreate }) {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Split string into array
     const rawDomains = formData.domains
       .split(",")
       .map((d) => d.trim())
@@ -97,7 +96,7 @@ function CreateTenantForm({ onCreate }) {
 
       <div>
         <label className="block text-xs font-semibold text-zinc-500 mb-1">
-          Primary Provider
+          {t("tenant_primary_provider")}
         </label>
         <select
           name="provider_type"
@@ -105,16 +104,16 @@ function CreateTenantForm({ onCreate }) {
           onChange={handleChange}
           className="cursor-pointer w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="microsoft">Microsoft Entra ID</option>
-          <option value="google">Google Workspace</option>
+          <option value="microsoft">{t("provider_microsoft_full")}</option>
+          <option value="google">{t("provider_google_full")}</option>
         </select>
       </div>
 
       <div>
         <label className="block text-xs font-semibold text-zinc-500 mb-1">
           {formData.provider_type === "microsoft"
-            ? "Entra Tenant ID"
-            : "Google Customer ID"}
+            ? t("tenant_entra_id_label")
+            : t("tenant_google_id_label")}
         </label>
         <input
           name="tenant_id"
@@ -165,8 +164,7 @@ function CreateTenantForm({ onCreate }) {
           className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <p className="text-[10px] text-zinc-400 mt-1">
-          * Domains added here will be pinned to the selected Primary Provider.
-          You can edit this later.
+          {t("tenant_create_domain_hint")}
         </p>
       </div>
 
@@ -184,13 +182,14 @@ function CreateTenantForm({ onCreate }) {
  * Component to manage the list of domains for a tenant in Edit mode.
  */
 function DomainEditor({ domains, onChange }) {
+  const { t } = useTranslation();
   const [newDomain, setNewDomain] = useState("");
 
   const handleAdd = () => {
     const d = newDomain.trim();
     if (!d) return;
     if (domains.some((item) => item.domain === d)) {
-      alert("Domain already exists");
+      alert(t("tenant_domain_exists"));
       return;
     }
     onChange([...domains, { domain: d, provider: null }]);
@@ -217,7 +216,7 @@ function DomainEditor({ domains, onChange }) {
   return (
     <div className="border border-zinc-200 dark:border-zinc-600 rounded-md p-3 bg-zinc-50 dark:bg-zinc-700/30">
       <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
-        Associated Domains
+        {t("tenant_associated_domains")}
       </label>
 
       <div className="flex gap-2 mb-3">
@@ -227,7 +226,7 @@ function DomainEditor({ domains, onChange }) {
           onKeyDown={(e) =>
             e.key === "Enter" && (e.preventDefault(), handleAdd())
           }
-          placeholder="Add domain (e.g. uaminc.com)"
+          placeholder={t("tenant_add_domain_placeholder")}
           className="flex-1 px-2 py-1 text-sm bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button
@@ -235,7 +234,7 @@ function DomainEditor({ domains, onChange }) {
           onClick={handleAdd}
           className="cursor-pointer px-3 py-1 bg-zinc-200 dark:bg-zinc-600 hover:bg-zinc-300 dark:hover:bg-zinc-500 text-zinc-700 dark:text-zinc-200 rounded text-sm transition-colors"
         >
-          Add
+          {t("add_btn")}
         </button>
       </div>
 
@@ -252,25 +251,25 @@ function DomainEditor({ domains, onChange }) {
               <button
                 type="button"
                 onClick={() => handleToggleProvider(idx, item.provider)}
-                className={`cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors ${
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors cursor-pointer ${
                   item.provider === "microsoft"
                     ? "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300"
                     : item.provider === "google"
                       ? "bg-red-50 border-red-200 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300"
                       : "bg-zinc-100 border-zinc-200 text-zinc-500 dark:bg-zinc-600 dark:border-zinc-500 dark:text-zinc-400"
                 }`}
-                title="Click to toggle provider pinning"
+                title={t("tenant_toggle_pinning")}
               >
                 {item.provider === "microsoft" && <FaMicrosoft />}
                 {item.provider === "google" && <FaGoogle />}
                 {!item.provider && <FaUnlink />}
-                {item.provider ? "Pinned" : "Any"}
+                {item.provider ? t("tenant_pinned") : t("tenant_any")}
               </button>
               <button
                 type="button"
                 onClick={() => handleDelete(idx)}
-                className="cursor-pointer text-zinc-400 hover:text-red-500 transition-colors p-1"
-                title="Remove domain"
+                className="text-zinc-400 hover:text-red-500 transition-colors p-1 cursor-pointer"
+                title={t("tenant_remove_domain")}
               >
                 <FaTimes />
               </button>
@@ -279,7 +278,7 @@ function DomainEditor({ domains, onChange }) {
         ))}
         {domains.length === 0 && (
           <div className="text-center text-xs text-zinc-400 py-2">
-            No domains configured.
+            {t("tenant_no_domains")}
           </div>
         )}
       </div>
@@ -397,8 +396,8 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
       activeMethods.length <= 1 && activeMethods.includes(provider);
 
     const confirmMessage = isLastMethod
-      ? `Removing ${provider} will remove the last authentication method and DELETE this tenant. Are you sure?`
-      : `Are you sure you want to remove the ${provider} configuration?`;
+      ? t("tenant_delete_last_auth_confirm", { provider })
+      : t("tenant_delete_auth_confirm", { provider });
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -418,11 +417,11 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
           setIsEditing(false);
         }
       } else {
-        alert("Failed to delete configuration.");
+        alert(t("tenant_delete_config_failed"));
       }
     } catch (error) {
       console.error("Error deleting auth method:", error);
-      alert("An error occurred.");
+      alert(t("error_generic"));
     }
   };
 
@@ -439,11 +438,14 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
             {d.provider === "microsoft" && (
               <FaMicrosoft
                 className="text-[#00a4ef]"
-                title="Pinned to Microsoft"
+                title={t("tenant_pinned_microsoft")}
               />
             )}
             {d.provider === "google" && (
-              <FaGoogle className="text-[#EA4335]" title="Pinned to Google" />
+              <FaGoogle
+                className="text-[#EA4335]"
+                title={t("tenant_pinned_google")}
+              />
             )}
           </span>
         ))}
@@ -461,11 +463,11 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
           </span>
           {isConfigured ? (
             <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
-              <FaCheckCircle /> Active
+              <FaCheckCircle /> {t("status_active")}
             </span>
           ) : (
             <span className="flex items-center gap-1 text-xs text-zinc-400">
-              <FaExclamationCircle /> Not Set
+              <FaExclamationCircle /> {t("status_not_set")}
             </span>
           )}
         </div>
@@ -474,7 +476,7 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
             className="text-xs text-zinc-500 dark:text-zinc-400 pl-4 font-mono truncate max-w-[200px]"
             title={config.client_id}
           >
-            Client: {config.client_id}
+            {t("client_id_prefix")} {config.client_id}
           </div>
         )}
       </div>
@@ -488,7 +490,7 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
-              Organization Name
+              {t("org_name_placeholder")}
             </label>
             <input
               name="organization_name"
@@ -514,7 +516,7 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
                 : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
             }`}
           >
-            <FaMicrosoft /> Microsoft Entra
+            <FaMicrosoft /> {t("provider_microsoft")}
           </button>
           <button
             type="button"
@@ -525,7 +527,7 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
                 : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
             }`}
           >
-            <FaGoogle /> Google Workspace
+            <FaGoogle /> {t("provider_google")}
           </button>
         </div>
 
@@ -534,11 +536,11 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
           {activeTab === "microsoft" && (
             <div className="space-y-3 animate-fade-in">
               <p className="text-xs text-zinc-500">
-                Configure Microsoft Entra ID (OIDC)
+                {t("tenant_config_microsoft_desc")}
               </p>
               <div className="grid grid-cols-1 gap-3">
                 <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 -mb-1">
-                  Entra Tenant ID (Hint)
+                  {t("tenant_microsoft_hint")}
                 </label>
                 <input
                   name="microsoft_tenant_hint"
@@ -549,18 +551,18 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
                 />
 
                 <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 -mb-1">
-                  Client ID
+                  {t("client_id_placeholder")}
                 </label>
                 <input
                   name="microsoft_client_id"
                   value={formData.microsoft_client_id}
                   onChange={handleChange}
-                  placeholder="Microsoft Client ID"
+                  placeholder={t("tenant_microsoft_client_id_placeholder")}
                   className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md"
                 />
 
                 <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 -mb-1">
-                  Client Secret
+                  {t("client_secret_placeholder")}
                 </label>
                 <input
                   name="microsoft_secret"
@@ -569,8 +571,8 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
                   onChange={handleChange}
                   placeholder={
                     msConfig.has_secret
-                      ? "Update Client Secret (Encrypted)"
-                      : "Set Client Secret"
+                      ? t("tenant_secret_update_placeholder")
+                      : t("tenant_secret_set_placeholder")
                   }
                   className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md"
                 />
@@ -584,8 +586,8 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
                     onClick={() => handleDeleteAuth("microsoft")}
                     className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 flex items-center gap-1 cursor-pointer"
                   >
-                    <FaTrash className="text-[10px]" /> Remove Microsoft
-                    Configuration
+                    <FaTrash className="text-[10px]" />{" "}
+                    {t("tenant_remove_microsoft")}
                   </button>
                 </div>
               )}
@@ -595,11 +597,11 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
           {activeTab === "google" && (
             <div className="space-y-3 animate-fade-in">
               <p className="text-xs text-zinc-500">
-                Configure Google Workspace (OAuth2)
+                {t("tenant_config_google_desc")}
               </p>
               <div className="grid grid-cols-1 gap-3">
                 <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 -mb-1">
-                  Customer ID / HD (Hint)
+                  {t("tenant_google_hint")}
                 </label>
                 <input
                   name="google_tenant_hint"
@@ -610,18 +612,18 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
                 />
 
                 <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 -mb-1">
-                  Client ID
+                  {t("client_id_placeholder")}
                 </label>
                 <input
                   name="google_client_id"
                   value={formData.google_client_id}
                   onChange={handleChange}
-                  placeholder="Google Client ID"
+                  placeholder={t("tenant_google_client_id_placeholder")}
                   className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md"
                 />
 
                 <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 -mb-1">
-                  Client Secret
+                  {t("client_secret_placeholder")}
                 </label>
                 <input
                   name="google_secret"
@@ -630,8 +632,8 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
                   onChange={handleChange}
                   placeholder={
                     googleConfig.has_secret
-                      ? "Update Client Secret (Encrypted)"
-                      : "Set Client Secret"
+                      ? t("tenant_secret_update_placeholder")
+                      : t("tenant_secret_set_placeholder")
                   }
                   className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md"
                 />
@@ -645,8 +647,8 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
                     onClick={() => handleDeleteAuth("google")}
                     className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 flex items-center gap-1 cursor-pointer"
                   >
-                    <FaTrash className="text-[10px]" /> Remove Google
-                    Configuration
+                    <FaTrash className="text-[10px]" />{" "}
+                    {t("tenant_remove_google")}
                   </button>
                 </div>
               )}
@@ -687,11 +689,14 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
             {msConfig.has_secret && (
               <FaMicrosoft
                 className="text-[#00a4ef]"
-                title="Microsoft Enabled"
+                title={t("tenant_microsoft_enabled")}
               />
             )}
             {googleConfig.has_secret && (
-              <FaGoogle className="text-[#EA4335]" title="Google Enabled" />
+              <FaGoogle
+                className="text-[#EA4335]"
+                title={t("tenant_google_enabled")}
+              />
             )}
           </div>
         </div>
@@ -701,12 +706,12 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
         {/* Auth Methods Grid */}
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-zinc-50 dark:bg-zinc-700/20 p-3 rounded-md border border-zinc-100 dark:border-zinc-700/50">
           {renderProviderInfo(
-            "Entra",
+            t("provider_microsoft"),
             <FaMicrosoft className="text-xs" />,
             msConfig,
           )}
           {renderProviderInfo(
-            "Google",
+            t("provider_google"),
             <FaGoogle className="text-xs" />,
             googleConfig,
           )}

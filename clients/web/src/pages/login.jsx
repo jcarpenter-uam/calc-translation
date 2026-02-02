@@ -58,7 +58,7 @@ export default function Login() {
       } else if (data.login_url) {
         window.location.href = data.login_url;
       } else {
-        throw new Error("Invalid server response.");
+        throw new Error(t("invalid_server_response"));
       }
     } catch (err) {
       setError(err.message);
@@ -77,8 +77,7 @@ export default function Login() {
 
           <p className="text-sm text-zinc-600 dark:text-zinc-400 text-center mb-6">
             {availableProviders.length > 0
-              ? t("select_provider_hint") ||
-                "Please select an authentication method."
+              ? t("select_provider_hint")
               : t("login_description")}
           </p>
 
@@ -93,20 +92,20 @@ export default function Login() {
               {availableProviders.includes("microsoft") && (
                 <button
                   onClick={() => handleLogin(null, "microsoft")}
-                  className="w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 font-medium rounded-md border border-zinc-300 dark:border-zinc-600 flex items-center justify-center gap-3 transition-colors"
+                  className="cursor-pointer w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 font-medium rounded-md border border-zinc-300 dark:border-zinc-600 flex items-center justify-center gap-3 transition-colors"
                 >
                   <FaMicrosoft className="text-[#00a4ef] text-lg" />
-                  Sign in with Microsoft
+                  {t("signin_microsoft")}
                 </button>
               )}
 
               {availableProviders.includes("google") && (
                 <button
                   onClick={() => handleLogin(null, "google")}
-                  className="w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 font-medium rounded-md border border-zinc-300 dark:border-zinc-600 flex items-center justify-center gap-3 transition-colors"
+                  className="cursor-pointer w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 font-medium rounded-md border border-zinc-300 dark:border-zinc-600 flex items-center justify-center gap-3 transition-colors"
                 >
                   <FaGoogle className="text-red-500 text-lg" />
-                  Sign in with Google
+                  {t("signin_google")}
                 </button>
               )}
 
@@ -115,9 +114,9 @@ export default function Login() {
                   setAvailableProviders([]);
                   setEmail("");
                 }}
-                className="block w-full text-center text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mt-4 underline"
+                className="cursor-pointer block w-full text-center text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 mt-4 underline"
               >
-                {t("use_different_email") || "Use a different email"}
+                {t("use_different_email")}
               </button>
             </div>
           ) : (
@@ -146,7 +145,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="cursor-pointer w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoading ? t("processing") : t("continue")}
               </button>

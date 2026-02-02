@@ -94,12 +94,17 @@ async def create_standalone_session(user_id: str) -> tuple[str, str]:
             )
 
             if not row_integration:
+                row_integration = await conn.fetchrow(
+                    SQL_GET_INTEGRATION, user_id, "google"
+                )
+
+            if not row_integration:
                 logger.error(
-                    f"User {user_id} has no Microsoft integration. Cannot create standalone session."
+                    f"User {user_id} has no valid integration (Microsoft/Google). Cannot create standalone session."
                 )
                 raise HTTPException(
                     status_code=400,
-                    detail="User must be authenticated with Microsoft to host.",
+                    detail="User must be authenticated with a valid provider (Microsoft or Google) to host.",
                 )
 
             integration_id = row_integration["id"]

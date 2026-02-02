@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FaEdit,
   FaTrash,
@@ -9,9 +9,21 @@ import {
   FaGoogle,
   FaCheckCircle,
   FaExclamationCircle,
-  FaCopy,
+  FaLink,
+  FaUnlink,
 } from "react-icons/fa";
 import { useTranslation } from "react-i18next";
+
+/**
+ * Helper to ensure we always work with domain objects { domain: "...", provider: "..." }
+ */
+const normalizeDomains = (domains) => {
+  if (!Array.isArray(domains)) return [];
+  return domains.map((d) => {
+    if (typeof d === "string") return { domain: d, provider: null };
+    return d;
+  });
+};
 
 /**
  * Form to create a new tenant.
@@ -35,14 +47,20 @@ function CreateTenantForm({ onCreate }) {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const domainArray = formData.domains
+    // Split string into array
+    const rawDomains = formData.domains
       .split(",")
       .map((d) => d.trim())
       .filter((d) => d.length > 0);
 
+    const domainObjects = rawDomains.map((d) => ({
+      domain: d,
+      provider: formData.provider_type,
+    }));
+
     onCreate({
       ...formData,
-      domains: domainArray,
+      domains: domainObjects,
     });
 
     setFormData({
@@ -64,73 +82,208 @@ function CreateTenantForm({ onCreate }) {
         {t("tenant_create_title")}
       </h3>
 
-      <input
-        name="organization_name"
-        value={formData.organization_name}
-        onChange={handleChange}
-        placeholder={t("org_name_placeholder")}
-        required
-        className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <div className="col-span-1 md:col-span-2">
+        <label className="block text-xs font-semibold text-zinc-500 mb-1">
+          {t("org_name_placeholder")}
+        </label>
+        <input
+          name="organization_name"
+          value={formData.organization_name}
+          onChange={handleChange}
+          required
+          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
 
-      <select
-        name="provider_type"
-        value={formData.provider_type}
-        onChange={handleChange}
-        className="cursor-pointer w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        <option value="microsoft">Microsoft Entra ID</option>
-        <option value="google">Google Workspace</option>
-      </select>
+      <div>
+        <label className="block text-xs font-semibold text-zinc-500 mb-1">
+          Primary Provider
+        </label>
+        <select
+          name="provider_type"
+          value={formData.provider_type}
+          onChange={handleChange}
+          className="cursor-pointer w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="microsoft">Microsoft Entra ID</option>
+          <option value="google">Google Workspace</option>
+        </select>
+      </div>
 
-      <input
-        name="domains"
-        value={formData.domains}
-        onChange={handleChange}
-        placeholder={t("domains_placeholder_hint")}
-        required
-        className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <div>
+        <label className="block text-xs font-semibold text-zinc-500 mb-1">
+          {formData.provider_type === "microsoft"
+            ? "Entra Tenant ID"
+            : "Google Customer ID"}
+        </label>
+        <input
+          name="tenant_id"
+          value={formData.tenant_id}
+          onChange={handleChange}
+          required
+          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
 
-      <input
-        name="tenant_id"
-        value={formData.tenant_id}
-        onChange={handleChange}
-        placeholder={
-          formData.provider_type === "microsoft"
-            ? "Entra Directory (Tenant) ID"
-            : "Google Customer ID (or 'hd' domain)"
-        }
-        required
-        className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <div>
+        <label className="block text-xs font-semibold text-zinc-500 mb-1">
+          {t("client_id_placeholder")}
+        </label>
+        <input
+          name="client_id"
+          value={formData.client_id}
+          onChange={handleChange}
+          required
+          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
 
-      <input
-        name="client_id"
-        value={formData.client_id}
-        onChange={handleChange}
-        placeholder={t("client_id_placeholder")}
-        required
-        className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <div>
+        <label className="block text-xs font-semibold text-zinc-500 mb-1">
+          {t("client_secret_placeholder")}
+        </label>
+        <input
+          name="client_secret"
+          type="password"
+          value={formData.client_secret}
+          onChange={handleChange}
+          required
+          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
 
-      <input
-        name="client_secret"
-        type="password"
-        value={formData.client_secret}
-        onChange={handleChange}
-        placeholder={t("client_secret_placeholder")}
-        required
-        className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <div className="col-span-1 md:col-span-2">
+        <label className="block text-xs font-semibold text-zinc-500 mb-1">
+          {t("domains_placeholder_hint")}
+        </label>
+        <input
+          name="domains"
+          value={formData.domains}
+          onChange={handleChange}
+          placeholder="example.com, myorg.com"
+          required
+          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p className="text-[10px] text-zinc-400 mt-1">
+          * Domains added here will be pinned to the selected Primary Provider.
+          You can edit this later.
+        </p>
+      </div>
 
       <button
         type="submit"
-        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 cursor-pointer col-span-1 md:col-span-2"
+        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 cursor-pointer col-span-1 md:col-span-2"
       >
         <FaPlus /> {t("create_tenant_btn")}
       </button>
     </form>
+  );
+}
+
+/**
+ * Component to manage the list of domains for a tenant in Edit mode.
+ */
+function DomainEditor({ domains, onChange }) {
+  const [newDomain, setNewDomain] = useState("");
+
+  const handleAdd = () => {
+    const d = newDomain.trim();
+    if (!d) return;
+    if (domains.some((item) => item.domain === d)) {
+      alert("Domain already exists");
+      return;
+    }
+    onChange([...domains, { domain: d, provider: null }]);
+    setNewDomain("");
+  };
+
+  const handleDelete = (idx) => {
+    const next = [...domains];
+    next.splice(idx, 1);
+    onChange(next);
+  };
+
+  const handleToggleProvider = (idx, currentProvider) => {
+    const next = [...domains];
+    let nextProvider = null;
+    if (!currentProvider) nextProvider = "microsoft";
+    else if (currentProvider === "microsoft") nextProvider = "google";
+    else nextProvider = null;
+
+    next[idx] = { ...next[idx], provider: nextProvider };
+    onChange(next);
+  };
+
+  return (
+    <div className="border border-zinc-200 dark:border-zinc-600 rounded-md p-3 bg-zinc-50 dark:bg-zinc-700/30">
+      <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
+        Associated Domains
+      </label>
+
+      <div className="flex gap-2 mb-3">
+        <input
+          value={newDomain}
+          onChange={(e) => setNewDomain(e.target.value)}
+          onKeyDown={(e) =>
+            e.key === "Enter" && (e.preventDefault(), handleAdd())
+          }
+          placeholder="Add domain (e.g. uaminc.com)"
+          className="flex-1 px-2 py-1 text-sm bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          type="button"
+          onClick={handleAdd}
+          className="px-3 py-1 bg-zinc-200 dark:bg-zinc-600 hover:bg-zinc-300 dark:hover:bg-zinc-500 text-zinc-700 dark:text-zinc-200 rounded text-sm transition-colors"
+        >
+          Add
+        </button>
+      </div>
+
+      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+        {domains.map((item, idx) => (
+          <div
+            key={idx}
+            className="flex items-center justify-between bg-white dark:bg-zinc-700 px-3 py-2 rounded border border-zinc-200 dark:border-zinc-600"
+          >
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">
+              {item.domain}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleToggleProvider(idx, item.provider)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors ${
+                  item.provider === "microsoft"
+                    ? "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300"
+                    : item.provider === "google"
+                      ? "bg-red-50 border-red-200 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300"
+                      : "bg-zinc-100 border-zinc-200 text-zinc-500 dark:bg-zinc-600 dark:border-zinc-500 dark:text-zinc-400"
+                }`}
+                title="Click to toggle provider pinning"
+              >
+                {item.provider === "microsoft" && <FaMicrosoft />}
+                {item.provider === "google" && <FaGoogle />}
+                {!item.provider && <FaUnlink />}
+                {item.provider ? "Pinned" : "Any"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(idx)}
+                className="text-zinc-400 hover:text-red-500 transition-colors p-1"
+                title="Remove domain"
+              >
+                <FaTimes />
+              </button>
+            </div>
+          </div>
+        ))}
+        {domains.length === 0 && (
+          <div className="text-center text-xs text-zinc-400 py-2">
+            No domains configured.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -146,11 +299,14 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
   const msConfig = authMethods.microsoft || {};
   const googleConfig = authMethods.google || {};
 
-  const initialDomains = (tenant.domains || []).join(", ");
+  const [domainObjects, setDomainObjects] = useState([]);
+
+  useEffect(() => {
+    setDomainObjects(normalizeDomains(tenant.domains));
+  }, [tenant.domains]);
 
   const [formData, setFormData] = useState({
     organization_name: tenant.organization_name || "",
-    domains: initialDomains,
 
     // Microsoft
     microsoft_client_id: msConfig.client_id || "",
@@ -174,13 +330,8 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
     if (formData.organization_name !== tenant.organization_name) {
       updateData.organization_name = formData.organization_name;
     }
-    const currentDomainString = (tenant.domains || []).join(", ");
-    if (formData.domains !== currentDomainString) {
-      updateData.domains = formData.domains
-        .split(",")
-        .map((d) => d.trim())
-        .filter(Boolean);
-    }
+
+    updateData.domains = domainObjects;
 
     updateData.provider_type = activeTab;
 
@@ -206,7 +357,7 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
       }
     }
 
-    if (Object.keys(updateData).length > 1) {
+    if (Object.keys(updateData).length > 0) {
       onUpdate(tenant.tenant_id, updateData);
     }
     setIsEditing(false);
@@ -215,7 +366,6 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
   const handleCancel = () => {
     setFormData({
       organization_name: tenant.organization_name || "",
-      domains: initialDomains,
 
       microsoft_client_id: msConfig.client_id || "",
       microsoft_secret: "",
@@ -225,6 +375,7 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
       google_secret: "",
       google_tenant_hint: googleConfig.tenant_hint || "",
     });
+    setDomainObjects(normalizeDomains(tenant.domains));
     setIsEditing(false);
   };
 
@@ -275,18 +426,30 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
     }
   };
 
-  const renderDomains = () => (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {(tenant.domains || []).map((d, i) => (
-        <span
-          key={i}
-          className="px-2 py-0.5 text-xs bg-zinc-100 dark:bg-zinc-700 rounded text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600"
-        >
-          {d}
-        </span>
-      ))}
-    </div>
-  );
+  const renderDomains = () => {
+    const domains = normalizeDomains(tenant.domains);
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {domains.map((d, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-700/50 rounded border border-zinc-200 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300"
+          >
+            {d.domain}
+            {d.provider === "microsoft" && (
+              <FaMicrosoft
+                className="text-[#00a4ef]"
+                title="Pinned to Microsoft"
+              />
+            )}
+            {d.provider === "google" && (
+              <FaGoogle className="text-[#EA4335]" title="Pinned to Google" />
+            )}
+          </span>
+        ))}
+      </div>
+    );
+  };
 
   const renderProviderInfo = (label, icon, config) => {
     const isConfigured = config && config.has_secret;
@@ -323,20 +486,21 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
       <div className="p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm space-y-4">
         {/* Header Inputs */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input
-            name="organization_name"
-            value={formData.organization_name}
-            onChange={handleChange}
-            placeholder={t("org_name_placeholder")}
-            className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md"
-          />
-          <input
-            name="domains"
-            value={formData.domains}
-            onChange={handleChange}
-            placeholder={t("domains_placeholder_simple")}
-            className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md"
-          />
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
+              Organization Name
+            </label>
+            <input
+              name="organization_name"
+              value={formData.organization_name}
+              onChange={handleChange}
+              placeholder={t("org_name_placeholder")}
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md"
+            />
+          </div>
+
+          {/* Use the new Domain Editor */}
+          <DomainEditor domains={domainObjects} onChange={setDomainObjects} />
         </div>
 
         {/* TABS for Providers */}

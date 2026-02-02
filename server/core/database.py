@@ -48,7 +48,8 @@ async def init_db():
                         """
                         CREATE TABLE IF NOT EXISTS TENANT_DOMAINS (
                             domain TEXT PRIMARY KEY,
-                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE
+                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE,
+                            provider_type TEXT
                         )
                         """
                     )
@@ -260,9 +261,11 @@ ON CONFLICT (tenant_id, provider_type) DO UPDATE SET
 """
 
 SQL_INSERT_DOMAIN = """
-INSERT INTO TENANT_DOMAINS (domain, tenant_id)
-VALUES ($1, $2)
-ON CONFLICT(domain) DO UPDATE SET tenant_id = excluded.tenant_id;
+INSERT INTO TENANT_DOMAINS (domain, tenant_id, provider_type)
+VALUES ($1, $2, $3)
+ON CONFLICT(domain) DO UPDATE SET 
+    tenant_id = excluded.tenant_id,
+    provider_type = excluded.provider_type;
 """
 
 SQL_GET_TENANT_BY_DOMAIN = """
@@ -271,7 +274,8 @@ SELECT
     ac.provider_type, 
     ac.client_id, 
     ac.client_secret_encrypted,
-    ac.tenant_hint
+    ac.tenant_hint,
+    td.provider_type as pinned_provider
 FROM TENANT_DOMAINS td
 JOIN TENANTS t ON td.tenant_id = t.tenant_id
 JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
@@ -279,36 +283,66 @@ WHERE td.domain = $1;
 """
 
 SQL_GET_TENANT_BY_ID = """
+WITH 
+domains_agg AS (
+    SELECT tenant_id, 
+           jsonb_agg(
+               jsonb_build_object('domain', domain, 'provider', provider_type)
+               ORDER BY domain
+           ) AS domains
+    FROM TENANT_DOMAINS 
+    GROUP BY tenant_id
+),
+auth_agg AS (
+    SELECT tenant_id, 
+           jsonb_object_agg(provider_type, jsonb_build_object(
+               'client_id', client_id,
+               'has_secret', (client_secret_encrypted IS NOT NULL),
+               'tenant_hint', tenant_hint
+           )) AS auth_methods
+    FROM TENANT_AUTH_CONFIGS 
+    GROUP BY tenant_id
+)
 SELECT 
     t.tenant_id, 
     t.organization_name,
-    COALESCE(array_agg(DISTINCT td.domain) FILTER (WHERE td.domain IS NOT NULL), '{}') as domains,
-    jsonb_object_agg(ac.provider_type, jsonb_build_object(
-        'client_id', ac.client_id,
-        'has_secret', (ac.client_secret_encrypted IS NOT NULL),
-        'tenant_hint', ac.tenant_hint
-    )) FILTER (WHERE ac.provider_type IS NOT NULL) as auth_methods
+    COALESCE(d.domains, '[]'::jsonb) AS domains,
+    a.auth_methods
 FROM TENANTS t
-LEFT JOIN TENANT_DOMAINS td ON t.tenant_id = td.tenant_id
-LEFT JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
-WHERE t.tenant_id = $1
-GROUP BY t.tenant_id, t.organization_name;
+LEFT JOIN domains_agg d ON t.tenant_id = d.tenant_id
+LEFT JOIN auth_agg a ON t.tenant_id = a.tenant_id
+WHERE t.tenant_id = $1;
 """
 
 SQL_GET_ALL_TENANTS = """
+WITH 
+domains_agg AS (
+    SELECT tenant_id, 
+           jsonb_agg(
+               jsonb_build_object('domain', domain, 'provider', provider_type)
+               ORDER BY domain
+           ) AS domains
+    FROM TENANT_DOMAINS 
+    GROUP BY tenant_id
+),
+auth_agg AS (
+    SELECT tenant_id, 
+           jsonb_object_agg(provider_type, jsonb_build_object(
+               'client_id', client_id,
+               'has_secret', (client_secret_encrypted IS NOT NULL),
+               'tenant_hint', tenant_hint
+           )) AS auth_methods
+    FROM TENANT_AUTH_CONFIGS 
+    GROUP BY tenant_id
+)
 SELECT 
     t.tenant_id, 
     t.organization_name,
-    COALESCE(array_agg(DISTINCT td.domain) FILTER (WHERE td.domain IS NOT NULL), '{}') as domains,
-    jsonb_object_agg(ac.provider_type, jsonb_build_object(
-        'client_id', ac.client_id,
-        'has_secret', (ac.client_secret_encrypted IS NOT NULL),
-        'tenant_hint', ac.tenant_hint
-    )) FILTER (WHERE ac.provider_type IS NOT NULL) as auth_methods
+    COALESCE(d.domains, '[]'::jsonb) AS domains,
+    a.auth_methods
 FROM TENANTS t
-LEFT JOIN TENANT_DOMAINS td ON t.tenant_id = td.tenant_id
-LEFT JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
-GROUP BY t.tenant_id, t.organization_name;
+LEFT JOIN domains_agg d ON t.tenant_id = d.tenant_id
+LEFT JOIN auth_agg a ON t.tenant_id = a.tenant_id;
 """
 
 SQL_DELETE_TENANT_BY_ID = "DELETE FROM TENANTS WHERE tenant_id = $1;"
@@ -324,6 +358,11 @@ SELECT COUNT(*) FROM TENANT_AUTH_CONFIGS
 WHERE tenant_id = $1
 """
 
+SQL_UNPIN_DOMAINS_BY_PROVIDER = """
+UPDATE TENANT_DOMAINS
+SET provider_type = NULL
+WHERE tenant_id = $1 AND provider_type = $2;
+"""
 
 # --- INTEGRATIONS ---
 

@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import asyncpg
 import core.database as database
@@ -15,20 +15,43 @@ from core.database import (
     SQL_INSERT_DOMAIN,
     SQL_INSERT_TENANT_AUTH,
     SQL_INSERT_TENANT_BASE,
+    SQL_UNPIN_DOMAINS_BY_PROVIDER,
 )
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
+
+
+class DomainEntry(BaseModel):
+    """Represents a domain associated with a tenant, optionally pinned to a provider."""
+
+    domain: str
+    provider: Optional[str] = None
 
 
 class TenantBase(BaseModel):
     """Base model with common fields."""
 
-    domains: List[str]
+    domains: List[Union[str, DomainEntry]]
     client_id: str
     organization_name: str
+
+    @field_validator("domains", mode="before")
+    def parse_domains(cls, v):
+        """Normalize input to list of DomainEntry objects."""
+        if not v:
+            return []
+        normalized = []
+        for item in v:
+            if isinstance(item, str):
+                normalized.append(DomainEntry(domain=item))
+            elif isinstance(item, dict):
+                normalized.append(DomainEntry(**item))
+            else:
+                normalized.append(item)
+        return normalized
 
 
 class TenantCreate(TenantBase):
@@ -44,12 +67,26 @@ class TenantCreate(TenantBase):
 class TenantUpdate(BaseModel):
     """Model for updating a tenant. All fields are optional."""
 
-    domains: Optional[List[str]] = None
+    domains: Optional[List[Union[str, DomainEntry]]] = None
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
     organization_name: Optional[str] = None
     tenant_hint: Optional[str] = None
     provider_type: Optional[str] = "microsoft"
+
+    @field_validator("domains", mode="before")
+    def parse_domains(cls, v):
+        if v is None:
+            return None
+        normalized = []
+        for item in v:
+            if isinstance(item, str):
+                normalized.append(DomainEntry(domain=item))
+            elif isinstance(item, dict):
+                normalized.append(DomainEntry(**item))
+            else:
+                normalized.append(item)
+        return normalized
 
 
 class TenantResponse(TenantBase):
@@ -60,6 +97,8 @@ class TenantResponse(TenantBase):
     auth_methods: Optional[Dict[str, Any]] = Field(
         default=None, description="Configuration status for all providers"
     )
+
+    domains: List[DomainEntry]
 
     class Config:
         from_attributes = True
@@ -86,10 +125,21 @@ def map_row_to_response(row, provider="microsoft") -> TenantResponse:
     if not config:
         config = {"client_id": "", "has_secret": False}
 
+    raw_domains = row["domains"]
+    if isinstance(raw_domains, str):
+        raw_domains = json.loads(raw_domains)
+
+    domain_objs = []
+    if raw_domains:
+        for d in raw_domains:
+            domain_objs.append(
+                DomainEntry(domain=d["domain"], provider=d.get("provider"))
+            )
+
     return TenantResponse(
         tenant_id=row["tenant_id"],
         organization_name=row["organization_name"] or "",
-        domains=row["domains"] or [],
+        domains=domain_objs,
         client_id=config.get("client_id", ""),
         has_secret=config.get("has_secret", False),
         auth_methods=auth_methods,
@@ -149,9 +199,12 @@ def create_tenant_router() -> APIRouter:
                         )
 
                         if tenant.domains:
-                            for domain in tenant.domains:
+                            for d_entry in tenant.domains:
                                 await conn.execute(
-                                    SQL_INSERT_DOMAIN, domain, tenant.tenant_id
+                                    SQL_INSERT_DOMAIN,
+                                    d_entry.domain,
+                                    tenant.tenant_id,
+                                    d_entry.provider,
                                 )
 
                         row = await conn.fetchrow(
@@ -309,8 +362,13 @@ def create_tenant_router() -> APIRouter:
                             await conn.execute(
                                 SQL_DELETE_DOMAINS_BY_TENANT_ID, tenant_id
                             )
-                            for domain in new_domains:
-                                await conn.execute(SQL_INSERT_DOMAIN, domain, tenant_id)
+                            for d_entry in new_domains:
+                                await conn.execute(
+                                    SQL_INSERT_DOMAIN,
+                                    d_entry["domain"],
+                                    tenant_id,
+                                    d_entry.get("provider"),
+                                )
 
                         row = await conn.fetchrow(SQL_GET_TENANT_BY_ID, tenant_id)
 
@@ -384,6 +442,10 @@ def create_tenant_router() -> APIRouter:
                 async with conn.transaction():
                     await conn.execute(
                         SQL_DELETE_TENANT_AUTH_CONFIG, tenant_id, provider_type
+                    )
+
+                    await conn.execute(
+                        SQL_UNPIN_DOMAINS_BY_PROVIDER, tenant_id, provider_type
                     )
 
                     count = await conn.fetchval(

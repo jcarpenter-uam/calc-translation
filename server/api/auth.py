@@ -75,7 +75,6 @@ def create_auth_router() -> APIRouter:
             - If >1 providers found -> Returns list for user selection.
         """
         with log_step(LOG_STEP):
-            # 1. If provider is explicitly chosen, dispatch immediately
             if request.provider == "microsoft":
                 return await entra.handle_login(
                     entra.EntraLoginRequest(
@@ -91,7 +90,6 @@ def create_auth_router() -> APIRouter:
                     response,
                 )
 
-            # 2. No provider specified: Lookup domain configuration
             try:
                 domain = request.email.split("@")[1]
             except IndexError:
@@ -110,7 +108,24 @@ def create_auth_router() -> APIRouter:
                     detail="Your organization is not configured for access.",
                 )
 
-            available_providers = list(set(row["provider_type"] for row in rows))
+            pinned_provider = rows[0].get("pinned_provider")
+
+            configured_providers = list(set(row["provider_type"] for row in rows))
+
+            if pinned_provider:
+                logger.info(f"Domain {domain} is pinned to provider: {pinned_provider}")
+                if pinned_provider in configured_providers:
+                    available_providers = [pinned_provider]
+                else:
+                    logger.error(
+                        f"Domain {domain} is pinned to {pinned_provider}, but that provider is not configured."
+                    )
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Configuration Error: Domain is pinned to {pinned_provider} but credentials are missing.",
+                    )
+            else:
+                available_providers = configured_providers
 
             if len(available_providers) == 1:
                 provider = available_providers[0]

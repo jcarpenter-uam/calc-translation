@@ -21,9 +21,15 @@ from integrations.zoom import (
 )
 from pydantic import BaseModel
 
-from integrations import entra
+from integrations import entra, google
 
 logger = logging.getLogger(__name__)
+
+
+class LoginRequest(BaseModel):
+    email: str
+    language: str = "en"
+    provider: Optional[str] = None
 
 
 class UserResponse(BaseModel):
@@ -60,14 +66,85 @@ def create_auth_router() -> APIRouter:
     LOG_STEP = "API-AUTH"
 
     @router.post("/login")
-    async def entra_login(request: entra.EntraLoginRequest, response: Response):
+    async def login_unified(request: LoginRequest, response: Response):
         """
-        Handles the first step of Entra ID login.
-        Expects an email and returns a redirect to Microsoft.
+        Unified login endpoint.
+        - If 'provider' is specified, it attempts login with that provider.
+        - If 'provider' is NOT specified, it looks up the domain.
+            - If 1 provider found -> Auto-redirects.
+            - If >1 providers found -> Returns list for user selection.
         """
         with log_step(LOG_STEP):
-            logger.debug(f"Handling Entra login request for email: {request.email}")
-            return await entra.handle_login(request, response)
+            if request.provider == "microsoft":
+                return await entra.handle_login(
+                    entra.EntraLoginRequest(
+                        email=request.email, language=request.language
+                    ),
+                    response,
+                )
+            elif request.provider == "google":
+                return await google.handle_login(
+                    google.GoogleLoginRequest(
+                        email=request.email, language=request.language
+                    ),
+                    response,
+                )
+
+            try:
+                domain = request.email.split("@")[1]
+            except IndexError:
+                raise HTTPException(status_code=400, detail="Invalid email format.")
+
+            if not database.DB_POOL:
+                raise HTTPException(status_code=503, detail="Database not initialized.")
+
+            async with database.DB_POOL.acquire() as conn:
+                rows = await conn.fetch(database.SQL_GET_TENANT_BY_DOMAIN, domain)
+
+            if not rows:
+                logger.warning(f"Login attempt for unconfigured domain: {domain}")
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your organization is not configured for access.",
+                )
+
+            pinned_provider = rows[0].get("pinned_provider")
+
+            configured_providers = list(set(row["provider_type"] for row in rows))
+
+            if pinned_provider:
+                logger.info(f"Domain {domain} is pinned to provider: {pinned_provider}")
+                if pinned_provider in configured_providers:
+                    available_providers = [pinned_provider]
+                else:
+                    logger.error(
+                        f"Domain {domain} is pinned to {pinned_provider}, but that provider is not configured."
+                    )
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Configuration Error: Domain is pinned to {pinned_provider} but credentials are missing.",
+                    )
+            else:
+                available_providers = configured_providers
+
+            if len(available_providers) == 1:
+                provider = available_providers[0]
+                if provider == "microsoft":
+                    return await entra.handle_login(
+                        entra.EntraLoginRequest(
+                            email=request.email, language=request.language
+                        ),
+                        response,
+                    )
+                elif provider == "google":
+                    return await google.handle_login(
+                        google.GoogleLoginRequest(
+                            email=request.email, language=request.language
+                        ),
+                        response,
+                    )
+            else:
+                return {"action": "select_provider", "providers": available_providers}
 
     @router.get("/entra/callback")
     async def entra_callback(request: Request):
@@ -78,6 +155,13 @@ def create_auth_router() -> APIRouter:
         with log_step(LOG_STEP):
             logger.debug("Handling Entra OAuth callback.")
             return await entra.handle_callback(request)
+
+    @router.get("/google/callback")
+    async def google_callback(request: Request):
+        """Handles Google OAuth2 callback"""
+        with log_step(LOG_STEP):
+            logger.debug("Handling Google OAuth callback.")
+            return await google.handle_callback(request)
 
     @router.post("/logout")
     async def entra_logout(

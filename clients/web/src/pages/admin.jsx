@@ -27,6 +27,7 @@ export default function AdminPage() {
     createTenant,
     updateTenant,
     deleteTenant,
+    refetch: refetchTenants,
   } = useTenants();
 
   const {
@@ -63,11 +64,13 @@ export default function AdminPage() {
             onDeleteUser={deleteUser}
           />
           <hr className="border-zinc-200 dark:border-zinc-700" />
+          {/* Updated: Pass onRefresh */}
           <TenantManagement
             tenants={tenants}
             onCreateTenant={createTenant}
             onUpdateTenant={updateTenant}
             onDeleteTenant={deleteTenant}
+            onRefresh={refetchTenants}
           />
           <hr className="border-zinc-200 dark:border-zinc-700" />
           <MetricsViewing
@@ -82,7 +85,7 @@ export default function AdminPage() {
             logs={logs}
             loading={logsLoading}
             error={logsError}
-            onRefresh={fetchLogs}
+            refetch={fetchLogs}
           />
         </div>
       )}

@@ -65,7 +65,8 @@ const languages = [
 ];
 
 export default function Language() {
-  const { languageCode, setLanguageCode } = useLanguageCode();
+  const { setLanguageCode, targetLanguage, setTargetLanguage } =
+    useLanguageCode();
 
   return (
     <div className="relative">
@@ -74,8 +75,12 @@ export default function Language() {
       </label>
       <select
         id="language-select"
-        value={languageCode}
-        onChange={(e) => setLanguageCode(e.target.value)}
+        value={targetLanguage}
+        onChange={(e) => {
+          const newLang = e.target.value;
+          setLanguageCode(newLang);
+          setTargetLanguage(newLang);
+        }}
         className="
           appearance-none
           bg-zinc-50 dark:bg-zinc-800 

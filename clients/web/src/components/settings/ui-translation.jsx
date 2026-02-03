@@ -2,15 +2,16 @@ import React from "react";
 import { useLanguageCode } from "../../hooks/use-language-code";
 
 export default function UiLanguageToggle() {
-  const { languageCode, uiLanguage, setUiLanguage } = useLanguageCode();
+  const { targetLanguage, uiLanguage, setUiLanguage } = useLanguageCode();
 
-  const isUiTranslated = uiLanguage === languageCode && languageCode !== "en";
+  const isUiTranslated =
+    uiLanguage === targetLanguage && targetLanguage !== "en";
 
   const toggleUiLanguage = () => {
     if (isUiTranslated) {
       setUiLanguage("en");
     } else {
-      setUiLanguage(languageCode);
+      setUiLanguage(targetLanguage);
     }
   };
 

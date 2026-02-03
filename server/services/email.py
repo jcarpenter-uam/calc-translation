@@ -204,7 +204,11 @@ class EmailService:
 
                                 <div style="text-align: center; margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
                                     <a href="{self.website_url}" target="_blank">
-                                        <img src="{self.logo_url}" alt="Calc-Translation Logo" style="max-width: 150px; max-height: 150px; width: auto; height: auto; display: inline-block;">
+                                        <img src="{self.logo_url}" 
+                                         alt="Calc-Translation Logo" 
+                                         width="150" 
+                                         height="150" 
+                                         style="width: 150px; height: 150px; display: inline-block; border: 0; -ms-interpolation-mode: bicubic;">
                                     </a>
                                 </div>
 

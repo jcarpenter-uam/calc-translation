@@ -33,7 +33,7 @@ export default function SessionPage() {
 
   const [isAuthorized, setIsAuthorized] = useState(!!token);
   const [showUnauthorized, setShowUnauthorized] = useState(false);
-  const { language } = useLanguage();
+  const { uiLanguage, targetLanguage } = useLanguage();
   const { t } = useTranslation();
 
   const hostAudioProps = useHostAudio(
@@ -47,21 +47,21 @@ export default function SessionPage() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthorized) {
-      setShowUnauthorized(true);
+    if (showUnauthorized || !isAuthorized) {
       const timer = setTimeout(() => {
-        navigate("/");
+        navigate("/", { replace: true });
       }, 5000);
 
       return () => clearTimeout(timer);
     }
-  }, [isAuthorized, navigate]);
+  }, [isAuthorized, showUnauthorized, navigate]);
 
   const encodedSessionId = isAuthorized ? encodeURIComponent(sessionId) : null;
 
-  const wsUrl = isAuthorized
-    ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${language}`
-    : null;
+  const wsUrl =
+    isAuthorized && !showUnauthorized
+      ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${targetLanguage}`
+      : null;
 
   const { transcripts, isDownloadable, isBackfilling, sessionStatus } =
     useTranscriptStream(wsUrl, sessionId, handleAuthFailure);

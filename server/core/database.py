@@ -30,11 +30,11 @@ async def init_db():
             async with DB_POOL.acquire() as conn:
                 async with conn.transaction():
 
-                    # Users & Tenants
+                    # Users
                     await conn.execute(
                         """
                         CREATE TABLE IF NOT EXISTS USERS (
-                            id TEXT PRIMARY KEY, -- EntraID User ID
+                            id TEXT PRIMARY KEY,
                             name TEXT,
                             email TEXT,
                             language_code TEXT,
@@ -42,21 +42,29 @@ async def init_db():
                         )
                         """
                     )
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS TENANTS (
-                            tenant_id TEXT PRIMARY KEY,
-                            client_id TEXT NOT NULL,
-                            client_secret_encrypted TEXT NOT NULL,
-                            organization_name TEXT
-                        )
-                        """
-                    )
+
+                    # Tenant Domains
                     await conn.execute(
                         """
                         CREATE TABLE IF NOT EXISTS TENANT_DOMAINS (
                             domain TEXT PRIMARY KEY,
-                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE
+                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE,
+                            provider_type TEXT
+                        )
+                        """
+                    )
+
+                    # Tenant Auth Configs
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS TENANT_AUTH_CONFIGS (
+                            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE,
+                            provider_type TEXT NOT NULL, -- 'microsoft' or 'google'
+                            client_id TEXT NOT NULL,
+                            client_secret_encrypted TEXT NOT NULL,
+                            tenant_hint TEXT, -- Stores Entra Tenant ID or Google Customer ID
+                            UNIQUE(tenant_id, provider_type)
                         )
                         """
                     )
@@ -191,62 +199,124 @@ SQL_GET_USER_ID_BY_EMAIL = "SELECT id FROM USERS WHERE email = $1"
 
 # --- TENANTS ---
 
-SQL_GET_TENANT_AUTH_BY_ID = """
-SELECT tenant_id, client_id, client_secret_encrypted
-FROM TENANTS
-WHERE tenant_id = $1;
+SQL_INSERT_TENANT_BASE = """
+INSERT INTO TENANTS (tenant_id, organization_name)
+VALUES ($1, $2)
+ON CONFLICT (tenant_id) DO UPDATE SET organization_name = EXCLUDED.organization_name;
 """
 
-SQL_INSERT_TENANT = """
-INSERT INTO TENANTS (tenant_id, client_id, client_secret_encrypted, organization_name)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT(tenant_id) DO UPDATE SET
-    client_id = excluded.client_id,
-    client_secret_encrypted = excluded.client_secret_encrypted,
-    organization_name = excluded.organization_name;
+SQL_INSERT_TENANT_AUTH = """
+INSERT INTO TENANT_AUTH_CONFIGS (tenant_id, provider_type, client_id, client_secret_encrypted, tenant_hint)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (tenant_id, provider_type) DO UPDATE SET
+    client_id = EXCLUDED.client_id,
+    client_secret_encrypted = EXCLUDED.client_secret_encrypted,
+    tenant_hint = EXCLUDED.tenant_hint;
 """
 
 SQL_INSERT_DOMAIN = """
-INSERT INTO TENANT_DOMAINS (domain, tenant_id)
-VALUES ($1, $2)
-ON CONFLICT(domain) DO UPDATE SET tenant_id = excluded.tenant_id;
+INSERT INTO TENANT_DOMAINS (domain, tenant_id, provider_type)
+VALUES ($1, $2, $3)
+ON CONFLICT(domain) DO UPDATE SET 
+    tenant_id = excluded.tenant_id,
+    provider_type = excluded.provider_type;
 """
 
 SQL_GET_TENANT_BY_DOMAIN = """
-SELECT t.tenant_id, t.client_id, t.client_secret_encrypted
-FROM TENANTS t
-JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
-WHERE d.domain = $1;
+SELECT 
+    t.tenant_id, 
+    ac.provider_type, 
+    ac.client_id, 
+    ac.client_secret_encrypted,
+    ac.tenant_hint,
+    td.provider_type as pinned_provider
+FROM TENANT_DOMAINS td
+JOIN TENANTS t ON td.tenant_id = t.tenant_id
+JOIN TENANT_AUTH_CONFIGS ac ON t.tenant_id = ac.tenant_id
+WHERE td.domain = $1;
 """
 
 SQL_GET_TENANT_BY_ID = """
+WITH 
+domains_agg AS (
+    SELECT tenant_id, 
+           jsonb_agg(
+               jsonb_build_object('domain', domain, 'provider', provider_type)
+               ORDER BY domain
+           ) AS domains
+    FROM TENANT_DOMAINS 
+    GROUP BY tenant_id
+),
+auth_agg AS (
+    SELECT tenant_id, 
+           jsonb_object_agg(provider_type, jsonb_build_object(
+               'client_id', client_id,
+               'has_secret', (client_secret_encrypted IS NOT NULL),
+               'tenant_hint', tenant_hint
+           )) AS auth_methods
+    FROM TENANT_AUTH_CONFIGS 
+    GROUP BY tenant_id
+)
 SELECT 
     t.tenant_id, 
-    t.client_id, 
-    t.organization_name, 
-    (t.client_secret_encrypted IS NOT NULL AND t.client_secret_encrypted != '') as has_secret,
-    COALESCE(array_agg(d.domain) FILTER (WHERE d.domain IS NOT NULL), '{}') as domains
+    t.organization_name,
+    COALESCE(d.domains, '[]'::jsonb) AS domains,
+    a.auth_methods
 FROM TENANTS t
-LEFT JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
-WHERE t.tenant_id = $1
-GROUP BY t.tenant_id;
+LEFT JOIN domains_agg d ON t.tenant_id = d.tenant_id
+LEFT JOIN auth_agg a ON t.tenant_id = a.tenant_id
+WHERE t.tenant_id = $1;
 """
 
 SQL_GET_ALL_TENANTS = """
+WITH 
+domains_agg AS (
+    SELECT tenant_id, 
+           jsonb_agg(
+               jsonb_build_object('domain', domain, 'provider', provider_type)
+               ORDER BY domain
+           ) AS domains
+    FROM TENANT_DOMAINS 
+    GROUP BY tenant_id
+),
+auth_agg AS (
+    SELECT tenant_id, 
+           jsonb_object_agg(provider_type, jsonb_build_object(
+               'client_id', client_id,
+               'has_secret', (client_secret_encrypted IS NOT NULL),
+               'tenant_hint', tenant_hint
+           )) AS auth_methods
+    FROM TENANT_AUTH_CONFIGS 
+    GROUP BY tenant_id
+)
 SELECT 
     t.tenant_id, 
-    t.client_id, 
-    t.organization_name, 
-    (t.client_secret_encrypted IS NOT NULL AND t.client_secret_encrypted != '') as has_secret,
-    COALESCE(array_agg(d.domain) FILTER (WHERE d.domain IS NOT NULL), '{}') as domains
+    t.organization_name,
+    COALESCE(d.domains, '[]'::jsonb) AS domains,
+    a.auth_methods
 FROM TENANTS t
-LEFT JOIN TENANT_DOMAINS d ON t.tenant_id = d.tenant_id
-GROUP BY t.tenant_id;
+LEFT JOIN domains_agg d ON t.tenant_id = d.tenant_id
+LEFT JOIN auth_agg a ON t.tenant_id = a.tenant_id;
 """
 
 SQL_DELETE_TENANT_BY_ID = "DELETE FROM TENANTS WHERE tenant_id = $1;"
 SQL_DELETE_DOMAINS_BY_TENANT_ID = "DELETE FROM TENANT_DOMAINS WHERE tenant_id = $1;"
 
+SQL_DELETE_TENANT_AUTH_CONFIG = """
+DELETE FROM TENANT_AUTH_CONFIGS 
+WHERE tenant_id = $1 AND provider_type = $2
+"""
+
+SQL_COUNT_TENANT_AUTH_CONFIGS = """
+SELECT COUNT(*) FROM TENANT_AUTH_CONFIGS 
+WHERE tenant_id = $1
+"""
+
+SQL_UNPIN_DOMAINS_BY_PROVIDER = """
+UPDATE TENANT_DOMAINS
+SET provider_type = NULL
+WHERE tenant_id = $1 AND provider_type = $2;
+"""
 
 # --- INTEGRATIONS ---
 

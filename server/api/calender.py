@@ -14,6 +14,7 @@ from core.database import (
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException
 from integrations.entra import get_valid_microsoft_token
+from integrations.google import get_valid_google_token
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -41,170 +42,285 @@ def create_calender_router() -> APIRouter:
     )
     LOG_STEP = "API-CALENDER"
 
+    async def _fetch_microsoft_events(user_id: str, start_str: str, end_str: str):
+        access_token = await get_valid_microsoft_token(user_id)
+        if not access_token:
+            return None
+
+        url = (
+            f"https://graph.microsoft.com/v1.0/me/calendarView"
+            f"?startDateTime={start_str}"
+            f"&endDateTime={end_str}"
+            f"&$top=50"
+            f"&$orderby=start/dateTime"
+        )
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url, headers={"Authorization": f"Bearer {access_token}"}
+            )
+
+        if response.status_code != 200:
+            logger.error(f"Microsoft Graph API Error: {response.text}")
+            return None
+
+        data = response.json()
+        return data.get("value", [])
+
+    async def _fetch_google_events(user_id: str, start_dt: datetime, end_dt: datetime):
+        access_token = await get_valid_google_token(user_id)
+        if not access_token:
+            return None
+
+        time_min = start_dt.isoformat().replace("+00:00", "Z")
+        time_max = end_dt.isoformat().replace("+00:00", "Z")
+
+        url = (
+            f"https://www.googleapis.com/calendar/v3/calendars/primary/events"
+            f"?timeMin={time_min}"
+            f"&timeMax={time_max}"
+            f"&singleEvents=true"
+            f"&orderBy=startTime"
+        )
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url, headers={"Authorization": f"Bearer {access_token}"}
+            )
+
+        if response.status_code != 200:
+            logger.error(f"Google Calendar API Error: {response.text}")
+            return None
+
+        data = response.json()
+        return data.get("items", [])
+
+    def _parse_microsoft_event(event):
+        event_id = event.get("id")
+        subject = event.get("subject")
+        is_cancelled = event.get("isCancelled", False)
+
+        start_raw = (event.get("start") or {}).get("dateTime")
+        end_raw = (event.get("end") or {}).get("dateTime")
+
+        start_time = (
+            datetime.fromisoformat(start_raw).replace(tzinfo=timezone.utc)
+            if start_raw
+            else None
+        )
+        end_time = (
+            datetime.fromisoformat(end_raw).replace(tzinfo=timezone.utc)
+            if end_raw
+            else None
+        )
+
+        location_obj = event.get("location") or {}
+        location = location_obj.get("displayName")
+        if not location:
+            locs = event.get("locations", [])
+            if locs:
+                location = locs[0].get("displayName")
+
+        web_link = event.get("webLink")
+        organizer = event.get("organizer", {}).get("emailAddress", {}).get("name")
+        body_content = (event.get("body") or {}).get("content")
+
+        join_url = None
+        if location and "zoom.us" in location:
+            join_url = location
+
+        return {
+            "id": event_id,
+            "subject": subject,
+            "body": body_content,
+            "start": start_time,
+            "end": end_time,
+            "location": location,
+            "join_url": join_url,
+            "web_link": web_link,
+            "organizer": organizer,
+            "is_cancelled": is_cancelled,
+            "raw": event,
+        }
+
+    def _parse_google_event(event):
+        try:
+            event_id = event.get("id")
+            subject = event.get("summary")
+            status = event.get("status")
+            is_cancelled = status == "cancelled"
+
+            start_raw = event.get("start", {}).get("dateTime")
+            end_raw = event.get("end", {}).get("dateTime")
+
+            start_time = None
+            if start_raw:
+                try:
+                    dt = datetime.fromisoformat(start_raw)
+                    start_time = dt.astimezone(timezone.utc)
+                except ValueError:
+                    if start_raw.endswith("Z"):
+                        start_raw = start_raw[:-1] + "+00:00"
+                        dt = datetime.fromisoformat(start_raw)
+                        start_time = dt.astimezone(timezone.utc)
+                    else:
+                        start_time = datetime.fromisoformat(start_raw).replace(
+                            tzinfo=timezone.utc
+                        )
+
+            end_time = None
+            if end_raw:
+                try:
+                    dt = datetime.fromisoformat(end_raw)
+                    end_time = dt.astimezone(timezone.utc)
+                except ValueError:
+                    if end_raw.endswith("Z"):
+                        end_raw = end_raw[:-1] + "+00:00"
+                        dt = datetime.fromisoformat(end_raw)
+                        end_time = dt.astimezone(timezone.utc)
+                    else:
+                        end_time = datetime.fromisoformat(end_raw).replace(
+                            tzinfo=timezone.utc
+                        )
+
+            location = event.get("location")
+            web_link = event.get("htmlLink")
+            organizer = event.get("organizer", {}).get("email")
+            body_content = event.get("description")
+
+            join_url = None
+            if location and "zoom.us" in location:
+                join_url = location
+
+            return {
+                "id": event_id,
+                "subject": subject,
+                "body": body_content,
+                "start": start_time,
+                "end": end_time,
+                "location": location,
+                "join_url": join_url,
+                "web_link": web_link,
+                "organizer": organizer,
+                "is_cancelled": is_cancelled,
+                "raw": event,
+            }
+        except Exception as e:
+            logger.error(
+                f"Error parsing google event {event.get('id')}: {e}", exc_info=True
+            )
+            return None
+
     # NOTE: Requires User Auth
     @router.get("/sync", response_model=List[CalendarEvent])
     async def sync_calendar(payload: dict = Depends(get_current_user_payload)):
         """
-        Uses the stored tokens to query the microsoft api to fetch calender information for a given user.
-        Stores the information in a new calenders table
+        Syncs calendar events from either Microsoft or Google depending on user integration.
+        Stores them in the DB and returns the list.
         """
         with log_step(LOG_STEP):
             user_id = payload.get("sub")
             if not user_id:
                 raise HTTPException(status_code=401, detail="Invalid user session.")
 
-            access_token = await get_valid_microsoft_token(user_id)
-            if not access_token:
-                logger.warning(f"Could not retrieve Microsoft token for user {user_id}")
-                raise HTTPException(
-                    status_code=403,
-                    detail="Microsoft account not linked or token expired. Please login again.",
-                )
-
-            today_date = datetime.now(timezone.utc).date()
-
-            start_dt = datetime.combine(today_date, time.min).replace(
-                tzinfo=timezone.utc
-            )
-
-            end_dt = start_dt + timedelta(days=30)
-
-            start_str = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-            end_str = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            url = (
-                f"https://graph.microsoft.com/v1.0/me/calendarView"
-                f"?startDateTime={start_str}"
-                f"&endDateTime={end_str}"
-                f"&$top=50"
-                f"&$orderby=start/dateTime"
-            )
-
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        url, headers={"Authorization": f"Bearer {access_token}"}
-                    )
-
-                if response.status_code != 200:
-                    logger.error(f"Graph API Error: {response.text}")
-                    raise HTTPException(
-                        status_code=502,
-                        detail="Failed to fetch calendar from Microsoft.",
-                    )
-
-                data = response.json()
-                events = data.get("value", [])
-
-            except httpx.RequestError as e:
-                logger.error(f"Network error contacting Graph API: {e}")
-                raise HTTPException(status_code=502, detail="Network error.")
-
-            parsed_events = []
-
             if not database.DB_POOL:
                 raise HTTPException(status_code=503, detail="Database not initialized.")
 
+            platforms = []
+            async with database.DB_POOL.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT platform FROM INTEGRATIONS WHERE user_id=$1", user_id
+                )
+                platforms = [r["platform"] for r in rows]
+
+            today_date = datetime.now(timezone.utc).date()
+            start_dt = datetime.combine(today_date, time.min).replace(
+                tzinfo=timezone.utc
+            )
+            end_dt = start_dt + timedelta(days=30)
+
+            ms_start_str = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            ms_end_str = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            raw_events = []
+            provider_type = "none"
+
+            if "microsoft" in platforms:
+                provider_type = "microsoft"
+                ms_data = await _fetch_microsoft_events(
+                    user_id, ms_start_str, ms_end_str
+                )
+                if ms_data:
+                    raw_events = [_parse_microsoft_event(e) for e in ms_data]
+
+            if "google" in platforms:
+                provider_type = "google"
+                g_data = await _fetch_google_events(user_id, start_dt, end_dt)
+                if g_data:
+                    g_parsed = []
+                    for e in g_data:
+                        p = _parse_google_event(e)
+                        if p:
+                            g_parsed.append(p)
+                    raw_events.extend(g_parsed)
+
+            if not raw_events and provider_type == "none":
+                raise HTTPException(
+                    status_code=403, detail="No calendar integration found."
+                )
+
+            parsed_events = []
+
             async with database.DB_POOL.acquire() as conn:
                 async with conn.transaction():
-                    for event in events:
-                        event_id = event.get("id")
-                        subject = event.get("subject")
-                        is_cancelled = event.get("isCancelled", False)
-
-                        start_data = event.get("start") or {}
-                        end_data = event.get("end") or {}
-
-                        start_raw = start_data.get("dateTime")
-                        end_raw = end_data.get("dateTime")
-
-                        start_time = None
-                        if start_raw:
-                            dt = datetime.fromisoformat(start_raw)
-                            start_time = dt.replace(tzinfo=timezone.utc)
-
-                        end_time = None
-                        if end_raw:
-                            dt = datetime.fromisoformat(end_raw)
-                            end_time = dt.replace(tzinfo=timezone.utc)
-
-                        location_obj = event.get("location") or {}
-                        location = location_obj.get("displayName")
-
-                        if not location:
-                            locations_list = event.get("locations")
-                            if (
-                                locations_list
-                                and isinstance(locations_list, list)
-                                and len(locations_list) > 0
-                            ):
-                                location = locations_list[0].get("displayName")
-
-                        web_link = event.get("webLink")
-                        organizer = (
-                            event.get("organizer", {})
-                            .get("emailAddress", {})
-                            .get("name")
-                        )
-
-                        body_data = event.get("body") or {}
-                        body_content = body_data.get("content")
-
-                        online_meeting = event.get("onlineMeeting") or {}
-                        join_url = online_meeting.get("joinUrl")
-
-                        join_url = None
-
-                        if location and "zoom.us" in location:
-                            join_url = location
-
-                        if not join_url:
+                    for ev in raw_events:
+                        if not ev["join_url"]:
                             logger.debug(
-                                f"Skipping event '{subject}': Location does not contain Zoom link."
+                                f"Skipping event '{ev['subject']}': No Zoom link. (Loc: {ev.get('location')})"
                             )
                             continue
 
-                        if location and (
-                            location.startswith("http://")
-                            or location.startswith("https://")
+                        display_loc = ev["location"]
+                        if display_loc and (
+                            display_loc.startswith("http") or "zoom.us" in display_loc
                         ):
-                            location = "Zoom Meeting"
+                            display_loc = "Zoom Meeting"
 
-                        full_event_json = json.dumps(event)
+                        full_json = json.dumps(ev["raw"])
 
                         await conn.execute(
                             SQL_UPSERT_CALENDAR_EVENT,
-                            event_id,
+                            ev["id"],
                             user_id,
-                            subject,
-                            body_content,
-                            start_time,
-                            end_time,
-                            location,
-                            join_url,
-                            web_link,
-                            organizer,
-                            is_cancelled,
-                            full_event_json,
+                            ev["subject"],
+                            ev["body"],
+                            ev["start"],
+                            ev["end"],
+                            display_loc,
+                            ev["join_url"],
+                            ev["web_link"],
+                            ev["organizer"],
+                            ev["is_cancelled"],
+                            full_json,
                         )
 
                         parsed_events.append(
                             CalendarEvent(
-                                id=event_id,
-                                subject=subject,
-                                body_content=body_content,
-                                start_time=start_time,
-                                end_time=end_time,
-                                location=location,
-                                join_url=join_url,
-                                web_link=web_link,
-                                organizer=organizer,
-                                is_cancelled=is_cancelled,
+                                id=ev["id"],
+                                subject=ev["subject"],
+                                body_content=ev["body"],
+                                start_time=ev["start"],
+                                end_time=ev["end"],
+                                location=display_loc,
+                                join_url=ev["join_url"],
+                                web_link=ev["web_link"],
+                                organizer=ev["organizer"],
+                                is_cancelled=ev["is_cancelled"],
                             )
                         )
 
             logger.info(
-                f"Synced {len(parsed_events)} calendar events for user {user_id}."
+                f"Synced {len(parsed_events)} events via {provider_type} for {user_id}."
             )
             return parsed_events
 
@@ -215,11 +331,6 @@ def create_calender_router() -> APIRouter:
         end: Optional[datetime] = None,
         payload: dict = Depends(get_current_user_payload),
     ):
-        """
-        Get the calendar from our database.
-        Optional 'start' and 'end' query params filter the results.
-        If no params are sent, returns all events.
-        """
         with log_step(LOG_STEP):
             user_id = payload.get("sub")
             if not user_id:

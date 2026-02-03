@@ -69,10 +69,6 @@ async def init_db():
                         """
                     )
 
-                    # --- START TEMPORARY MIGRATION LOGIC ---
-                    await migrate_legacy_entra_data(conn)
-                    # --- END TEMPORARY MIGRATION LOGIC ---
-
                     # Integrations
                     await conn.execute(
                         """
@@ -177,51 +173,6 @@ async def init_db():
                 logger.error(f"Failed to initialize database pool: {e}", exc_info=True)
             DB_POOL = None
             raise
-
-
-# --- START TEMPORARY MIGRATION FUNCTION ---
-async def migrate_legacy_entra_data(conn):
-    legacy_columns_exist = await conn.fetchval(
-        """
-        SELECT EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name='tenants' AND column_name='client_id'
-        )
-    """
-    )
-
-    if legacy_columns_exist:
-        logger.info("Migrating legacy tenant credentials...")
-
-        await conn.execute(
-            """
-            INSERT INTO TENANT_AUTH_CONFIGS (tenant_id, provider_type, client_id, client_secret_encrypted, tenant_hint)
-            SELECT tenant_id, 'microsoft', client_id, client_secret_encrypted, tenant_id
-            FROM TENANTS
-            ON CONFLICT DO NOTHING
-        """
-        )
-
-        await conn.execute("ALTER TABLE TENANTS DROP COLUMN IF EXISTS client_id")
-        await conn.execute(
-            "ALTER TABLE TENANTS DROP COLUMN IF EXISTS client_secret_encrypted"
-        )
-
-    domain_column_exists = await conn.fetchval(
-        """
-        SELECT EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name='tenant_domains' AND column_name='provider_type'
-        )
-    """
-    )
-
-    if not domain_column_exists:
-        logger.info("Migrating TENANT_DOMAINS schema...")
-        await conn.execute("ALTER TABLE TENANT_DOMAINS ADD COLUMN provider_type TEXT")
-
-
-# --- END TEMPORARY MIGRATION FUNCTION ---
 
 
 # ==============================================================================

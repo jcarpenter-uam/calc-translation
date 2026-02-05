@@ -97,7 +97,7 @@ class SonioxService:
             #
             # Select the model to use.
             # See: soniox.com/docs/stt/models
-            "model": "stt-rt-v3",
+            "model": "stt-rt-v4",
             #
             # Enable language identification. Each token will include a "language" field.
             # See: soniox.com/docs/stt/concepts/language-identification

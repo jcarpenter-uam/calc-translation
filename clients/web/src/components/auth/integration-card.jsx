@@ -99,10 +99,6 @@ export function StandaloneForm({ onSubmit }) {
     onSubmit({ joinUrl, mode: "join" });
   };
 
-  const handleHostStart = () => {
-    onSubmit({ mode: "host" });
-  };
-
   return (
     <div className="space-y-6">
       <form onSubmit={handleJoinSubmit} className="space-y-4">
@@ -150,14 +146,6 @@ export function StandaloneForm({ onSubmit }) {
           <BiPlay className="w-6 h-6" />
           {t("start_new_meeting_btn")}
         </Link>
-        {/* <button */}
-        {/*   type="button" */}
-        {/*   onClick={handleHostStart} */}
-        {/*   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600/90 text-white font-semibold rounded-lg hover:bg-green-700/90 transition-colors cursor-pointer" */}
-        {/* > */}
-        {/*   <BiPlay className="w-6 h-6" /> */}
-        {/*   {t("start_new_meeting_btn")} */}
-        {/* </button> */}
       </div>
     </div>
   );

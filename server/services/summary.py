@@ -29,19 +29,38 @@ class SummaryService:
             self.model = settings.OLLAMA_MODEL
 
     def _clean_vtt_content(self, vtt_content: str) -> str:
-        """Removes VTT headers and timestamps to extract pure dialogue."""
         lines = vtt_content.splitlines()
-        cleaned_lines = []
+        formatted_lines = []
+        current_timestamp = None
+        
         for line in lines:
-            if (
-                line.startswith("WEBVTT")
-                or "-->" in line
-                or line.strip().isdigit()
-                or not line.strip()
-            ):
+            line = line.strip()
+            
+            if not line or line == "WEBVTT":
                 continue
-            cleaned_lines.append(line)
-        return "\n".join(cleaned_lines)
+                
+            if "-->" in line:
+                try:
+                    start_time = line.split("-->")[0].strip()
+                    current_timestamp = start_time.split(".")[0]
+                except Exception:
+                    pass
+                continue
+            
+            if line.isdigit():
+                continue
+
+            time_prefix = f"*{current_timestamp}* - " if current_timestamp else ""
+
+            if ": " in line:
+                parts = line.split(": ", 1)
+                speaker = parts[0]
+                text = parts[1]
+                formatted_lines.append(f"{time_prefix}**{speaker}:** {text}")
+            else:
+                formatted_lines.append(f"{time_prefix}{line}")
+                
+        return "\n\n".join(formatted_lines)
 
     async def _generate_single_summary(
         self, source_text: str, target_lang: str, output_dir: str, session_id: str
@@ -54,8 +73,8 @@ class SummaryService:
                 )
 
                 system_prompt = (
-                    "You are a professional meeting secretary. "
                     f"Your task is to analyze the provided English meeting transcript and generate a structured summary corresponding to this language code '{target_lang}'.\n\n"
+                    "Do NOT include timestamps or preamble. Your job is to only provide the summary in the target language."
                 )
 
                 response = await self.client.chat(

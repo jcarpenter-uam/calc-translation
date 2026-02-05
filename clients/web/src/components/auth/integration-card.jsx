@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BiLogoZoom, BiPlay, BiLogIn } from "react-icons/bi";
+import { Link } from "react-router-dom";
 
 // --- Zoom-Specific Form ---
 export function ZoomForm({ onSubmit }) {
@@ -142,14 +143,21 @@ export function StandaloneForm({ onSubmit }) {
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">
           {t("host_mode_description")}
         </p>
-        <button
-          type="button"
-          onClick={handleHostStart}
+        <Link
+          to="/standalone/host"
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600/90 text-white font-semibold rounded-lg hover:bg-green-700/90 transition-colors cursor-pointer"
         >
           <BiPlay className="w-6 h-6" />
           {t("start_new_meeting_btn")}
-        </button>
+        </Link>
+        {/* <button */}
+        {/*   type="button" */}
+        {/*   onClick={handleHostStart} */}
+        {/*   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600/90 text-white font-semibold rounded-lg hover:bg-green-700/90 transition-colors cursor-pointer" */}
+        {/* > */}
+        {/*   <BiPlay className="w-6 h-6" /> */}
+        {/*   {t("start_new_meeting_btn")} */}
+        {/* </button> */}
       </div>
     </div>
   );

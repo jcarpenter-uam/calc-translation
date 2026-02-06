@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable, Optional, List
 
 import websockets
 from core.config import settings
@@ -65,6 +65,7 @@ class SonioxService:
         target_language: str = "en",
         session_id: Optional[str] = None,
         enable_speaker_diarization: bool = False,
+        language_hints: Optional[List[str]] = None,
     ):
         self.api_key = settings.SONIOX_API_KEY
 
@@ -75,6 +76,7 @@ class SonioxService:
         self.target_language = target_language
         self.session_id = session_id
         self.enable_speaker_diarization = enable_speaker_diarization
+        self.language_hints = language_hints if language_hints is not None else []
         self.current_speaker: Optional[str] = "Unknown"
         self.ws = None
         self.receive_task = None
@@ -125,8 +127,7 @@ class SonioxService:
             #
             # Set language hints when possible to significantly improve accuracy.
             # See: soniox.com/docs/stt/concepts/language-hints
-            # NOTE: I will need a way to add to this list during a meeting
-            "language_hints": ["en", "zh"],
+            "language_hints": self.language_hints,
         }
 
     async def _receive_loop(self):
@@ -349,7 +350,7 @@ class SonioxService:
             self.receive_task = self.loop.create_task(self._receive_loop())
             with log_step("SONIOX"):
                 logger.debug(
-                    f"Soniox service connected (Target: {self.target_language})."
+                    f"Soniox service connected (Target: {self.target_language}) | Hints: {self.language_hints}"
                 )
         except Exception as e:
             self._is_connected = False

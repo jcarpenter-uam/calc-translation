@@ -20,6 +20,7 @@ export default function StandalonePage() {
         body: JSON.stringify({
           host: data.mode === "host",
           join_url: data.joinUrl,
+          language_hints: data.languageHints,
         }),
       });
 

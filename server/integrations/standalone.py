@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from urllib.parse import urlparse
 
 from core import database
@@ -21,6 +21,7 @@ class StandaloneAuthRequest(BaseModel):
 
     join_url: Optional[str] = None
     host: bool = False
+    language_hints: Optional[List[str]] = None
 
 
 class StandaloneAuthResponse(BaseModel):
@@ -72,7 +73,7 @@ async def authenticate_standalone_session(
             raise HTTPException(status_code=404, detail="Meeting not found.")
 
 
-async def create_standalone_session(user_id: str) -> tuple[str, str]:
+async def create_standalone_session(user_id: str, language_hints: Optional[List[str]] = None) -> tuple[str, str]:
     """
     Creates a new standalone meeting record in the DB.
     Uses the host's existing 'microsoft' integration to link the meeting.
@@ -119,6 +120,7 @@ async def create_standalone_session(user_id: str) -> tuple[str, str]:
                 now,
                 join_url,
                 None,
+                language_hints,
             )
 
             logger.info(

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   BiCaptions,
   BiMicrophone,
@@ -8,16 +8,70 @@ import {
   BiHeadphone,
   BiLogoZoom,
   BiPlay,
+  BiX,
+  BiSearch,
+  BiCheck,
 } from "react-icons/bi";
+import { languages } from "./supported-langs";
 
 export default function TranslationModes({ onSubmit }) {
+  const [selectedLangs, setSelectedLangs] = useState([]);
+  const [search, setSearch] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleOneWayStart = () => {
-    onSubmit({ mode: "host" });
+    const hints = selectedLangs.map((l) => l.code);
+    onSubmit({ mode: "host", languageHints: hints });
   };
 
-  // const handleTwoWayStart = () => {
-  //   onSubmit({ mode: "host" });
-  // };
+  const toggleLanguage = (lang) => {
+    const isSelected = selectedLangs.some((l) => l.code === lang.code);
+
+    if (isSelected) {
+      setSelectedLangs(selectedLangs.filter((l) => l.code !== lang.code));
+    } else {
+      if (selectedLangs.length >= 5) return;
+      setSelectedLangs([...selectedLangs, lang]);
+    }
+
+    setSearch("");
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  };
+
+  const filteredLanguages = languages.filter((lang) =>
+    lang.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const handleInputKeyDown = (e) => {
+    if (e.key === "Enter" && filteredLanguages.length > 0) {
+      e.preventDefault();
+      toggleLanguage(filteredLanguages[0]);
+    } else if (
+      e.key === "Backspace" &&
+      search === "" &&
+      selectedLangs.length > 0
+    ) {
+      // Optional: Delete last pill on backspace if input is empty
+      const newLangs = [...selectedLangs];
+      newLangs.pop();
+      setSelectedLangs(newLangs);
+    }
+  };
 
   return (
     <section className="w-full py-10 px-6 flex justify-center">
@@ -28,7 +82,125 @@ export default function TranslationModes({ onSubmit }) {
             <OneWay />
           </div>
 
-          <div className="mt-8">
+          <div className="mt-8 space-y-4">
+            {/* === Language Selector === */}
+            <div className="relative" ref={dropdownRef}>
+              <div className="flex justify-between items-end mb-2">
+                <label className="block text-zinc-400 text-sm font-medium">
+                  Spoken Languages (Hints)
+                </label>
+                <span
+                  className={`text-xs ${selectedLangs.length >= 5 ? "text-orange-400" : "text-zinc-600"}`}
+                >
+                  {selectedLangs.length}/5 selected
+                </span>
+              </div>
+
+              {/* Selected Pills Container */}
+              <div
+                className="w-full min-h-[50px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-wrap gap-2 items-center cursor-pointer transition-all focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500"
+                onClick={() => {
+                  setIsOpen(true);
+                  inputRef.current?.focus();
+                }}
+              >
+                {selectedLangs.map((lang) => (
+                  <span
+                    key={lang.code}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-sm animate-in zoom-in-95 duration-200"
+                  >
+                    <img
+                      src={
+                        lang.flag.startsWith("http")
+                          ? lang.flag
+                          : `https://flagcdn.com/${lang.flag}.svg`
+                      }
+                      alt=""
+                      className="w-4 h-4 rounded-full object-cover"
+                    />
+                    {lang.name}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleLanguage(lang);
+                      }}
+                      className="hover:text-white transition-colors"
+                    >
+                      <BiX className="w-4 h-4" />
+                    </button>
+                  </span>
+                ))}
+
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setIsOpen(true);
+                  }}
+                  onKeyDown={handleInputKeyDown}
+                  onFocus={() => setIsOpen(true)}
+                  placeholder={
+                    selectedLangs.length === 0 ? "Select languages..." : ""
+                  }
+                  className="bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-500 flex-grow min-w-[20px] py-1 cursor-pointer"
+                />
+              </div>
+
+              {/* Dropdown Menu */}
+              {isOpen && (
+                <div className="absolute z-50 w-full mt-2 bg-[#1e1e24] border border-zinc-700 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-none">
+                  {filteredLanguages.length > 0 ? (
+                    filteredLanguages.map((lang) => {
+                      const isSelected = selectedLangs.some(
+                        (l) => l.code === lang.code,
+                      );
+                      const isDisabled =
+                        !isSelected && selectedLangs.length >= 5;
+
+                      return (
+                        <button
+                          key={lang.code}
+                          disabled={isDisabled}
+                          onClick={() => toggleLanguage(lang)}
+                          className={`w-full text-left px-4 py-3 flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? "bg-blue-500/10 text-blue-400 cursor-pointer"
+                              : isDisabled
+                                ? "opacity-50 cursor-not-allowed text-zinc-500"
+                                : "text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={
+                                lang.flag.startsWith("http")
+                                  ? lang.flag
+                                  : `https://flagcdn.com/${lang.flag}.svg`
+                              }
+                              alt=""
+                              className={`w-5 h-5 rounded-full object-cover ${isDisabled ? "grayscale opacity-50" : ""}`}
+                            />
+                            <span>{lang.name}</span>
+                          </div>
+                          {isSelected && <BiCheck className="w-5 h-5" />}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-4 py-3 text-zinc-500 text-center text-sm">
+                      No languages found
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <p className="text-xs text-zinc-500 mt-2">
+                Select up to 5 spoken languages to improve accuracy.
+              </p>
+            </div>
+
             <button
               type="button"
               onClick={handleOneWayStart}

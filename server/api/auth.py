@@ -442,7 +442,7 @@ def create_auth_router() -> APIRouter:
 
             try:
                 if request.host:
-                    session_id, join_url = await create_standalone_session(user_id)
+                    session_id, join_url = await create_standalone_session(user_id, language_hints=request.language_hints)
                     logger.info(
                         f"Created new standalone session {session_id} (JoinURL: {join_url})"
                     )

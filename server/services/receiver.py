@@ -54,6 +54,7 @@ class StreamHandler:
         session_start_time: datetime,
         initial_utterance_count: int = 0,
         enable_diarization: bool = False,
+        language_hints: Optional[List[str]] = None,
     ):
         self.language_code = language_code
         self.session_id = session_id
@@ -63,6 +64,7 @@ class StreamHandler:
         self.service: Optional[SonioxService] = None
         self.utterance_count = initial_utterance_count
         self.enable_diarization = enable_diarization
+        self.language_hints = language_hints
 
         self.is_new_utterance = True
         self.await_next_utterance = False
@@ -238,6 +240,7 @@ class StreamHandler:
             target_language=self.language_code,
             session_id=self.session_id,
             enable_speaker_diarization=self.enable_diarization,
+            language_hints=self.language_hints,
         )
         self.connect_time = datetime.now()
         await self.service.connect()
@@ -285,6 +288,7 @@ class MeetingSession:
 
         self.cleanup_task: Optional[asyncio.Task] = None
         self.is_closed = False
+        self.language_hints: Optional[List[str]] = None
 
     async def initialize(self):
         """Called only once when the session is first created."""
@@ -305,6 +309,7 @@ class MeetingSession:
                 )
 
                 if current_meeting:
+                    self.language_hints = current_meeting.get("language_hints")
                     readable_id = current_meeting.get("readable_id")
 
                     if readable_id:
@@ -368,6 +373,7 @@ class MeetingSession:
             session_start_time=self.start_time,
             initial_utterance_count=0,
             enable_diarization=should_enable_diarization,
+            language_hints=self.language_hints,
         )
 
         try:

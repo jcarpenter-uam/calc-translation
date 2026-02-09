@@ -341,6 +341,7 @@ async def get_meeting_data(
                             datetime.now(),
                             None,
                             None,
+                            None,
                         )
 
                 logger.info(f"Created fallback meeting record for {real_uuid}")

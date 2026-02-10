@@ -55,6 +55,7 @@ class StreamHandler:
         initial_utterance_count: int = 0,
         enable_diarization: bool = False,
         language_hints: Optional[List[str]] = None,
+        translation_config: Optional[dict] = None,
     ):
         self.language_code = language_code
         self.session_id = session_id
@@ -65,6 +66,7 @@ class StreamHandler:
         self.utterance_count = initial_utterance_count
         self.enable_diarization = enable_diarization
         self.language_hints = language_hints
+        self.translation_config = translation_config
 
         self.is_new_utterance = True
         self.await_next_utterance = False
@@ -241,6 +243,7 @@ class StreamHandler:
             session_id=self.session_id,
             enable_speaker_diarization=self.enable_diarization,
             language_hints=self.language_hints,
+            translation_config=self.translation_config,
         )
         self.connect_time = datetime.now()
         await self.service.connect()
@@ -289,6 +292,9 @@ class MeetingSession:
         self.cleanup_task: Optional[asyncio.Task] = None
         self.is_closed = False
         self.language_hints: Optional[List[str]] = None
+        self.translation_type: str = "one_way"
+        self.translation_language_a: Optional[str] = None
+        self.translation_language_b: Optional[str] = None
 
     async def initialize(self):
         """Called only once when the session is first created."""
@@ -310,6 +316,9 @@ class MeetingSession:
 
                 if current_meeting:
                     self.language_hints = current_meeting.get("language_hints")
+                    self.translation_type = current_meeting.get("translation_type") or "one_way"
+                    self.translation_language_a = current_meeting.get("translation_language_a")
+                    self.translation_language_b = current_meeting.get("translation_language_b")
                     readable_id = current_meeting.get("readable_id")
 
                     if readable_id:
@@ -339,15 +348,35 @@ class MeetingSession:
             self.session_id, self._remove_language_stream_wrapper
         )
 
-        waiting_languages = self.viewer_manager.get_waiting_languages(self.session_id)
-
-        waiting_languages.add("en")
+        if self._is_two_way_session() and self.translation_language_a:
+            waiting_languages = {self.translation_language_a}
+        else:
+            waiting_languages = self.viewer_manager.get_waiting_languages(self.session_id)
+            waiting_languages.add("en")
 
         with log_step("SESSION"):
             logger.info(f"Initializing session with languages: {waiting_languages}")
 
         tasks = [self.add_language_stream(lang) for lang in waiting_languages]
         await asyncio.gather(*tasks)
+
+    def _is_two_way_session(self) -> bool:
+        return (
+            self.integration == "standalone"
+            and self.translation_type == "two_way"
+            and bool(self.translation_language_a)
+            and bool(self.translation_language_b)
+        )
+
+    def _get_translation_config(self) -> Optional[dict]:
+        if not self._is_two_way_session():
+            return None
+
+        return {
+            "type": "two_way",
+            "language_a": self.translation_language_a,
+            "language_b": self.translation_language_b,
+        }
 
     async def _add_language_stream_wrapper(self, language_code: str):
         await self.add_language_stream(language_code)
@@ -357,6 +386,9 @@ class MeetingSession:
 
     async def add_language_stream(self, language_code: str):
         if self.is_closed:
+            return
+
+        if self._is_two_way_session() and language_code != self.translation_language_a:
             return
 
         async with self.handlers_lock:
@@ -374,6 +406,7 @@ class MeetingSession:
             initial_utterance_count=0,
             enable_diarization=should_enable_diarization,
             language_hints=self.language_hints,
+            translation_config=self._get_translation_config(),
         )
 
         try:

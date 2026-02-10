@@ -442,7 +442,25 @@ def create_auth_router() -> APIRouter:
 
             try:
                 if request.host:
-                    session_id, join_url = await create_standalone_session(user_id, language_hints=request.language_hints)
+                    if request.translation_type == "two_way":
+                        if not request.language_a or not request.language_b:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Two-way translation requires both language_a and language_b.",
+                            )
+                        if request.language_a == request.language_b:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Two-way translation languages must be different.",
+                            )
+
+                    session_id, join_url = await create_standalone_session(
+                        user_id,
+                        language_hints=request.language_hints,
+                        translation_type=request.translation_type or "one_way",
+                        language_a=request.language_a,
+                        language_b=request.language_b,
+                    )
                     logger.info(
                         f"Created new standalone session {session_id} (JoinURL: {join_url})"
                     )

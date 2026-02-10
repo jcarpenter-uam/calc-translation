@@ -16,6 +16,8 @@ import { languages } from "./supported-langs";
 
 export default function TranslationModes({ onSubmit }) {
   const [selectedLangs, setSelectedLangs] = useState([]);
+  const [languageA, setLanguageA] = useState("");
+  const [languageB, setLanguageB] = useState("");
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -34,7 +36,25 @@ export default function TranslationModes({ onSubmit }) {
 
   const handleOneWayStart = () => {
     const hints = selectedLangs.map((l) => l.code);
-    onSubmit({ mode: "host", languageHints: hints });
+    onSubmit({
+      mode: "host",
+      languageHints: hints,
+      translationType: "one_way",
+    });
+  };
+
+  const handleTwoWayStart = () => {
+    if (!languageA || !languageB || languageA === languageB) {
+      return;
+    }
+
+    onSubmit({
+      mode: "host",
+      languageHints: [languageA, languageB],
+      translationType: "two_way",
+      languageA,
+      languageB,
+    });
   };
 
   const toggleLanguage = (lang) => {
@@ -238,14 +258,59 @@ export default function TranslationModes({ onSubmit }) {
           {/*     Best for conversations & interviews */}
           {/*   </p> */}
           {/* </div> */}
-          <div className="mt-8">
+          <div className="mt-8 space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-sm text-zinc-400">
+                Language A
+                <select
+                  value={languageA}
+                  onChange={(e) => setLanguageA(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 outline-none focus:border-emerald-500"
+                >
+                  <option value="">Select language</option>
+                  {languages.map((lang) => (
+                    <option key={`a-${lang.code}`} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm text-zinc-400">
+                Language B
+                <select
+                  value={languageB}
+                  onChange={(e) => setLanguageB(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 outline-none focus:border-emerald-500"
+                >
+                  <option value="">Select language</option>
+                  {languages.map((lang) => (
+                    <option key={`b-${lang.code}`} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             <button
               type="button"
-              disabled
-              className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-zinc-800 border border-zinc-700 text-zinc-500 font-bold text-lg rounded-xl cursor-not-allowed opacity-80"
+              onClick={handleTwoWayStart}
+              disabled={!languageA || !languageB || languageA === languageB}
+              className="cursor-pointer group w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              Coming Soon
+              <div className="p-1 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
+                <BiPlay className="w-6 h-6 ml-0.5" />
+              </div>
+              Start Two-Way Meeting
             </button>
+
+            {languageA && languageB && languageA === languageB && (
+              <p className="text-center text-orange-400 text-sm">
+                Please select two different languages.
+              </p>
+            )}
+
             <p className="text-center text-zinc-600 text-sm mt-3">
               Best for conversations & interviews
             </p>

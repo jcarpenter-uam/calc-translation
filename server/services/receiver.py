@@ -195,11 +195,13 @@ class StreamHandler:
 
                 vtt_timestamp = None
                 if payload_type == "partial":
-                    self.timestamp_service.mark_utterance_start(self.current_message_id)
+                    self.timestamp_service.mark_utterance_start(
+                        self.current_message_id, result.start_ms
+                    )
 
                 if payload_type == "final":
                     vtt_timestamp = self.timestamp_service.complete_utterance(
-                        self.current_message_id
+                        self.current_message_id, result.end_ms
                     )
 
                 final_speaker_name = (

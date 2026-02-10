@@ -48,6 +48,8 @@ class SonioxResult:
     source_language: Optional[str] = None
     target_language: Optional[str] = None
     speaker: Optional[str] = None
+    start_ms: Optional[int] = None
+    end_ms: Optional[int] = None
 
 
 class SonioxService:
@@ -91,6 +93,8 @@ class SonioxService:
         self.final_source_language: Optional[str] = None
         self.final_translation_language: Optional[str] = None
         self.final_speaker: Optional[str] = None
+        self.utterance_start_ms: Optional[int] = None
+        self.utterance_end_ms: Optional[int] = None
 
     def _get_config(self) -> dict:
         """
@@ -212,6 +216,26 @@ class SonioxService:
                                 if spk:
                                     non_final_speaker = str(spk)
 
+                        if not is_translation:
+                            token_start_ms = token.get("start_ms")
+                            token_end_ms = token.get("end_ms")
+
+                            if isinstance(token_start_ms, (int, float)):
+                                normalized_start_ms = max(0, int(token_start_ms))
+                                if (
+                                    self.utterance_start_ms is None
+                                    or normalized_start_ms < self.utterance_start_ms
+                                ):
+                                    self.utterance_start_ms = normalized_start_ms
+
+                            if isinstance(token_end_ms, (int, float)):
+                                normalized_end_ms = max(0, int(token_end_ms))
+                                if (
+                                    self.utterance_end_ms is None
+                                    or normalized_end_ms > self.utterance_end_ms
+                                ):
+                                    self.utterance_end_ms = normalized_end_ms
+
                     final_transcription = "".join(self.final_transcription_tokens)
                     non_final_transcription = "".join(non_final_transcription_tokens)
                     full_transcription = (
@@ -244,6 +268,8 @@ class SonioxService:
                             source_language=source_lang_to_send,
                             target_language=target_lang_to_send,
                             speaker=speaker_to_send,
+                            start_ms=self.utterance_start_ms,
+                            end_ms=self.utterance_end_ms,
                         )
                     )
 
@@ -270,6 +296,8 @@ class SonioxService:
                                 source_language=final_source_lang,
                                 target_language=final_target_lang,
                                 speaker=self.final_speaker,
+                                start_ms=self.utterance_start_ms,
+                                end_ms=self.utterance_end_ms,
                             )
                         )
                         self.final_transcription_tokens = []
@@ -277,6 +305,8 @@ class SonioxService:
                         self.final_source_language = None
                         self.final_translation_language = None
                         self.final_speaker = None
+                        self.utterance_start_ms = None
+                        self.utterance_end_ms = None
 
                     if res.get("finished"):
                         with log_step("SONIOX"):
@@ -294,6 +324,8 @@ class SonioxService:
                                 target_language=self.final_translation_language
                                 or self.target_language,
                                 speaker=self.final_speaker,
+                                start_ms=self.utterance_start_ms,
+                                end_ms=self.utterance_end_ms,
                             )
                         )
                         break
@@ -312,6 +344,8 @@ class SonioxService:
                     source_language=self.final_source_language,
                     target_language=self.final_translation_language
                     or self.target_language,
+                    start_ms=self.utterance_start_ms,
+                    end_ms=self.utterance_end_ms,
                 )
             )
             await self.on_close_callback(1000, "Normal closure")

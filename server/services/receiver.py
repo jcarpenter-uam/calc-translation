@@ -298,14 +298,6 @@ class MeetingSession:
 
     async def initialize(self):
         """Called only once when the session is first created."""
-        self.viewer_manager.register_transcription_session(
-            self.session_id,
-            self.integration,
-            shared_two_way_mode=self._is_two_way_session(),
-        )
-        await self.viewer_manager.broadcast_to_session(
-            self.session_id, {"type": "status", "status": "active"}
-        )
         self.session_log_handler = add_session_log_handler(
             self.session_id, self.integration
         )
@@ -342,6 +334,15 @@ class MeetingSession:
 
         except Exception as e:
             logger.error(f"Failed to migrate waiting room sessions: {e}", exc_info=True)
+
+        self.viewer_manager.register_transcription_session(
+            self.session_id,
+            self.integration,
+            shared_two_way_mode=self._is_two_way_session(),
+        )
+        await self.viewer_manager.broadcast_to_session(
+            self.session_id, {"type": "status", "status": "active"}
+        )
 
         self.viewer_manager.register_language_callback(
             self.session_id, self._add_language_stream_wrapper

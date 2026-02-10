@@ -9,21 +9,23 @@ import {
   BiLogoZoom,
   BiPlay,
   BiX,
-  BiSearch,
   BiCheck,
 } from "react-icons/bi";
 import { languages } from "./supported-langs";
 
-export default function TranslationModes({ onSubmit }) {
-  const [selectedLangs, setSelectedLangs] = useState([]);
-  const [languageA, setLanguageA] = useState("");
-  const [languageB, setLanguageB] = useState("");
+function LanguageMultiSelect({
+  selectedLangs,
+  setSelectedLangs,
+  maxSelections,
+  label,
+  accent = "blue",
+  helperText,
+}) {
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -34,36 +36,13 @@ export default function TranslationModes({ onSubmit }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleOneWayStart = () => {
-    const hints = selectedLangs.map((l) => l.code);
-    onSubmit({
-      mode: "host",
-      languageHints: hints,
-      translationType: "one_way",
-    });
-  };
-
-  const handleTwoWayStart = () => {
-    if (!languageA || !languageB || languageA === languageB) {
-      return;
-    }
-
-    onSubmit({
-      mode: "host",
-      languageHints: [languageA, languageB],
-      translationType: "two_way",
-      languageA,
-      languageB,
-    });
-  };
-
   const toggleLanguage = (lang) => {
     const isSelected = selectedLangs.some((l) => l.code === lang.code);
 
     if (isSelected) {
       setSelectedLangs(selectedLangs.filter((l) => l.code !== lang.code));
     } else {
-      if (selectedLangs.length >= 5) return;
+      if (selectedLangs.length >= maxSelections) return;
       setSelectedLangs([...selectedLangs, lang]);
     }
 
@@ -86,11 +65,156 @@ export default function TranslationModes({ onSubmit }) {
       search === "" &&
       selectedLangs.length > 0
     ) {
-      // Optional: Delete last pill on backspace if input is empty
       const newLangs = [...selectedLangs];
       newLangs.pop();
       setSelectedLangs(newLangs);
     }
+  };
+
+  const isBlue = accent === "blue";
+  const pillClass = isBlue
+    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  const focusClass = isBlue
+    ? "focus-within:ring-blue-500/50 focus-within:border-blue-500"
+    : "focus-within:ring-emerald-500/50 focus-within:border-emerald-500";
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div className="flex justify-between items-end mb-2">
+        <label className="block text-zinc-400 text-sm font-medium">{label}</label>
+        <span
+          className={`text-xs ${selectedLangs.length >= maxSelections ? "text-orange-400" : "text-zinc-600"}`}
+        >
+          {selectedLangs.length}/{maxSelections} selected
+        </span>
+      </div>
+
+      <div
+        className={`w-full min-h-[50px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-wrap gap-2 items-center cursor-pointer transition-all focus-within:ring-2 ${focusClass}`}
+        onClick={() => {
+          setIsOpen(true);
+          inputRef.current?.focus();
+        }}
+      >
+        {selectedLangs.map((lang) => (
+          <span
+            key={lang.code}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm animate-in zoom-in-95 duration-200 ${pillClass}`}
+          >
+            <img
+              src={
+                lang.flag.startsWith("http")
+                  ? lang.flag
+                  : `https://flagcdn.com/${lang.flag}.svg`
+              }
+              alt=""
+              className="w-4 h-4 rounded-full object-cover"
+            />
+            {lang.name}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleLanguage(lang);
+              }}
+              className="hover:text-white transition-colors"
+            >
+              <BiX className="w-4 h-4" />
+            </button>
+          </span>
+        ))}
+
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setIsOpen(true);
+          }}
+          onKeyDown={handleInputKeyDown}
+          onFocus={() => setIsOpen(true)}
+          placeholder={selectedLangs.length === 0 ? "Select languages..." : ""}
+          className="bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-500 flex-grow min-w-[20px] py-1 cursor-pointer"
+        />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-2 bg-[#1e1e24] border border-zinc-700 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-none">
+          {filteredLanguages.length > 0 ? (
+            filteredLanguages.map((lang) => {
+              const isSelected = selectedLangs.some((l) => l.code === lang.code);
+              const isDisabled = !isSelected && selectedLangs.length >= maxSelections;
+
+              return (
+                <button
+                  key={lang.code}
+                  disabled={isDisabled}
+                  onClick={() => toggleLanguage(lang)}
+                  className={`w-full text-left px-4 py-3 flex items-center justify-between transition-colors ${
+                    isSelected
+                      ? "bg-blue-500/10 text-blue-400 cursor-pointer"
+                      : isDisabled
+                        ? "opacity-50 cursor-not-allowed text-zinc-500"
+                        : "text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={
+                        lang.flag.startsWith("http")
+                          ? lang.flag
+                          : `https://flagcdn.com/${lang.flag}.svg`
+                      }
+                      alt=""
+                      className={`w-5 h-5 rounded-full object-cover ${isDisabled ? "grayscale opacity-50" : ""}`}
+                    />
+                    <span>{lang.name}</span>
+                  </div>
+                  {isSelected && <BiCheck className="w-5 h-5" />}
+                </button>
+              );
+            })
+          ) : (
+            <div className="px-4 py-3 text-zinc-500 text-center text-sm">
+              No languages found
+            </div>
+          )}
+        </div>
+      )}
+
+      {helperText && <p className="text-xs text-zinc-500 mt-2">{helperText}</p>}
+    </div>
+  );
+}
+
+export default function TranslationModes({ onSubmit }) {
+  const [selectedLangs, setSelectedLangs] = useState([]);
+  const [twoWayLangs, setTwoWayLangs] = useState([]);
+
+  const handleOneWayStart = () => {
+    const hints = selectedLangs.map((l) => l.code);
+    onSubmit({
+      mode: "host",
+      languageHints: hints,
+      translationType: "one_way",
+    });
+  };
+
+  const handleTwoWayStart = () => {
+    if (twoWayLangs.length !== 2) {
+      return;
+    }
+
+    const [langA, langB] = twoWayLangs;
+
+    onSubmit({
+      mode: "host",
+      languageHints: [langA.code, langB.code],
+      translationType: "two_way",
+      languageA: langA.code,
+      languageB: langB.code,
+    });
   };
 
   return (
@@ -103,123 +227,14 @@ export default function TranslationModes({ onSubmit }) {
           </div>
 
           <div className="mt-8 space-y-4">
-            {/* === Language Selector === */}
-            <div className="relative" ref={dropdownRef}>
-              <div className="flex justify-between items-end mb-2">
-                <label className="block text-zinc-400 text-sm font-medium">
-                  Spoken Languages (Hints)
-                </label>
-                <span
-                  className={`text-xs ${selectedLangs.length >= 5 ? "text-orange-400" : "text-zinc-600"}`}
-                >
-                  {selectedLangs.length}/5 selected
-                </span>
-              </div>
-
-              {/* Selected Pills Container */}
-              <div
-                className="w-full min-h-[50px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-wrap gap-2 items-center cursor-pointer transition-all focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500"
-                onClick={() => {
-                  setIsOpen(true);
-                  inputRef.current?.focus();
-                }}
-              >
-                {selectedLangs.map((lang) => (
-                  <span
-                    key={lang.code}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-sm animate-in zoom-in-95 duration-200"
-                  >
-                    <img
-                      src={
-                        lang.flag.startsWith("http")
-                          ? lang.flag
-                          : `https://flagcdn.com/${lang.flag}.svg`
-                      }
-                      alt=""
-                      className="w-4 h-4 rounded-full object-cover"
-                    />
-                    {lang.name}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLanguage(lang);
-                      }}
-                      className="hover:text-white transition-colors"
-                    >
-                      <BiX className="w-4 h-4" />
-                    </button>
-                  </span>
-                ))}
-
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setIsOpen(true);
-                  }}
-                  onKeyDown={handleInputKeyDown}
-                  onFocus={() => setIsOpen(true)}
-                  placeholder={
-                    selectedLangs.length === 0 ? "Select languages..." : ""
-                  }
-                  className="bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-500 flex-grow min-w-[20px] py-1 cursor-pointer"
-                />
-              </div>
-
-              {/* Dropdown Menu */}
-              {isOpen && (
-                <div className="absolute z-50 w-full mt-2 bg-[#1e1e24] border border-zinc-700 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-none">
-                  {filteredLanguages.length > 0 ? (
-                    filteredLanguages.map((lang) => {
-                      const isSelected = selectedLangs.some(
-                        (l) => l.code === lang.code,
-                      );
-                      const isDisabled =
-                        !isSelected && selectedLangs.length >= 5;
-
-                      return (
-                        <button
-                          key={lang.code}
-                          disabled={isDisabled}
-                          onClick={() => toggleLanguage(lang)}
-                          className={`w-full text-left px-4 py-3 flex items-center justify-between transition-colors ${
-                            isSelected
-                              ? "bg-blue-500/10 text-blue-400 cursor-pointer"
-                              : isDisabled
-                                ? "opacity-50 cursor-not-allowed text-zinc-500"
-                                : "text-zinc-300 hover:bg-zinc-800 cursor-pointer"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={
-                                lang.flag.startsWith("http")
-                                  ? lang.flag
-                                  : `https://flagcdn.com/${lang.flag}.svg`
-                              }
-                              alt=""
-                              className={`w-5 h-5 rounded-full object-cover ${isDisabled ? "grayscale opacity-50" : ""}`}
-                            />
-                            <span>{lang.name}</span>
-                          </div>
-                          {isSelected && <BiCheck className="w-5 h-5" />}
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="px-4 py-3 text-zinc-500 text-center text-sm">
-                      No languages found
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <p className="text-xs text-zinc-500 mt-2">
-                Select up to 5 spoken languages to improve accuracy.
-              </p>
-            </div>
+            <LanguageMultiSelect
+              selectedLangs={selectedLangs}
+              setSelectedLangs={setSelectedLangs}
+              maxSelections={5}
+              label="Spoken Languages (Hints)"
+              accent="blue"
+              helperText="Select up to 5 spoken languages to improve accuracy."
+            />
 
             <button
               type="button"
@@ -243,60 +258,20 @@ export default function TranslationModes({ onSubmit }) {
             <TwoWay />
           </div>
 
-          {/* <div className="mt-8"> */}
-          {/*   <button */}
-          {/*     type="button" */}
-          {/*     onClick={handleTwoWayStart} */}
-          {/*     className="cursor-pointer group w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200" */}
-          {/*   > */}
-          {/*     <div className="p-1 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors"> */}
-          {/*       <BiPlay className="w-6 h-6 ml-0.5" /> */}
-          {/*     </div> */}
-          {/*     Start Two-Way Meeting */}
-          {/*   </button> */}
-          {/*   <p className="text-center text-zinc-500 text-sm mt-3"> */}
-          {/*     Best for conversations & interviews */}
-          {/*   </p> */}
-          {/* </div> */}
           <div className="mt-8 space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-sm text-zinc-400">
-                Language A
-                <select
-                  value={languageA}
-                  onChange={(e) => setLanguageA(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 outline-none focus:border-emerald-500"
-                >
-                  <option value="">Select language</option>
-                  {languages.map((lang) => (
-                    <option key={`a-${lang.code}`} value={lang.code}>
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="text-sm text-zinc-400">
-                Language B
-                <select
-                  value={languageB}
-                  onChange={(e) => setLanguageB(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200 outline-none focus:border-emerald-500"
-                >
-                  <option value="">Select language</option>
-                  {languages.map((lang) => (
-                    <option key={`b-${lang.code}`} value={lang.code}>
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <LanguageMultiSelect
+              selectedLangs={twoWayLangs}
+              setSelectedLangs={setTwoWayLangs}
+              maxSelections={2}
+              label="Two-Way Language Pair"
+              accent="emerald"
+              helperText="Select exactly 2 languages for back-and-forth translation."
+            />
 
             <button
               type="button"
               onClick={handleTwoWayStart}
-              disabled={!languageA || !languageB || languageA === languageB}
+              disabled={twoWayLangs.length !== 2}
               className="cursor-pointer group w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <div className="p-1 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
@@ -305,9 +280,9 @@ export default function TranslationModes({ onSubmit }) {
               Start Two-Way Meeting
             </button>
 
-            {languageA && languageB && languageA === languageB && (
+            {twoWayLangs.length !== 2 && (
               <p className="text-center text-orange-400 text-sm">
-                Please select two different languages.
+                Please select exactly two languages.
               </p>
             )}
 

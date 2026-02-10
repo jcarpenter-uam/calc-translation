@@ -590,6 +590,12 @@ class MeetingSession:
 
             started_at = meeting_details.get("started_at") if meeting_details else None
 
+            is_two_way_standalone = bool(
+                meeting_details
+                and meeting_details.get("platform") == "standalone"
+                and meeting_details.get("translation_type") == "two_way"
+            )
+
             email_service = EmailService()
             await email_service.send_session_transcripts(
                 session_id=self.session_id,
@@ -597,6 +603,7 @@ class MeetingSession:
                 attendees=attendees,
                 topic=topic,
                 meeting_start_time=started_at,
+                is_two_way_standalone=is_two_way_standalone,
             )
 
         except Exception as e:

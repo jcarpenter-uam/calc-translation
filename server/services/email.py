@@ -125,6 +125,7 @@ class EmailService:
         attendees: list,
         topic: str = None,
         meeting_start_time: datetime = None,
+        is_two_way_standalone: bool = False,
     ):
         """
         Iterates through attendees and emails them using the Graph API.
@@ -152,11 +153,11 @@ class EmailService:
                 if not email:
                     continue
 
-                transcript_candidates = [
-                    f"transcript_{pref_lang}.vtt",
-                    "transcript_en.vtt",
-                    "transcript_two_way.vtt",
-                ]
+                transcript_candidates = (
+                    ["transcript_two_way.vtt", f"transcript_{pref_lang}.vtt", "transcript_en.vtt"]
+                    if is_two_way_standalone
+                    else [f"transcript_{pref_lang}.vtt", "transcript_en.vtt", "transcript_two_way.vtt"]
+                )
                 vtt_filename = next(
                     (
                         name

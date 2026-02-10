@@ -6,7 +6,11 @@ import urllib.parse
 import ollama
 from core import database
 from core.config import settings
-from core.database import SQL_GET_MEETING_ATTENDEES_DETAILS, SQL_INSERT_SUMMARY
+from core.database import (
+    SQL_GET_MEETING_ATTENDEES_DETAILS,
+    SQL_GET_MEETING_BY_ID,
+    SQL_INSERT_SUMMARY,
+)
 from core.logging_setup import log_step
 
 logger = logging.getLogger(__name__)
@@ -123,6 +127,7 @@ class SummaryService:
                     attendees = await conn.fetch(
                         SQL_GET_MEETING_ATTENDEES_DETAILS, session_id
                     )
+                    meeting_details = await conn.fetchrow(SQL_GET_MEETING_BY_ID, session_id)
 
                 if not attendees:
                     logger.info("No attendees found. Skipping summary generation.")
@@ -137,16 +142,31 @@ class SummaryService:
 
                 safe_session_id = urllib.parse.quote(session_id, safe="")
                 output_dir = os.path.join("output", integration, safe_session_id)
-                source_vtt_path = os.path.join(output_dir, "transcript_en.vtt")
-                if not os.path.exists(source_vtt_path):
-                    two_way_path = os.path.join(output_dir, "transcript_two_way.vtt")
-                    if os.path.exists(two_way_path):
-                        source_vtt_path = two_way_path
-                    else:
-                        logger.warning(
-                            f"No supported source transcript found (checked transcript_en.vtt and transcript_two_way.vtt) in {output_dir}. Cannot generate summaries."
-                        )
-                        return
+                is_two_way_standalone = bool(
+                    meeting_details
+                    and meeting_details.get("platform") == "standalone"
+                    and meeting_details.get("translation_type") == "two_way"
+                )
+
+                transcript_candidates = (
+                    ["transcript_two_way.vtt", "transcript_en.vtt"]
+                    if is_two_way_standalone
+                    else ["transcript_en.vtt", "transcript_two_way.vtt"]
+                )
+                source_vtt_path = next(
+                    (
+                        os.path.join(output_dir, name)
+                        for name in transcript_candidates
+                        if os.path.exists(os.path.join(output_dir, name))
+                    ),
+                    None,
+                )
+
+                if not source_vtt_path:
+                    logger.warning(
+                        f"No supported source transcript found (checked {', '.join(transcript_candidates)}) in {output_dir}. Cannot generate summaries."
+                    )
+                    return
 
                 with open(source_vtt_path, "r", encoding="utf-8") as f:
                     raw_content = f.read()

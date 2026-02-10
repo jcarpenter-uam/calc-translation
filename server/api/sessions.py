@@ -1,6 +1,7 @@
 import logging
 import os
 import urllib.parse
+from datetime import datetime
 
 from core import database
 from core.authentication import get_current_user_payload, validate_client_token
@@ -151,9 +152,33 @@ def create_sessions_router() -> APIRouter:
                     f"User '{cookie_user_id}' downloading transcript. File: {file_path}"
                 )
 
+                meeting_date_for_filename = datetime.now()
+                try:
+                    async with database.DB_POOL.acquire() as conn:
+                        filename_row = await conn.fetchrow(
+                            """
+                            SELECT started_at, meeting_time
+                            FROM MEETINGS
+                            WHERE id = $1
+                            """,
+                            resolved_session_id,
+                        )
+                    if filename_row:
+                        meeting_date_for_filename = (
+                            filename_row.get("started_at")
+                            or filename_row.get("meeting_time")
+                            or meeting_date_for_filename
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to resolve meeting date for download filename: {e}"
+                    )
+
+                date_token = meeting_date_for_filename.strftime("%m-%d-%y")
+
                 return FileResponse(
                     path=file_path,
-                    filename=f"{integration}_{safe_session_id}_{language_code}.vtt",
+                    filename=f"{integration}_{date_token}_{language_code}.vtt",
                     media_type="text/vtt",
                 )
 

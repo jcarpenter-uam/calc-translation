@@ -78,9 +78,21 @@ def create_sessions_router() -> APIRouter:
 
                 async with database.DB_POOL.acquire() as conn:
                     m_row = await conn.fetchrow(
-                        "SELECT readable_id, platform FROM MEETINGS WHERE id = $1",
+                        """
+                        SELECT readable_id, platform, translation_type
+                        FROM MEETINGS
+                        WHERE id = $1
+                        """,
                         session_id,
                     )
+
+                    is_shared_two_way_mode = bool(
+                        m_row
+                        and m_row.get("platform") == "standalone"
+                        and m_row.get("translation_type") == "two_way"
+                    )
+                    if is_shared_two_way_mode:
+                        language_code = "two_way"
 
                     if m_row and m_row["readable_id"]:
                         readable_id = m_row["readable_id"]

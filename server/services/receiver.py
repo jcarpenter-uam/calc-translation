@@ -299,7 +299,9 @@ class MeetingSession:
     async def initialize(self):
         """Called only once when the session is first created."""
         self.viewer_manager.register_transcription_session(
-            self.session_id, self.integration
+            self.session_id,
+            self.integration,
+            shared_two_way_mode=self._is_two_way_session(),
         )
         await self.viewer_manager.broadcast_to_session(
             self.session_id, {"type": "status", "status": "active"}

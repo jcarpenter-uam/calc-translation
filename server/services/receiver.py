@@ -341,7 +341,12 @@ class MeetingSession:
             shared_two_way_mode=self._is_two_way_session(),
         )
         await self.viewer_manager.broadcast_to_session(
-            self.session_id, {"type": "status", "status": "active"}
+            self.session_id,
+            {
+                "type": "status",
+                "status": "active",
+                "shared_two_way_mode": self._is_two_way_session(),
+            },
         )
 
         self.viewer_manager.register_language_callback(

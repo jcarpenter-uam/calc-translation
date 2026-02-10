@@ -63,8 +63,13 @@ export default function SessionPage() {
       ? `/ws/view/${integration}/${encodedSessionId}?token=${token}&language=${targetLanguage}`
       : null;
 
-  const { transcripts, isDownloadable, isBackfilling, sessionStatus } =
-    useTranscriptStream(wsUrl, sessionId, handleAuthFailure);
+  const {
+    transcripts,
+    isDownloadable,
+    isBackfilling,
+    sessionStatus,
+    isSharedTwoWayMode,
+  } = useTranscriptStream(wsUrl, sessionId, handleAuthFailure);
 
   const lastTopTextRef = React.useRef(null);
   const scrollDependencies = useMemo(() => {
@@ -106,6 +111,7 @@ export default function SessionPage() {
                   ? lastTopTextRef
                   : null
               }
+              forceBothLanguages={isSharedTwoWayMode}
             />
           ))}
         {isDownloadable && (

@@ -11,6 +11,7 @@ import {
   BiX,
   BiCheck,
 } from "react-icons/bi";
+import { useTranslation } from "react-i18next";
 import { languages } from "./supported-langs";
 
 function LanguageMultiSelect({
@@ -20,6 +21,9 @@ function LanguageMultiSelect({
   label,
   accent = "blue",
   helperText,
+  placeholderText,
+  noLanguagesText,
+  selectedCountText,
 }) {
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -78,6 +82,9 @@ function LanguageMultiSelect({
   const focusClass = isBlue
     ? "focus-within:ring-blue-500/50 focus-within:border-blue-500"
     : "focus-within:ring-emerald-500/50 focus-within:border-emerald-500";
+  const selectedColorClass = isBlue
+    ? "bg-blue-500/10 text-blue-400 cursor-pointer"
+    : "bg-emerald-500/10 text-emerald-400 cursor-pointer";
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -86,7 +93,7 @@ function LanguageMultiSelect({
         <span
           className={`text-xs ${selectedLangs.length >= maxSelections ? "text-orange-400" : "text-zinc-600"}`}
         >
-          {selectedLangs.length}/{maxSelections} selected
+          {selectedCountText}
         </span>
       </div>
 
@@ -134,7 +141,7 @@ function LanguageMultiSelect({
           }}
           onKeyDown={handleInputKeyDown}
           onFocus={() => setIsOpen(true)}
-          placeholder={selectedLangs.length === 0 ? "Select languages..." : ""}
+          placeholder={selectedLangs.length === 0 ? placeholderText : ""}
           className="bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-500 flex-grow min-w-[20px] py-1 cursor-pointer"
         />
       </div>
@@ -153,7 +160,7 @@ function LanguageMultiSelect({
                   onClick={() => toggleLanguage(lang)}
                   className={`w-full text-left px-4 py-3 flex items-center justify-between transition-colors ${
                     isSelected
-                      ? "bg-blue-500/10 text-blue-400 cursor-pointer"
+                      ? selectedColorClass
                       : isDisabled
                         ? "opacity-50 cursor-not-allowed text-zinc-500"
                         : "text-zinc-300 hover:bg-zinc-800 cursor-pointer"
@@ -177,7 +184,7 @@ function LanguageMultiSelect({
             })
           ) : (
             <div className="px-4 py-3 text-zinc-500 text-center text-sm">
-              No languages found
+              {noLanguagesText}
             </div>
           )}
         </div>
@@ -189,6 +196,7 @@ function LanguageMultiSelect({
 }
 
 export default function TranslationModes({ onSubmit }) {
+  const { t } = useTranslation();
   const [selectedLangs, setSelectedLangs] = useState([]);
   const [twoWayLangs, setTwoWayLangs] = useState([]);
 
@@ -231,9 +239,15 @@ export default function TranslationModes({ onSubmit }) {
               selectedLangs={selectedLangs}
               setSelectedLangs={setSelectedLangs}
               maxSelections={5}
-              label="Spoken Languages (Hints)"
+              label={t("standalone_one_way_spoken_languages")}
               accent="blue"
-              helperText="Select up to 5 spoken languages to improve accuracy."
+              helperText={t("standalone_one_way_spoken_languages_helper")}
+              placeholderText={t("standalone_language_picker_placeholder")}
+              noLanguagesText={t("standalone_language_picker_no_results")}
+              selectedCountText={t("standalone_language_picker_selected_count", {
+                count: selectedLangs.length,
+                max: 5,
+              })}
             />
 
             <button
@@ -244,10 +258,10 @@ export default function TranslationModes({ onSubmit }) {
               <div className="p-1 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
                 <BiPlay className="w-6 h-6 ml-0.5" />
               </div>
-              Start One-Way Meeting
+              {t("standalone_one_way_start")}
             </button>
             <p className="text-center text-zinc-500 text-sm mt-3">
-              Best for presentations & speeches
+              {t("standalone_one_way_footer")}
             </p>
           </div>
         </div>
@@ -263,9 +277,15 @@ export default function TranslationModes({ onSubmit }) {
               selectedLangs={twoWayLangs}
               setSelectedLangs={setTwoWayLangs}
               maxSelections={2}
-              label="Two-Way Language Pair"
+              label={t("standalone_two_way_language_pair")}
               accent="emerald"
-              helperText="Select exactly 2 languages for back-and-forth translation."
+              helperText={t("standalone_two_way_language_pair_helper")}
+              placeholderText={t("standalone_language_picker_placeholder")}
+              noLanguagesText={t("standalone_language_picker_no_results")}
+              selectedCountText={t("standalone_language_picker_selected_count", {
+                count: twoWayLangs.length,
+                max: 2,
+              })}
             />
 
             <button
@@ -277,17 +297,17 @@ export default function TranslationModes({ onSubmit }) {
               <div className="p-1 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
                 <BiPlay className="w-6 h-6 ml-0.5" />
               </div>
-              Start Two-Way Meeting
+              {t("standalone_two_way_start")}
             </button>
 
             {twoWayLangs.length !== 2 && (
               <p className="text-center text-orange-400 text-sm">
-                Please select exactly two languages.
+                {t("standalone_two_way_select_exactly_two")}
               </p>
             )}
 
             <p className="text-center text-zinc-600 text-sm mt-3">
-              Best for conversations & interviews
+              {t("standalone_two_way_footer")}
             </p>
           </div>
         </div>
@@ -320,18 +340,18 @@ function FeatureItem({ icon, title, desc, color = "blue" }) {
 }
 
 function OneWay() {
+  const { t } = useTranslation();
   return (
     <div className="space-y-10 h-full flex flex-col">
       <div>
         <h2 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-6">
-          One-Way Translation
+          {t("standalone_one_way_title")}
         </h2>
         <p className="text-zinc-400 text-lg leading-relaxed">
-          Everyone speaks their mind; you hear what matters. Our system
-          automatically translates all incoming audio into
+          {t("standalone_one_way_description_prefix")}
           <span className="text-white font-semibold">
             {" "}
-            each viewers preferred language
+            {t("standalone_one_way_description_highlight")}
           </span>
           .
         </p>
@@ -341,26 +361,26 @@ function OneWay() {
         <FeatureItem
           color="blue"
           icon={<BiCaptions className="w-6 h-6" />}
-          title="Read in your language"
-          desc="Regardless of what language is spoken, you receive the text in your native tongue."
+          title={t("standalone_one_way_feature_read_title")}
+          desc={t("standalone_one_way_feature_read_desc")}
         />
         <FeatureItem
           color="blue"
           icon={<BiMicrophone className="w-6 h-6" />}
-          title="Speak freely"
-          desc="Talk in the language you are most comfortable with. We handle the rest."
+          title={t("standalone_one_way_feature_speak_title")}
+          desc={t("standalone_one_way_feature_speak_desc")}
         />
         <FeatureItem
           color="blue"
           icon={<BiUser className="w-6 h-6" />}
-          title="Easy for users"
-          desc="Anyone within the meeting can freely change their preferred language without affecting anyone else."
+          title={t("standalone_one_way_feature_easy_title")}
+          desc={t("standalone_one_way_feature_easy_desc")}
         />
         <FeatureItem
           color="blue"
           icon={<BiLogoZoom className="w-6 h-6" />}
-          title="Used for Zoom"
-          desc="This is how our Zoom integration works"
+          title={t("standalone_one_way_feature_zoom_title")}
+          desc={t("standalone_one_way_feature_zoom_desc")}
         />
       </div>
     </div>
@@ -368,17 +388,19 @@ function OneWay() {
 }
 
 function TwoWay() {
+  const { t } = useTranslation();
   return (
     <div className="space-y-10 h-full flex flex-col">
       <div>
         <h2 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-6">
-          Two-Way Translation
+          {t("standalone_two_way_title")}
         </h2>
         <p className="text-zinc-400 text-lg leading-relaxed">
-          Seamlessly bridge the gap between two people. The host selects{" "}
-          <span className="text-white font-semibold">two active languages</span>
-          , allowing fluid, back-and-forth dialogue without pauses. Displaying
-          everything said in both languages.
+          {t("standalone_two_way_description_prefix")} {" "}
+          <span className="text-white font-semibold">
+            {t("standalone_two_way_description_highlight")}
+          </span>
+          , {t("standalone_two_way_description_suffix")}
         </p>
       </div>
 
@@ -386,20 +408,20 @@ function TwoWay() {
         <FeatureItem
           color="emerald"
           icon={<BiSelectMultiple className="w-6 h-6" />}
-          title="Host Controlled"
-          desc="The host selects the exact language pair (e.g., English & Spanish) for the session."
+          title={t("standalone_two_way_feature_host_title")}
+          desc={t("standalone_two_way_feature_host_desc")}
         />
         <FeatureItem
           color="emerald"
           icon={<BiConversation className="w-6 h-6" />}
-          title="Fluid Dialogue"
-          desc="No toggling required. Both parties simply speak, and the system handles the routing instantly."
+          title={t("standalone_two_way_feature_dialogue_title")}
+          desc={t("standalone_two_way_feature_dialogue_desc")}
         />
         <FeatureItem
           color="emerald"
           icon={<BiHeadphone className="w-6 h-6" />}
-          title="Exclusive Channel"
-          desc="Unlike One-Way mode, this is restricted to the two selected languages for maximum accuracy."
+          title={t("standalone_two_way_feature_channel_title")}
+          desc={t("standalone_two_way_feature_channel_desc")}
         />
       </div>
     </div>

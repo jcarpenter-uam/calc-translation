@@ -73,7 +73,7 @@ class SummaryService:
                 )
 
                 system_prompt = (
-                    f"Your task is to analyze the provided English meeting transcript and generate a structured summary corresponding to this language code '{target_lang}'.\n\n"
+                    f"Your task is to analyze the provided meeting transcript and generate a structured summary corresponding to this language code '{target_lang}'.\n\n"
                     "Do NOT include timestamps or preamble. Your job is to only provide the summary in the target language."
                 )
 
@@ -138,12 +138,15 @@ class SummaryService:
                 safe_session_id = urllib.parse.quote(session_id, safe="")
                 output_dir = os.path.join("output", integration, safe_session_id)
                 source_vtt_path = os.path.join(output_dir, "transcript_en.vtt")
-
                 if not os.path.exists(source_vtt_path):
-                    logger.warning(
-                        f"English transcript missing at {source_vtt_path}. Cannot generate summaries."
-                    )
-                    return
+                    two_way_path = os.path.join(output_dir, "transcript_two_way.vtt")
+                    if os.path.exists(two_way_path):
+                        source_vtt_path = two_way_path
+                    else:
+                        logger.warning(
+                            f"No supported source transcript found (checked transcript_en.vtt and transcript_two_way.vtt) in {output_dir}. Cannot generate summaries."
+                        )
+                        return
 
                 with open(source_vtt_path, "r", encoding="utf-8") as f:
                     raw_content = f.read()

@@ -15,6 +15,7 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
   const [isDownloadable, setIsDownloadable] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [sessionStatus, setSessionStatus] = useState("connecting");
+  const [isSharedTwoWayMode, setIsSharedTwoWayMode] = useState(false);
   const [isStopped, setIsStopped] = useState(false);
 
   const ws = useRef(null);
@@ -84,6 +85,9 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
 
           if (data.type === "status") {
             setSessionStatus(data.status);
+            if (typeof data.shared_two_way_mode === "boolean") {
+              setIsSharedTwoWayMode(data.shared_two_way_mode);
+            }
             return;
           }
 
@@ -166,5 +170,11 @@ export function useTranscriptStream(wsUrl, sessionId, onUnauthorized) {
     };
   }, [wsUrl, sessionId, onUnauthorized, isStopped]);
 
-  return { transcripts, isDownloadable, isBackfilling, sessionStatus };
+  return {
+    transcripts,
+    isDownloadable,
+    isBackfilling,
+    sessionStatus,
+    isSharedTwoWayMode,
+  };
 }

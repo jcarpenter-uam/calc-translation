@@ -103,9 +103,21 @@ async def init_db():
                             started_at TIMESTAMPTZ,
                             ended_at TIMESTAMPTZ,
                             attendees TEXT[] DEFAULT '{}',
-                            language_hints TEXT[] DEFAULT '{}'
+                            language_hints TEXT[] DEFAULT '{}',
+                            translation_type TEXT DEFAULT 'one_way',
+                            translation_language_a TEXT,
+                            translation_language_b TEXT
                         )
                         """
+                    )
+                    await conn.execute(
+                        "ALTER TABLE MEETINGS ADD COLUMN IF NOT EXISTS translation_type TEXT DEFAULT 'one_way'"
+                    )
+                    await conn.execute(
+                        "ALTER TABLE MEETINGS ADD COLUMN IF NOT EXISTS translation_language_a TEXT"
+                    )
+                    await conn.execute(
+                        "ALTER TABLE MEETINGS ADD COLUMN IF NOT EXISTS translation_language_b TEXT"
                     )
                     await conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_meetings_readable ON MEETINGS(platform, readable_id);"

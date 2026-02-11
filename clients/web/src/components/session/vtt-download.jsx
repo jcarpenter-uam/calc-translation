@@ -32,7 +32,17 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.setAttribute("download", `meeting_transcript_${targetLanguage}.vtt`);
+
+      const disposition = response.headers.get("content-disposition") || "";
+      const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      const serverFilename = filenameMatch
+        ? decodeURIComponent(filenameMatch[1] || filenameMatch[2])
+        : null;
+
+      link.setAttribute(
+        "download",
+        serverFilename || `meeting_transcript_${targetLanguage}.vtt`,
+      );
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

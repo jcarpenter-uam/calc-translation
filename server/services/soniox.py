@@ -48,6 +48,8 @@ class SonioxResult:
     source_language: Optional[str] = None
     target_language: Optional[str] = None
     speaker: Optional[str] = None
+    start_ms: Optional[int] = None
+    end_ms: Optional[int] = None
 
 
 class SonioxService:
@@ -66,6 +68,7 @@ class SonioxService:
         session_id: Optional[str] = None,
         enable_speaker_diarization: bool = False,
         language_hints: Optional[List[str]] = None,
+        translation_config: Optional[dict] = None,
     ):
         self.api_key = settings.SONIOX_API_KEY
 
@@ -77,6 +80,7 @@ class SonioxService:
         self.session_id = session_id
         self.enable_speaker_diarization = enable_speaker_diarization
         self.language_hints = language_hints if language_hints is not None else []
+        self.translation_config = translation_config
         self.current_speaker: Optional[str] = "Unknown"
         self.ws = None
         self.receive_task = None
@@ -89,12 +93,14 @@ class SonioxService:
         self.final_source_language: Optional[str] = None
         self.final_translation_language: Optional[str] = None
         self.final_speaker: Optional[str] = None
+        self.utterance_start_ms: Optional[int] = None
+        self.utterance_end_ms: Optional[int] = None
 
     def _get_config(self) -> dict:
         """
         Generates the configuration for the Soniox websocket connection.
         """
-        return {
+        config = {
             "api_key": self.api_key,
             #
             # Select the model to use.
@@ -118,17 +124,22 @@ class SonioxService:
             "audio_format": "pcm_s16le",
             "sample_rate": 16000,
             "num_channels": 1,
-            # Translation options.
-            # See: soniox.com/docs/stt/rt/real-time-translation#translation-modes
-            "translation": {
-                "type": "one_way",
-                "target_language": self.target_language,
-            },
-            #
             # Set language hints when possible to significantly improve accuracy.
             # See: soniox.com/docs/stt/concepts/language-hints
             "language_hints": self.language_hints,
         }
+
+        # Translation options.
+        # See: soniox.com/docs/stt/rt/real-time-translation#translation-modes
+        if self.translation_config:
+            config["translation"] = self.translation_config
+        else:
+            config["translation"] = {
+                "type": "one_way",
+                "target_language": self.target_language,
+            }
+
+        return config
 
     async def _receive_loop(self):
         """
@@ -205,6 +216,26 @@ class SonioxService:
                                 if spk:
                                     non_final_speaker = str(spk)
 
+                        if not is_translation:
+                            token_start_ms = token.get("start_ms")
+                            token_end_ms = token.get("end_ms")
+
+                            if isinstance(token_start_ms, (int, float)):
+                                normalized_start_ms = max(0, int(token_start_ms))
+                                if (
+                                    self.utterance_start_ms is None
+                                    or normalized_start_ms < self.utterance_start_ms
+                                ):
+                                    self.utterance_start_ms = normalized_start_ms
+
+                            if isinstance(token_end_ms, (int, float)):
+                                normalized_end_ms = max(0, int(token_end_ms))
+                                if (
+                                    self.utterance_end_ms is None
+                                    or normalized_end_ms > self.utterance_end_ms
+                                ):
+                                    self.utterance_end_ms = normalized_end_ms
+
                     final_transcription = "".join(self.final_transcription_tokens)
                     non_final_transcription = "".join(non_final_transcription_tokens)
                     full_transcription = (
@@ -237,6 +268,8 @@ class SonioxService:
                             source_language=source_lang_to_send,
                             target_language=target_lang_to_send,
                             speaker=speaker_to_send,
+                            start_ms=self.utterance_start_ms,
+                            end_ms=self.utterance_end_ms,
                         )
                     )
 
@@ -263,6 +296,8 @@ class SonioxService:
                                 source_language=final_source_lang,
                                 target_language=final_target_lang,
                                 speaker=self.final_speaker,
+                                start_ms=self.utterance_start_ms,
+                                end_ms=self.utterance_end_ms,
                             )
                         )
                         self.final_transcription_tokens = []
@@ -270,6 +305,8 @@ class SonioxService:
                         self.final_source_language = None
                         self.final_translation_language = None
                         self.final_speaker = None
+                        self.utterance_start_ms = None
+                        self.utterance_end_ms = None
 
                     if res.get("finished"):
                         with log_step("SONIOX"):
@@ -287,6 +324,8 @@ class SonioxService:
                                 target_language=self.final_translation_language
                                 or self.target_language,
                                 speaker=self.final_speaker,
+                                start_ms=self.utterance_start_ms,
+                                end_ms=self.utterance_end_ms,
                             )
                         )
                         break
@@ -305,6 +344,8 @@ class SonioxService:
                     source_language=self.final_source_language,
                     target_language=self.final_translation_language
                     or self.target_language,
+                    start_ms=self.utterance_start_ms,
+                    end_ms=self.utterance_end_ms,
                 )
             )
             await self.on_close_callback(1000, "Normal closure")
@@ -350,7 +391,7 @@ class SonioxService:
             self.receive_task = self.loop.create_task(self._receive_loop())
             with log_step("SONIOX"):
                 logger.debug(
-                    f"Soniox service connected (Target: {self.target_language}) | Hints: {self.language_hints}"
+                    f"Soniox service connected (Translation: {config.get('translation')}) | Hints: {self.language_hints}"
                 )
         except Exception as e:
             self._is_connected = False

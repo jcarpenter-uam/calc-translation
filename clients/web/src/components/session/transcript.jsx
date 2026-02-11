@@ -8,8 +8,12 @@ export default function Transcript({
   speaker,
   translation,
   transcription,
+  source_language,
+  target_language,
+  preferredLanguage,
   isFinalized = false,
   topTextRef,
+  forceBothLanguages = false,
 }) {
   const { displayMode } = useDisplayMode();
   const textOpacity = isFinalized ? "opacity-100" : "opacity-60";
@@ -18,6 +22,41 @@ export default function Transcript({
   const secondaryTextClass = `m-0 leading-relaxed text-sm text-zinc-500 dark:text-zinc-400 ${textOpacity}`;
 
   const renderContent = () => {
+    if (forceBothLanguages) {
+      const hasBothVersions =
+        translation && transcription && translation !== transcription;
+      const canPrioritizePreferredLanguage =
+        preferredLanguage &&
+        (preferredLanguage === source_language ||
+          preferredLanguage === target_language);
+      const shouldShowSourceLanguageOnTop =
+        canPrioritizePreferredLanguage && preferredLanguage === source_language;
+
+      if (hasBothVersions) {
+        const topText = shouldShowSourceLanguageOnTop
+          ? transcription
+          : translation;
+        const bottomText = shouldShowSourceLanguageOnTop
+          ? translation
+          : transcription;
+
+        return (
+          <>
+            <p ref={topTextRef} className={primaryTextClass}>
+              {topText}
+            </p>
+            <p className={secondaryTextClass}>{bottomText}</p>
+          </>
+        );
+      }
+
+      return (
+        <p ref={topTextRef} className={primaryTextClass}>
+          {translation || transcription}
+        </p>
+      );
+    }
+
     if (displayMode === "transcript") {
       return (
         <p ref={topTextRef} className={primaryTextClass}>

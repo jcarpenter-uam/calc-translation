@@ -23,6 +23,7 @@ async def handle_viewer_session(
     Also handles "early join" logic where we verify the meeting via Zoom API if not in DB.
     """
     resolved_session_id = session_id
+    shared_two_way_mode = False
     session_token = session_id_var.set(session_id)
 
     try:
@@ -32,10 +33,16 @@ async def handle_viewer_session(
                     f"Session '{session_id}' not currently active. Checking DB for meeting record..."
                 )
                 meeting_exists = False
+                readable_id = None
+                platform = None
                 async with database.DB_POOL.acquire() as conn:
                     row = await conn.fetchrow(SQL_GET_MEETING_BY_ID, session_id)
                     if row:
                         meeting_exists = True
+                        shared_two_way_mode = bool(
+                            row.get("platform") == "standalone"
+                            and row.get("translation_type") == "two_way"
+                        )
 
                         # TODO: START OF JANK SOLUTION
                         # It needs to be improved when im not on a deadline
@@ -91,6 +98,18 @@ async def handle_viewer_session(
                 websocket, resolved_session_id, language_code, user_id
             )
 
+            if viewer_manager.is_session_active(resolved_session_id) and not shared_two_way_mode:
+                async with database.DB_POOL.acquire() as conn:
+                    active_row = await conn.fetchrow(
+                        "SELECT platform, translation_type FROM MEETINGS WHERE id = $1",
+                        resolved_session_id,
+                    )
+                    if active_row:
+                        shared_two_way_mode = bool(
+                            active_row.get("platform") == "standalone"
+                            and active_row.get("translation_type") == "two_way"
+                        )
+
             status_msg = (
                 "active"
                 if viewer_manager.is_session_active(resolved_session_id)
@@ -101,7 +120,13 @@ async def handle_viewer_session(
                 f"Viewer connected to session '{resolved_session_id}' (Status: {status_msg}) with language '{language_code}'."
             )
 
-            await websocket.send_json({"type": "status", "status": status_msg})
+            await websocket.send_json(
+                {
+                    "type": "status",
+                    "status": status_msg,
+                    "shared_two_way_mode": shared_two_way_mode,
+                }
+            )
 
             while True:
                 await websocket.receive_text()

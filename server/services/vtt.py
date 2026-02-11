@@ -2,7 +2,7 @@ import logging
 import os
 import urllib.parse
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core import database
 from core.database import SQL_INSERT_TRANSCRIPT
@@ -19,6 +19,7 @@ class TimestampService:
         """
         self._session_start_time: datetime = start_time or datetime.now()
         self._utterance_start_times: Dict[str, datetime] = {}
+        self._utterance_start_offsets_ms: Dict[str, int] = {}
         with log_step("TIMESTAMP"):
             logger.debug(
                 f"TimestampService initialized. Session zero point set to {self._session_start_time}."
@@ -41,11 +42,14 @@ class TimestampService:
             f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}.{milliseconds:03d}"
         )
 
-    def mark_utterance_start(self, message_id: str):
+    def mark_utterance_start(self, message_id: str, start_ms: int | None = None):
         """
         Records the start time of a new utterance, associated with its message_id.
         This should be called on the first partial result for a new utterance.
         """
+        if isinstance(start_ms, int) and start_ms >= 0:
+            self._utterance_start_offsets_ms.setdefault(message_id, start_ms)
+
         if message_id not in self._utterance_start_times:
             self._utterance_start_times[message_id] = datetime.now()
 
@@ -56,7 +60,7 @@ class TimestampService:
             finally:
                 message_id_var.reset(token)
 
-    def complete_utterance(self, message_id: str) -> str:
+    def complete_utterance(self, message_id: str, end_ms: int | None = None) -> str:
         """
         Records the end time of an utterance and calculates the full
         VTT timestamp string (start --> end) relative to the session start.
@@ -65,20 +69,30 @@ class TimestampService:
         token = message_id_var.set(message_id)
         try:
             with log_step("TIMESTAMP"):
-                utterance_end_time = datetime.now()
-                utterance_start_time = self._utterance_start_times.pop(message_id, None)
+                start_offset_ms = self._utterance_start_offsets_ms.pop(message_id, None)
 
-                if not utterance_start_time:
-                    utterance_start_time = utterance_end_time
-                    logger.warning(
-                        f"Warning: Completed utterance '{message_id}' without a recorded start time. Using end time as start."
-                    )
+                if start_offset_ms is not None:
+                    normalized_end_ms = start_offset_ms
+                    if isinstance(end_ms, int) and end_ms >= 0:
+                        normalized_end_ms = max(start_offset_ms, end_ms)
 
-                start_delta = utterance_start_time - self._session_start_time
-                end_delta = utterance_end_time - self._session_start_time
+                    start_delta = timedelta(milliseconds=start_offset_ms)
+                    end_delta = timedelta(milliseconds=normalized_end_ms)
+                else:
+                    utterance_end_time = datetime.now()
+                    utterance_start_time = self._utterance_start_times.pop(message_id, None)
 
-                if end_delta < start_delta:
-                    end_delta = start_delta
+                    if not utterance_start_time:
+                        utterance_start_time = utterance_end_time
+                        logger.warning(
+                            f"Warning: Completed utterance '{message_id}' without a recorded start time. Using end time as start."
+                        )
+
+                    start_delta = utterance_start_time - self._session_start_time
+                    end_delta = utterance_end_time - self._session_start_time
+
+                    if end_delta < start_delta:
+                        end_delta = start_delta
 
                 start_str = self._format_timedelta(start_delta)
                 end_str = self._format_timedelta(end_delta)

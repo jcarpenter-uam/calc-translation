@@ -54,6 +54,15 @@ class ConnectionManager:
         """Checks if a transcription session is currently active."""
         return session_id in self.active_transcription_sessions
 
+    def _is_shared_two_way_mode(self, session_id: str) -> bool:
+        session_data = self.active_transcription_sessions.get(session_id, {})
+        return bool(session_data.get("shared_two_way_mode"))
+
+    def _get_effective_language(self, session_id: str, language_code: str) -> str:
+        if self._is_shared_two_way_mode(session_id):
+            return "two_way"
+        return language_code
+
     def register_language_callback(
         self, session_id: str, callback: Callable[[str], Any]
     ):
@@ -204,35 +213,38 @@ class ConnectionManager:
                 self.sessions[session_id] = []
             self.sessions[session_id].append(websocket)
 
-            self.socket_languages[websocket] = language_code
+            effective_language = self._get_effective_language(session_id, language_code)
+            self.socket_languages[websocket] = effective_language
             self.socket_users[websocket] = user_id
 
             if (
                 session_id in self.cleanup_tasks
-                and language_code in self.cleanup_tasks[session_id]
+                and effective_language in self.cleanup_tasks[session_id]
             ):
-                self.cleanup_tasks[session_id][language_code].cancel()
-                del self.cleanup_tasks[session_id][language_code]
+                self.cleanup_tasks[session_id][effective_language].cancel()
+                del self.cleanup_tasks[session_id][effective_language]
+
+            is_shared_two_way_mode = self._is_shared_two_way_mode(session_id)
 
             if self.is_session_active(session_id):
-                if session_id in self.language_request_callbacks:
+                if not is_shared_two_way_mode and session_id in self.language_request_callbacks:
                     try:
                         callback = self.language_request_callbacks[session_id]
                         if asyncio.iscoroutinefunction(callback):
-                            await callback(language_code)
+                            await callback(effective_language)
                         else:
-                            callback(language_code)
+                            callback(effective_language)
                     except Exception as e:
                         logger.error(
                             f"Error triggering language request callback for session {session_id}: {e}"
                         )
                 asyncio.create_task(self._record_attendee(session_id, user_id))
 
-            history = self.cache.get_history(session_id, language_code)
+            history = self.cache.get_history(session_id, effective_language)
 
             with log_step("CONN-MANAGER"):
                 logger.debug(
-                    f"New viewer connecting (Language: {language_code}). "
+                    f"New viewer connecting (Language: {effective_language}). "
                     f"Replaying {len(history)} cached messages."
                 )
 
@@ -252,7 +264,7 @@ class ConnectionManager:
 
             with log_step("CONN-MANAGER"):
                 logger.info(
-                    f"Viewer connected (Lang: {language_code}). "
+                    f"Viewer connected (Lang: {effective_language}). "
                     f"Active Viewers: Total={total_count} [{breakdown}]"
                 )
         finally:
@@ -300,7 +312,11 @@ class ConnectionManager:
                     f"Active Viewers: Total={total_count}, {language_code}={lang_count}"
                 )
 
-            if language_code and language_code != "en":
+            if (
+                language_code
+                and language_code != "en"
+                and not self._is_shared_two_way_mode(session_id)
+            ):
                 remaining_viewers = self.get_viewer_count(session_id, language_code)
                 if remaining_viewers == 0:
                     with log_step("CONN-MANAGER"):
@@ -325,27 +341,35 @@ class ConnectionManager:
     async def broadcast_to_session(self, session_id: str, payload: Dict[str, Any]):
         """
         Broadcasts a JSON object to a specific session.
-        Only sends the payload to users whose subscribed language matches
-        the payload's 'target_language' (or if it's a general system message).
+        For normal mode, only sends language-targeted payloads to matching viewers.
+        For shared two-way mode, sends transcript payloads to all viewers and stores
+        everything under a single shared cache/transcript language key.
         """
         payload_lang = payload.get("target_language")
+        is_shared_two_way_mode = self._is_shared_two_way_mode(session_id)
+        effective_payload_lang = "two_way" if is_shared_two_way_mode else payload_lang
 
-        if payload.get("message_id") and payload_lang:
-            self.cache.process_message(session_id, payload_lang, payload)
+        if payload.get("message_id") and effective_payload_lang:
+            self.cache.process_message(session_id, effective_payload_lang, payload)
 
         if session_id in self.sessions:
             connections_to_send = []
 
             for conn in self.sessions[session_id]:
                 user_lang = self.socket_languages.get(conn)
-                if not payload_lang or user_lang == payload_lang:
+                if is_shared_two_way_mode or not payload_lang or user_lang == payload_lang:
                     connections_to_send.append(conn)
 
             if connections_to_send:
                 tasks = [conn.send_json(payload) for conn in connections_to_send]
                 await asyncio.gather(*tasks, return_exceptions=True)
 
-    def register_transcription_session(self, session_id: str, integration: str) -> bool:
+    def register_transcription_session(
+        self,
+        session_id: str,
+        integration: str,
+        shared_two_way_mode: bool = False,
+    ) -> bool:
         """
         Atomically marks a transcription session as active.
         Returns:
@@ -364,6 +388,7 @@ class ConnectionManager:
                 session_data = {
                     "integration": integration,
                     "start_time": datetime.utcnow().isoformat(),
+                    "shared_two_way_mode": shared_two_way_mode,
                 }
                 self.active_transcription_sessions[session_id] = session_data
 

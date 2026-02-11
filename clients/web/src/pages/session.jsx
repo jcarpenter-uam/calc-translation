@@ -33,7 +33,7 @@ export default function SessionPage() {
 
   const [isAuthorized, setIsAuthorized] = useState(!!token);
   const [showUnauthorized, setShowUnauthorized] = useState(false);
-  const { uiLanguage, targetLanguage } = useLanguage();
+  const { targetLanguage } = useLanguage();
   const { t } = useTranslation();
 
   const hostAudioProps = useHostAudio(
@@ -112,6 +112,7 @@ export default function SessionPage() {
                   : null
               }
               forceBothLanguages={isSharedTwoWayMode}
+              preferredLanguage={targetLanguage}
             />
           ))}
         {isDownloadable && (

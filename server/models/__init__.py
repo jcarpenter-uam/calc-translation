@@ -1,18 +1,27 @@
-from .calendar_events import SCHEMA_STATEMENTS as CALENDAR_EVENTS_SCHEMA
-from .integrations import SCHEMA_STATEMENTS as INTEGRATIONS_SCHEMA
-from .meetings import SCHEMA_STATEMENTS as MEETINGS_SCHEMA
-from .summaries import SCHEMA_STATEMENTS as SUMMARIES_SCHEMA
-from .tenants import SCHEMA_STATEMENTS as TENANTS_SCHEMA
-from .transcripts import SCHEMA_STATEMENTS as TRANSCRIPTS_SCHEMA
-from .users import SCHEMA_STATEMENTS as USERS_SCHEMA
+from .calendar_events import CalendarEvent
+from .integrations import Integration
+from .meetings import Meeting
+from .summaries import Summary
+from .tenants import Tenant, TenantAuthConfig, TenantDomain
+from .transcripts import Transcript
+from .users import User
 
-# Order matters because of foreign key dependencies.
-SCHEMA_STATEMENTS = [
-    *USERS_SCHEMA,
-    *TENANTS_SCHEMA,
-    *INTEGRATIONS_SCHEMA,
-    *MEETINGS_SCHEMA,
-    *CALENDAR_EVENTS_SCHEMA,
-    *TRANSCRIPTS_SCHEMA,
-    *SUMMARIES_SCHEMA,
+# Compatibility patch for databases created before translation columns were added.
+POST_CREATE_STATEMENTS = [
+    "ALTER TABLE meetings ADD COLUMN IF NOT EXISTS translation_type TEXT DEFAULT 'one_way'",
+    "ALTER TABLE meetings ADD COLUMN IF NOT EXISTS translation_language_a TEXT",
+    "ALTER TABLE meetings ADD COLUMN IF NOT EXISTS translation_language_b TEXT",
+]
+
+__all__ = [
+    "CalendarEvent",
+    "Integration",
+    "Meeting",
+    "Summary",
+    "Tenant",
+    "TenantAuthConfig",
+    "TenantDomain",
+    "Transcript",
+    "User",
+    "POST_CREATE_STATEMENTS",
 ]

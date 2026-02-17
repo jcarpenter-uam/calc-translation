@@ -1,9 +1,9 @@
 import logging
 from typing import Optional
 
-from core import database
 from core.authentication import generate_jwt_token, get_current_user_payload
 from core.config import settings
+from core.db import AsyncSessionLocal
 from core.logging_setup import log_step, session_id_var
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
@@ -20,8 +20,11 @@ from integrations.zoom import (
     exchange_code_for_token,
 )
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from integrations import entra, google
+from models.calendar_events import CalendarEvent
+from models.tenants import TenantAuthConfig, TenantDomain
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +98,19 @@ def create_auth_router() -> APIRouter:
             except IndexError:
                 raise HTTPException(status_code=400, detail="Invalid email format.")
 
-            if not database.DB_POOL:
-                raise HTTPException(status_code=503, detail="Database not initialized.")
-
-            async with database.DB_POOL.acquire() as conn:
-                rows = await conn.fetch(database.SQL_GET_TENANT_BY_DOMAIN, domain)
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(
+                    select(
+                        TenantAuthConfig.provider_type,
+                        TenantDomain.provider_type.label("pinned_provider"),
+                    )
+                    .join(
+                        TenantAuthConfig,
+                        TenantAuthConfig.tenant_id == TenantDomain.tenant_id,
+                    )
+                    .where(TenantDomain.domain == domain)
+                )
+                rows = result.all()
 
             if not rows:
                 logger.warning(f"Login attempt for unconfigured domain: {domain}")
@@ -108,9 +119,8 @@ def create_auth_router() -> APIRouter:
                     detail="Your organization is not configured for access.",
                 )
 
-            pinned_provider = rows[0].get("pinned_provider")
-
-            configured_providers = list(set(row["provider_type"] for row in rows))
+            pinned_provider = rows[0].pinned_provider
+            configured_providers = list(set(row.provider_type for row in rows))
 
             if pinned_provider:
                 logger.info(f"Domain {domain} is pinned to provider: {pinned_provider}")
@@ -193,12 +203,14 @@ def create_auth_router() -> APIRouter:
             )
 
             try:
-                async with database.DB_POOL.acquire() as conn:
-                    row = await conn.fetchrow(
-                        "SELECT join_url, subject FROM CALENDAR_EVENTS WHERE id = $1 AND user_id = $2",
-                        request.meetingId,
-                        user_id,
+                async with AsyncSessionLocal() as session:
+                    result = await session.execute(
+                        select(CalendarEvent).where(
+                            CalendarEvent.id == request.meetingId,
+                            CalendarEvent.user_id == user_id,
+                        )
                     )
+                    row = result.scalar_one_or_none()
 
                     if not row:
                         logger.warning(
@@ -209,8 +221,8 @@ def create_auth_router() -> APIRouter:
                             detail="Calendar event not found or access denied.",
                         )
 
-                    join_url = row["join_url"] or request.joinUrl
-                    topic = row["subject"]
+                    join_url = row.join_url or request.joinUrl
+                    topic = row.subject
 
                     if not join_url:
                         raise HTTPException(

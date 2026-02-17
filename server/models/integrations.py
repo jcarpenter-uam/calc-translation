@@ -1,15 +1,19 @@
-SCHEMA_STATEMENTS = [
-    """
-    CREATE TABLE IF NOT EXISTS INTEGRATIONS (
-        id SERIAL PRIMARY KEY,
-        user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
-        platform TEXT,
-        platform_user_id TEXT,
-        access_token TEXT,
-        refresh_token TEXT,
-        expires_at BIGINT,
-        UNIQUE(user_id, platform)
+from sqlalchemy import BigInteger, Column, ForeignKey, Index, Integer, Text, UniqueConstraint
+
+from core.orm import Base
+
+
+class Integration(Base):
+    __tablename__ = "integrations"
+    __table_args__ = (
+        UniqueConstraint("user_id", "platform", name="uq_integration_user_platform"),
+        Index("idx_integrations_platform_id", "platform", "platform_user_id"),
     )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_integrations_platform_id ON INTEGRATIONS(platform, platform_user_id);",
-]
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Text, ForeignKey("users.id", ondelete="CASCADE"))
+    platform = Column(Text)
+    platform_user_id = Column(Text)
+    access_token = Column(Text)
+    refresh_token = Column(Text)
+    expires_at = Column(BigInteger)

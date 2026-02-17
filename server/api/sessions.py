@@ -3,12 +3,14 @@ import os
 import urllib.parse
 from datetime import datetime
 
-from core import database
 from core.authentication import get_current_user_payload, validate_client_token
-from core.database import SQL_GET_TRANSCRIPT_BY_MEETING_ID
+from core.db import AsyncSessionLocal
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
+from models.meetings import Meeting
+from models.transcripts import Transcript
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -77,55 +79,51 @@ def create_sessions_router() -> APIRouter:
                 resolved_session_id = session_id
                 file_name = None
 
-                async with database.DB_POOL.acquire() as conn:
-                    m_row = await conn.fetchrow(
-                        """
-                        SELECT readable_id, platform, translation_type
-                        FROM MEETINGS
-                        WHERE id = $1
-                        """,
-                        session_id,
+                async with AsyncSessionLocal() as session:
+                    m_result = await session.execute(
+                        select(Meeting).where(Meeting.id == session_id)
                     )
+                    m_row = m_result.scalar_one_or_none()
 
                     is_shared_two_way_mode = bool(
                         m_row
-                        and m_row.get("platform") == "standalone"
-                        and m_row.get("translation_type") == "two_way"
+                        and m_row.platform == "standalone"
+                        and m_row.translation_type == "two_way"
                     )
                     if is_shared_two_way_mode:
                         language_code = "two_way"
 
-                    if m_row and m_row["readable_id"]:
-                        readable_id = m_row["readable_id"]
-                        platform = m_row["platform"]
-
-                        fallback_sql = """
-                            SELECT t.file_name, t.meeting_id
-                            FROM TRANSCRIPTS t
-                            JOIN MEETINGS m ON t.meeting_id = m.id
-                            WHERE m.readable_id = $1 
-                              AND t.language_code = $2
-                              AND m.platform = $3
-                            ORDER BY t.creation_date DESC
-                            LIMIT 1
-                        """
-                        t_row = await conn.fetchrow(
-                            fallback_sql, readable_id, language_code, platform
+                    if m_row and m_row.readable_id:
+                        t_result = await session.execute(
+                            select(Transcript.file_name, Transcript.meeting_id)
+                            .join(Meeting, Transcript.meeting_id == Meeting.id)
+                            .where(
+                                Meeting.readable_id == m_row.readable_id,
+                                Transcript.language_code == language_code,
+                                Meeting.platform == m_row.platform,
+                            )
+                            .order_by(Transcript.creation_date.desc())
+                            .limit(1)
                         )
+                        t_row = t_result.first()
 
                         if t_row:
-                            file_name = t_row["file_name"]
-                            resolved_session_id = t_row["meeting_id"]
+                            file_name = t_row.file_name
+                            resolved_session_id = t_row.meeting_id
                             logger.info(
                                 f"Resolved latest transcript via readable_id: {session_id} -> {resolved_session_id}"
                             )
 
                     if not file_name:
-                        row = await conn.fetchrow(
-                            SQL_GET_TRANSCRIPT_BY_MEETING_ID, session_id, language_code
+                        t_result = await session.execute(
+                            select(Transcript.file_name).where(
+                                Transcript.meeting_id == session_id,
+                                Transcript.language_code == language_code,
+                            )
                         )
-                        if row:
-                            file_name = row[0]
+                        t_row = t_result.first()
+                        if t_row:
+                            file_name = t_row.file_name
 
                 if not file_name:
                     logger.warning(
@@ -154,19 +152,17 @@ def create_sessions_router() -> APIRouter:
 
                 meeting_date_for_filename = datetime.now()
                 try:
-                    async with database.DB_POOL.acquire() as conn:
-                        filename_row = await conn.fetchrow(
-                            """
-                            SELECT started_at, meeting_time
-                            FROM MEETINGS
-                            WHERE id = $1
-                            """,
-                            resolved_session_id,
+                    async with AsyncSessionLocal() as session:
+                        m_result = await session.execute(
+                            select(Meeting.started_at, Meeting.meeting_time).where(
+                                Meeting.id == resolved_session_id
+                            )
                         )
+                        filename_row = m_result.first()
                     if filename_row:
                         meeting_date_for_filename = (
-                            filename_row.get("started_at")
-                            or filename_row.get("meeting_time")
+                            filename_row.started_at
+                            or filename_row.meeting_time
                             or meeting_date_for_filename
                         )
                 except Exception as e:

@@ -4,9 +4,10 @@ import urllib.parse
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from core import database
-from core.database import SQL_INSERT_TRANSCRIPT
+from core.db import AsyncSessionLocal
 from core.logging_setup import log_step, message_id_var, session_id_var
+from models.transcripts import Transcript
+from sqlalchemy.dialects.postgresql import insert
 
 logger = logging.getLogger(__name__)
 
@@ -254,11 +255,21 @@ async def create_vtt_file(
                 f"Transcript VTT saved to {vtt_filepath}. {len(history)} entries."
             )
 
-            async with database.DB_POOL.acquire() as conn:
-                async with conn.transaction():
-                    await conn.execute(
-                        SQL_INSERT_TRANSCRIPT, session_id, language_code, filename
-                    )
+            async with AsyncSessionLocal() as session:
+                stmt = insert(Transcript).values(
+                    meeting_id=session_id,
+                    language_code=language_code,
+                    file_name=filename,
+                )
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=[Transcript.meeting_id, Transcript.language_code],
+                    set_={
+                        "file_name": stmt.excluded.file_name,
+                        "creation_date": datetime.utcnow(),
+                    },
+                )
+                await session.execute(stmt)
+                await session.commit()
             logger.debug(
                 f"Saved transcript record to DB for meeting {session_id} (Lang: {language_code})."
             )

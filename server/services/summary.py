@@ -4,14 +4,14 @@ import os
 import urllib.parse
 
 import ollama
-from core import database
 from core.config import settings
-from core.database import (
-    SQL_GET_MEETING_ATTENDEES_DETAILS,
-    SQL_GET_MEETING_BY_ID,
-    SQL_INSERT_SUMMARY,
-)
+from core.db import AsyncSessionLocal
 from core.logging_setup import log_step
+from models.meetings import Meeting
+from models.summaries import Summary
+from models.users import User
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +103,20 @@ class SummaryService:
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(summary_text)
 
-                if database.DB_POOL:
-                    async with database.DB_POOL.acquire() as conn:
-                        await conn.execute(
-                            SQL_INSERT_SUMMARY, session_id, target_lang, filename
-                        )
+                async with AsyncSessionLocal() as session:
+                    stmt = insert(Summary).values(
+                        meeting_id=session_id,
+                        language_code=target_lang,
+                        file_name=filename,
+                    )
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=[Summary.meeting_id, Summary.language_code],
+                        set_={
+                            "file_name": stmt.excluded.file_name,
+                        },
+                    )
+                    await session.execute(stmt)
+                    await session.commit()
 
                 logger.info(f"Completed {target_lang} summary for {session_id}.")
                 return True
@@ -123,11 +132,20 @@ class SummaryService:
         """
         with log_step(LOG_STEP):
             try:
-                async with database.DB_POOL.acquire() as conn:
-                    attendees = await conn.fetch(
-                        SQL_GET_MEETING_ATTENDEES_DETAILS, session_id
+                async with AsyncSessionLocal() as session:
+                    meeting_result = await session.execute(
+                        select(Meeting).where(Meeting.id == session_id)
                     )
-                    meeting_details = await conn.fetchrow(SQL_GET_MEETING_BY_ID, session_id)
+                    meeting_details = meeting_result.scalar_one_or_none()
+
+                    attendees = []
+                    if meeting_details and meeting_details.attendees:
+                        user_result = await session.execute(
+                            select(User.email, User.language_code).where(
+                                User.id.in_(meeting_details.attendees)
+                            )
+                        )
+                        attendees = user_result.all()
 
                 if not attendees:
                     logger.info("No attendees found. Skipping summary generation.")
@@ -135,7 +153,7 @@ class SummaryService:
 
                 needed_languages = set()
                 for row in attendees:
-                    lang = row.get("language_code")
+                    lang = row.language_code
                     needed_languages.add(lang if lang else "en")
 
                 needed_languages.add("en")
@@ -144,8 +162,8 @@ class SummaryService:
                 output_dir = os.path.join("output", integration, safe_session_id)
                 is_two_way_standalone = bool(
                     meeting_details
-                    and meeting_details.get("platform") == "standalone"
-                    and meeting_details.get("translation_type") == "two_way"
+                    and meeting_details.platform == "standalone"
+                    and meeting_details.translation_type == "two_way"
                 )
 
                 transcript_candidates = (

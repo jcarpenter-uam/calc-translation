@@ -5,13 +5,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional, List
 
-from core import database
-from core.database import (
-    SQL_GET_MEETING_ATTENDEES_DETAILS,
-    SQL_GET_MEETING_BY_ID,
-    SQL_UPDATE_MEETING_END,
-    SQL_UPDATE_MEETING_START,
-)
+from core.db import AsyncSessionLocal
 from core.logging_setup import (
     add_session_log_handler,
     log_step,
@@ -21,6 +15,9 @@ from core.logging_setup import (
     speaker_var,
 )
 from fastapi import WebSocket, WebSocketDisconnect
+from models.meetings import Meeting
+from models.users import User
+from sqlalchemy import select, update
 
 from .backfill import BackfillService
 from .email import EmailService
@@ -305,31 +302,31 @@ class MeetingSession:
         )
 
         try:
-            async with database.DB_POOL.acquire() as conn:
-                current_meeting = await conn.fetchrow(
-                    database.SQL_GET_MEETING_BY_ID, self.session_id
+            async with AsyncSessionLocal() as session:
+                meeting_result = await session.execute(
+                    select(Meeting).where(Meeting.id == self.session_id)
                 )
+                current_meeting = meeting_result.scalar_one_or_none()
 
                 if current_meeting:
-                    self.language_hints = current_meeting.get("language_hints")
-                    self.translation_type = current_meeting.get("translation_type") or "one_way"
-                    self.translation_language_a = current_meeting.get("translation_language_a")
-                    self.translation_language_b = current_meeting.get("translation_language_b")
-                    readable_id = current_meeting.get("readable_id")
+                    self.language_hints = current_meeting.language_hints
+                    self.translation_type = current_meeting.translation_type or "one_way"
+                    self.translation_language_a = current_meeting.translation_language_a
+                    self.translation_language_b = current_meeting.translation_language_b
+                    readable_id = current_meeting.readable_id
 
                     if readable_id:
-                        siblings = await conn.fetch(
-                            """
-                            SELECT id FROM MEETINGS 
-                            WHERE readable_id = $1 AND platform = $2 AND id != $3
-                            """,
-                            readable_id,
-                            self.integration,
-                            self.session_id,
+                        sibling_result = await session.execute(
+                            select(Meeting.id).where(
+                                Meeting.readable_id == readable_id,
+                                Meeting.platform == self.integration,
+                                Meeting.id != self.session_id,
+                            )
                         )
+                        siblings = sibling_result.all()
 
                         for row in siblings:
-                            old_uuid = row["id"]
+                            old_uuid = row.id
                             await self.viewer_manager.migrate_session(
                                 old_uuid, self.session_id
                             )
@@ -524,10 +521,13 @@ class MeetingSession:
         logger.info(f"Closing session {self.session_id} permanently.")
 
         try:
-            async with database.DB_POOL.acquire() as conn:
-                await conn.execute(
-                    SQL_UPDATE_MEETING_END, datetime.now(), self.session_id
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    update(Meeting)
+                    .where(Meeting.id == self.session_id)
+                    .values(ended_at=datetime.now())
                 )
+                await session.commit()
         except Exception as e:
             logger.error(f"Failed to update meeting end time: {e}")
 
@@ -571,31 +571,35 @@ class MeetingSession:
     async def _email_attendees(self):
         """Helper to fetch attendees and delegate email logic."""
         try:
-            async with database.DB_POOL.acquire() as conn:
-                attendees = await conn.fetch(
-                    SQL_GET_MEETING_ATTENDEES_DETAILS, self.session_id
+            async with AsyncSessionLocal() as session:
+                meeting_result = await session.execute(
+                    select(Meeting).where(Meeting.id == self.session_id)
                 )
+                meeting_details = meeting_result.scalar_one_or_none()
 
-                meeting_details = await conn.fetchrow(
-                    SQL_GET_MEETING_BY_ID, self.session_id
-                )
+                attendees = []
+                if meeting_details and meeting_details.attendees:
+                    attendee_result = await session.execute(
+                        select(User.email, User.language_code).where(
+                            User.id.in_(meeting_details.attendees)
+                        )
+                    )
+                    attendees = attendee_result.mappings().all()
 
             if not attendees:
                 logger.info(f"No attendees to email for session {self.session_id}.")
                 return
 
-            topic = meeting_details.get("topic") if meeting_details else None
+            topic = meeting_details.topic if meeting_details else None
 
-            platform = (
-                meeting_details.get("platform") if meeting_details else self.integration
-            )
+            platform = meeting_details.platform if meeting_details else self.integration
 
-            started_at = meeting_details.get("started_at") if meeting_details else None
+            started_at = meeting_details.started_at if meeting_details else None
 
             is_two_way_standalone = bool(
                 meeting_details
-                and meeting_details.get("platform") == "standalone"
-                and meeting_details.get("translation_type") == "two_way"
+                and meeting_details.platform == "standalone"
+                and meeting_details.translation_type == "two_way"
             )
 
             email_service = EmailService()
@@ -700,10 +704,13 @@ async def handle_receiver_session(
                     )
 
                     try:
-                        async with database.DB_POOL.acquire() as conn:
-                            await conn.execute(
-                                SQL_UPDATE_MEETING_START, new_zero_point, session_id
+                        async with AsyncSessionLocal() as session:
+                            await session.execute(
+                                update(Meeting)
+                                .where(Meeting.id == session_id)
+                                .values(started_at=new_zero_point)
                             )
+                            await session.commit()
                         meeting_session.db_start_written = True
                     except Exception as e:
                         logger.error(f"Failed to update meeting start time: {e}")
@@ -732,10 +739,13 @@ async def handle_receiver_session(
                     logger.info(
                         f"Using fallback zero point (start message missing): {fallback_time}"
                     )
-                    async with database.DB_POOL.acquire() as conn:
-                        await conn.execute(
-                            SQL_UPDATE_MEETING_START, fallback_time, session_id
+                    async with AsyncSessionLocal() as session:
+                        await session.execute(
+                            update(Meeting)
+                            .where(Meeting.id == session_id)
+                            .values(started_at=fallback_time)
                         )
+                        await session.commit()
                     meeting_session.db_start_written = True
                 except Exception as e:
                     logger.error(f"Failed to update meeting start time (fallback): {e}")

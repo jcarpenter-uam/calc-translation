@@ -1,26 +1,33 @@
-SCHEMA_STATEMENTS = [
-    """
-    CREATE TABLE IF NOT EXISTS TENANTS (
-        tenant_id TEXT PRIMARY KEY,
-        organization_name TEXT
+from sqlalchemy import Column, ForeignKey, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import UUID
+
+from core.orm import Base
+
+
+class Tenant(Base):
+    __tablename__ = "tenants"
+
+    tenant_id = Column(Text, primary_key=True)
+    organization_name = Column(Text)
+
+
+class TenantDomain(Base):
+    __tablename__ = "tenant_domains"
+
+    domain = Column(Text, primary_key=True)
+    tenant_id = Column(Text, ForeignKey("tenants.tenant_id", ondelete="CASCADE"))
+    provider_type = Column(Text)
+
+
+class TenantAuthConfig(Base):
+    __tablename__ = "tenant_auth_configs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider_type", name="uq_tenant_provider"),
     )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS TENANT_DOMAINS (
-        domain TEXT PRIMARY KEY,
-        tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE,
-        provider_type TEXT
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS TENANT_AUTH_CONFIGS (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE,
-        provider_type TEXT NOT NULL,
-        client_id TEXT NOT NULL,
-        client_secret_encrypted TEXT NOT NULL,
-        tenant_hint TEXT,
-        UNIQUE(tenant_id, provider_type)
-    )
-    """,
-]
+
+    id = Column(UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()"))
+    tenant_id = Column(Text, ForeignKey("tenants.tenant_id", ondelete="CASCADE"))
+    provider_type = Column(Text, nullable=False)
+    client_id = Column(Text, nullable=False)
+    client_secret_encrypted = Column(Text, nullable=False)
+    tenant_hint = Column(Text)

@@ -1,14 +1,15 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-import core.database as database
 import jwt
 from core.config import settings
-from core.database import SQL_GET_USER_BY_ID
+from core.db import AsyncSessionLocal
 from core.logging_setup import log_step
+from models.users import User
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, HTTPException, Query, Request, WebSocketException, status
 from pydantic import BaseModel, ValidationError
+from sqlalchemy import select
 from starlette.requests import HTTPConnection
 
 logger = logging.getLogger(__name__)
@@ -219,20 +220,16 @@ async def get_admin_user_payload(
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid auth token payload")
 
-    if not database.DB_POOL:
-        with log_step(LOG_STEP):
-            logger.error("Admin check failed: Database not initialized.")
-            raise HTTPException(status_code=503, detail="Database not initialized.")
-
-    async with database.DB_POOL.acquire() as conn:
-        user_row = await conn.fetchrow(SQL_GET_USER_BY_ID, user_id)
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User).where(User.id == user_id))
+        user_row = result.scalar_one_or_none()
 
     if not user_row:
         with log_step(LOG_STEP):
             logger.error(f"Authenticated admin user {user_id} not found in DB.")
             raise HTTPException(status_code=401, detail="User not found.")
 
-    if not user_row.get("is_admin"):
+    if not user_row.is_admin:
         with log_step(LOG_STEP):
             logger.warning(f"User {user_id} attempted unauthorized admin access.")
         raise HTTPException(

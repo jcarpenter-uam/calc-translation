@@ -3,19 +3,18 @@ import logging
 from datetime import datetime, time, timedelta, timezone
 from typing import List, Optional
 
-import core.database as database
 import httpx
 from core.authentication import get_current_user_payload
-from core.database import (
-    SQL_GET_CALENDAR_EVENTS_BY_USER_ID,
-    SQL_GET_CALENDAR_EVENTS_FILTERED,
-    SQL_UPSERT_CALENDAR_EVENT,
-)
+from core.db import AsyncSessionLocal
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException
 from integrations.entra import get_valid_microsoft_token
 from integrations.google import get_valid_google_token
+from models.calendar_events import CalendarEvent as CalendarEventModel
+from models.integrations import Integration
 from pydantic import BaseModel
+from sqlalchemy import and_, select
+from sqlalchemy.dialects.postgresql import insert
 
 logger = logging.getLogger(__name__)
 
@@ -223,15 +222,12 @@ def create_calender_router() -> APIRouter:
             if not user_id:
                 raise HTTPException(status_code=401, detail="Invalid user session.")
 
-            if not database.DB_POOL:
-                raise HTTPException(status_code=503, detail="Database not initialized.")
-
             platforms = []
-            async with database.DB_POOL.acquire() as conn:
-                rows = await conn.fetch(
-                    "SELECT platform FROM INTEGRATIONS WHERE user_id=$1", user_id
+            async with AsyncSessionLocal() as session:
+                rows = await session.execute(
+                    select(Integration.platform).where(Integration.user_id == user_id)
                 )
-                platforms = [r["platform"] for r in rows]
+                platforms = [r.platform for r in rows]
 
             today_date = datetime.now(timezone.utc).date()
             start_dt = datetime.combine(today_date, time.min).replace(
@@ -271,53 +267,66 @@ def create_calender_router() -> APIRouter:
 
             parsed_events = []
 
-            async with database.DB_POOL.acquire() as conn:
-                async with conn.transaction():
-                    for ev in raw_events:
-                        if not ev["join_url"]:
-                            logger.debug(
-                                f"Skipping event '{ev['subject']}': No Zoom link. (Loc: {ev.get('location')})"
-                            )
-                            continue
-
-                        display_loc = ev["location"]
-                        if display_loc and (
-                            display_loc.startswith("http") or "zoom.us" in display_loc
-                        ):
-                            display_loc = "Zoom Meeting"
-
-                        full_json = json.dumps(ev["raw"])
-
-                        await conn.execute(
-                            SQL_UPSERT_CALENDAR_EVENT,
-                            ev["id"],
-                            user_id,
-                            ev["subject"],
-                            ev["body"],
-                            ev["start"],
-                            ev["end"],
-                            display_loc,
-                            ev["join_url"],
-                            ev["web_link"],
-                            ev["organizer"],
-                            ev["is_cancelled"],
-                            full_json,
+            async with AsyncSessionLocal() as session:
+                for ev in raw_events:
+                    if not ev["join_url"]:
+                        logger.debug(
+                            f"Skipping event '{ev['subject']}': No Zoom link. (Loc: {ev.get('location')})"
                         )
+                        continue
 
-                        parsed_events.append(
-                            CalendarEvent(
-                                id=ev["id"],
-                                subject=ev["subject"],
-                                body_content=ev["body"],
-                                start_time=ev["start"],
-                                end_time=ev["end"],
-                                location=display_loc,
-                                join_url=ev["join_url"],
-                                web_link=ev["web_link"],
-                                organizer=ev["organizer"],
-                                is_cancelled=ev["is_cancelled"],
-                            )
+                    display_loc = ev["location"]
+                    if display_loc and (
+                        display_loc.startswith("http") or "zoom.us" in display_loc
+                    ):
+                        display_loc = "Zoom Meeting"
+
+                    stmt = insert(CalendarEventModel).values(
+                        id=ev["id"],
+                        user_id=user_id,
+                        subject=ev["subject"],
+                        body_content=ev["body"],
+                        start_time=ev["start"],
+                        end_time=ev["end"],
+                        location=display_loc,
+                        join_url=ev["join_url"],
+                        web_link=ev["web_link"],
+                        organizer=ev["organizer"],
+                        is_cancelled=ev["is_cancelled"],
+                        full_event_data=ev["raw"],
+                    )
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=[CalendarEventModel.id],
+                        set_={
+                            "subject": stmt.excluded.subject,
+                            "body_content": stmt.excluded.body_content,
+                            "start_time": stmt.excluded.start_time,
+                            "end_time": stmt.excluded.end_time,
+                            "location": stmt.excluded.location,
+                            "join_url": stmt.excluded.join_url,
+                            "web_link": stmt.excluded.web_link,
+                            "organizer": stmt.excluded.organizer,
+                            "is_cancelled": stmt.excluded.is_cancelled,
+                            "full_event_data": stmt.excluded.full_event_data,
+                        },
+                    )
+                    await session.execute(stmt)
+
+                    parsed_events.append(
+                        CalendarEvent(
+                            id=ev["id"],
+                            subject=ev["subject"],
+                            body_content=ev["body"],
+                            start_time=ev["start"],
+                            end_time=ev["end"],
+                            location=display_loc,
+                            join_url=ev["join_url"],
+                            web_link=ev["web_link"],
+                            organizer=ev["organizer"],
+                            is_cancelled=ev["is_cancelled"],
                         )
+                    )
+                await session.commit()
 
             logger.info(
                 f"Synced {len(parsed_events)} events via {provider_type} for {user_id}."
@@ -336,28 +345,33 @@ def create_calender_router() -> APIRouter:
             if not user_id:
                 raise HTTPException(status_code=401, detail="Invalid user session.")
 
-            if not database.DB_POOL:
-                raise HTTPException(status_code=503, detail="Database not initialized.")
-
-            async with database.DB_POOL.acquire() as conn:
-                rows = await conn.fetch(
-                    SQL_GET_CALENDAR_EVENTS_FILTERED, user_id, start, end
+            clauses = [CalendarEventModel.user_id == user_id]
+            if start is not None:
+                clauses.append(CalendarEventModel.start_time >= start)
+            if end is not None:
+                clauses.append(CalendarEventModel.start_time <= end)
+            async with AsyncSessionLocal() as session:
+                rows = await session.execute(
+                    select(CalendarEventModel)
+                    .where(and_(*clauses))
+                    .order_by(CalendarEventModel.start_time.asc())
                 )
+                records = rows.scalars().all()
 
             events = []
-            for row in rows:
+            for row in records:
                 events.append(
                     CalendarEvent(
-                        id=row["id"],
-                        subject=row["subject"],
-                        body_content=row["body_content"],
-                        start_time=row["start_time"],
-                        end_time=row["end_time"],
-                        location=row["location"],
-                        join_url=row["join_url"],
-                        web_link=row["web_link"],
-                        organizer=row["organizer"],
-                        is_cancelled=row["is_cancelled"],
+                        id=row.id,
+                        subject=row.subject,
+                        body_content=row.body_content,
+                        start_time=row.start_time,
+                        end_time=row.end_time,
+                        location=row.location,
+                        join_url=row.join_url,
+                        web_link=row.web_link,
+                        organizer=row.organizer,
+                        is_cancelled=row.is_cancelled,
                     )
                 )
 

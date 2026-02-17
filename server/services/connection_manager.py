@@ -4,10 +4,10 @@ import threading
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Set
 
-from core import database
-from core.database import SQL_ADD_MEETING_ATTENDEE
+from core.db import AsyncSessionLocal
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket
+from sqlalchemy import text
 
 from .cache import TranscriptCache
 
@@ -104,8 +104,19 @@ class ConnectionManager:
         if not user_id:
             return
         try:
-            async with database.DB_POOL.acquire() as conn:
-                await conn.execute(SQL_ADD_MEETING_ATTENDEE, user_id, session_id)
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    text(
+                        """
+                        UPDATE meetings
+                        SET attendees = array_append(COALESCE(attendees, '{}'), :user_id)
+                        WHERE id = :session_id
+                          AND (:user_id <> ALL(COALESCE(attendees, '{}')));
+                        """
+                    ),
+                    {"user_id": user_id, "session_id": session_id},
+                )
+                await session.commit()
                 logger.debug(f"Recorded attendee {user_id} for session {session_id}")
         except Exception as e:
             logger.error(f"Failed to record attendee {user_id} in DB: {e}")

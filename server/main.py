@@ -19,7 +19,7 @@ from api.tenants import create_tenant_router
 from api.transcribe import create_transcribe_router
 from api.users import create_user_router
 from api.viewing import create_viewer_router
-from core import database
+from core import db
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,7 +38,7 @@ async def startup_event():
     On application startup, initialize the database.
     This ensures the DB file and tables are ready before handling requests.
     """
-    await database.init_db()
+    await db.init_db()
 
 
 transcript_cache = TranscriptCache()

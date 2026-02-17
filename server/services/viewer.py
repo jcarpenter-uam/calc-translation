@@ -1,10 +1,11 @@
 import logging
 
-from core import database
-from core.database import SQL_GET_LATEST_ACTIVE_SIBLING, SQL_GET_MEETING_BY_ID
+from core.db import AsyncSessionLocal
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket, WebSocketDisconnect, status
 from integrations.zoom import get_meeting_data
+from models.meetings import Meeting
+from sqlalchemy import select
 
 from .connection_manager import ConnectionManager
 
@@ -35,30 +36,39 @@ async def handle_viewer_session(
                 meeting_exists = False
                 readable_id = None
                 platform = None
-                async with database.DB_POOL.acquire() as conn:
-                    row = await conn.fetchrow(SQL_GET_MEETING_BY_ID, session_id)
+                async with AsyncSessionLocal() as session:
+                    result = await session.execute(
+                        select(Meeting).where(Meeting.id == session_id)
+                    )
+                    row = result.scalar_one_or_none()
                     if row:
                         meeting_exists = True
                         shared_two_way_mode = bool(
-                            row.get("platform") == "standalone"
-                            and row.get("translation_type") == "two_way"
+                            row.platform == "standalone"
+                            and row.translation_type == "two_way"
                         )
 
                         # TODO: START OF JANK SOLUTION
                         # It needs to be improved when im not on a deadline
-                        readable_id = row.get("readable_id")
-                        platform = row.get("platform")
+                        readable_id = row.readable_id
+                        platform = row.platform
 
                     if readable_id and platform:
-                        sibling = await conn.fetchrow(
-                            SQL_GET_LATEST_ACTIVE_SIBLING,
-                            readable_id,
-                            platform,
-                            session_id,
+                        sibling_result = await session.execute(
+                            select(Meeting.id)
+                            .where(
+                                Meeting.readable_id == readable_id,
+                                Meeting.platform == platform,
+                                Meeting.id != session_id,
+                                Meeting.started_at.is_not(None),
+                            )
+                            .order_by(Meeting.started_at.desc())
+                            .limit(1)
                         )
+                        sibling = sibling_result.first()
 
                         if sibling:
-                            candidate_session_id = sibling["id"]
+                            candidate_session_id = sibling.id
                             if viewer_manager.is_session_active(candidate_session_id):
                                 logger.info(
                                     f"Found active sibling session. Redirecting {session_id} -> {candidate_session_id}"
@@ -99,15 +109,17 @@ async def handle_viewer_session(
             )
 
             if viewer_manager.is_session_active(resolved_session_id) and not shared_two_way_mode:
-                async with database.DB_POOL.acquire() as conn:
-                    active_row = await conn.fetchrow(
-                        "SELECT platform, translation_type FROM MEETINGS WHERE id = $1",
-                        resolved_session_id,
+                async with AsyncSessionLocal() as session:
+                    active_result = await session.execute(
+                        select(Meeting.platform, Meeting.translation_type).where(
+                            Meeting.id == resolved_session_id
+                        )
                     )
+                    active_row = active_result.first()
                     if active_row:
                         shared_two_way_mode = bool(
-                            active_row.get("platform") == "standalone"
-                            and active_row.get("translation_type") == "two_way"
+                            active_row.platform == "standalone"
+                            and active_row.translation_type == "two_way"
                         )
 
             status_msg = (

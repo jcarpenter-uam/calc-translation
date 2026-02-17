@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     ALIBABA_API_KEY: str = ""
 
     MAX_CACHE_MB: int = 10
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_KEY_PREFIX: str = "calc-translation"
+    RECEIVER_LEASE_TTL_SECONDS: int = 30
+    RECEIVER_LEASE_HEARTBEAT_SECONDS: int = 10
+    RECEIVER_LEASE_WAIT_SECONDS: int = 6
 
     DATABASE_URL: str
 

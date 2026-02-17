@@ -160,14 +160,14 @@ class BackfillService:
         Helper to find a specific message ID in history.
         If not found immediately, waits briefly (handling the race condition).
         """
-        history = viewer_manager.cache.get_history(session_id, "en")
+        history = await viewer_manager.cache.get_history(session_id, "en")
         item = next((x for x in history if x.get("message_id") == message_id), None)
         if item:
             return item
 
         for _ in range(10):
             await asyncio.sleep(0.25)
-            history = viewer_manager.cache.get_history(session_id, "en")
+            history = await viewer_manager.cache.get_history(session_id, "en")
             item = next((x for x in history if x.get("message_id") == message_id), None)
             if item:
                 return item
@@ -196,7 +196,7 @@ class BackfillService:
         try:
             found_item = None
             for _ in range(60):
-                history = viewer_manager.cache.get_history(session_id, "en")
+                history = await viewer_manager.cache.get_history(session_id, "en")
                 found_item = next(
                     (
                         item

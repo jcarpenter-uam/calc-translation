@@ -29,7 +29,7 @@ async def handle_viewer_session(
 
     try:
         with log_step("WEBSOCKET"):
-            if not viewer_manager.is_session_active(session_id):
+            if not await viewer_manager.is_session_active_global(session_id):
                 logger.info(
                     f"Session '{session_id}' not currently active. Checking DB for meeting record..."
                 )
@@ -69,7 +69,7 @@ async def handle_viewer_session(
 
                         if sibling:
                             candidate_session_id = sibling.id
-                            if viewer_manager.is_session_active(candidate_session_id):
+                            if await viewer_manager.is_session_active_global(candidate_session_id):
                                 logger.info(
                                     f"Found active sibling session. Redirecting {session_id} -> {candidate_session_id}"
                                 )
@@ -108,23 +108,15 @@ async def handle_viewer_session(
                 websocket, resolved_session_id, language_code, user_id
             )
 
-            if viewer_manager.is_session_active(resolved_session_id) and not shared_two_way_mode:
-                async with AsyncSessionLocal() as session:
-                    active_result = await session.execute(
-                        select(Meeting.platform, Meeting.translation_type).where(
-                            Meeting.id == resolved_session_id
-                        )
-                    )
-                    active_row = active_result.first()
-                    if active_row:
-                        shared_two_way_mode = bool(
-                            active_row.platform == "standalone"
-                            and active_row.translation_type == "two_way"
-                        )
+            session_meta = await viewer_manager.get_session_metadata_global(
+                resolved_session_id
+            )
+            if session_meta:
+                shared_two_way_mode = bool(session_meta.get("shared_two_way_mode"))
 
             status_msg = (
                 "active"
-                if viewer_manager.is_session_active(resolved_session_id)
+                if await viewer_manager.is_session_active_global(resolved_session_id)
                 else "waiting"
             )
 
@@ -146,7 +138,7 @@ async def handle_viewer_session(
     except WebSocketDisconnect:
         with log_step("WEBSOCKET"):
             logger.debug(f"Viewer disconnected from session '{resolved_session_id}'.")
-        viewer_manager.disconnect(websocket, resolved_session_id)
+        await viewer_manager.disconnect(websocket, resolved_session_id)
 
     except Exception as e:
         with log_step("WEBSOCKET"):

@@ -42,18 +42,25 @@ function LanguageMultiSelect({
 
   const toggleLanguage = (lang) => {
     const isSelected = selectedLangs.some((l) => l.code === lang.code);
+    let nextSelectedCount = selectedLangs.length;
 
     if (isSelected) {
+      nextSelectedCount = selectedLangs.length - 1;
       setSelectedLangs(selectedLangs.filter((l) => l.code !== lang.code));
     } else {
       if (selectedLangs.length >= maxSelections) return;
+      nextSelectedCount = selectedLangs.length + 1;
       setSelectedLangs([...selectedLangs, lang]);
     }
 
     setSearch("");
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 0);
+    if (nextSelectedCount >= maxSelections) {
+      setIsOpen(false);
+    } else {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
   };
 
   const filteredLanguages = languages.filter((lang) =>

@@ -314,6 +314,7 @@ async def get_meeting_data(
                         parsed_start_time,
                         join_url,
                         topic,
+                        None,
                     )
 
             logger.info(

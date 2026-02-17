@@ -125,6 +125,7 @@ class EmailService:
         attendees: list,
         topic: str = None,
         meeting_start_time: datetime = None,
+        is_two_way_standalone: bool = False,
     ):
         """
         Iterates through attendees and emails them using the Graph API.
@@ -152,18 +153,39 @@ class EmailService:
                 if not email:
                     continue
 
-                vtt_filename = f"transcript_{pref_lang}.vtt"
-                vtt_path = os.path.join(output_dir, vtt_filename)
+                transcript_candidates = (
+                    ["transcript_two_way.vtt", f"transcript_{pref_lang}.vtt", "transcript_en.vtt"]
+                    if is_two_way_standalone
+                    else [f"transcript_{pref_lang}.vtt", "transcript_en.vtt", "transcript_two_way.vtt"]
+                )
+                vtt_filename = next(
+                    (
+                        name
+                        for name in transcript_candidates
+                        if os.path.exists(os.path.join(output_dir, name))
+                    ),
+                    None,
+                )
+                vtt_path = os.path.join(output_dir, vtt_filename) if vtt_filename else ""
 
-                if not os.path.exists(vtt_path):
-                    vtt_filename = "transcript_en.vtt"
-                    vtt_path = os.path.join(output_dir, vtt_filename)
-
-                summary_filename = f"summary_{pref_lang}.txt"
-                summary_path = os.path.join(output_dir, summary_filename)
-
-                if not os.path.exists(summary_path):
-                    summary_path = os.path.join(output_dir, "summary_en.txt")
+                summary_candidates = [
+                    f"summary_{pref_lang}.txt",
+                    "summary_en.txt",
+                    "summary_two_way.txt",
+                ]
+                summary_filename = next(
+                    (
+                        name
+                        for name in summary_candidates
+                        if os.path.exists(os.path.join(output_dir, name))
+                    ),
+                    None,
+                )
+                summary_path = (
+                    os.path.join(output_dir, summary_filename)
+                    if summary_filename
+                    else ""
+                )
 
                 summary_content = "<p><i>No summary available.</i></p>"
 
@@ -253,7 +275,7 @@ class EmailService:
                     )
                 else:
                     logger.warning(
-                        f"No transcript found for {email} (checked {pref_lang} & en). Skipping email."
+                        f"No transcript found for {email} (checked {pref_lang}, en, and two_way). Skipping email."
                     )
 
             if tasks:

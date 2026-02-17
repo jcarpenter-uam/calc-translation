@@ -21,6 +21,9 @@ export default function StandalonePage() {
           host: data.mode === "host",
           join_url: data.joinUrl,
           language_hints: data.languageHints,
+          translation_type: data.translationType,
+          language_a: data.languageA,
+          language_b: data.languageB,
         }),
       });
 

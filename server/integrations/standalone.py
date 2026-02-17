@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from urllib.parse import urlparse
 
 from core import database
@@ -22,6 +22,9 @@ class StandaloneAuthRequest(BaseModel):
     join_url: Optional[str] = None
     host: bool = False
     language_hints: Optional[List[str]] = None
+    translation_type: Optional[Literal["one_way", "two_way"]] = "one_way"
+    language_a: Optional[str] = None
+    language_b: Optional[str] = None
 
 
 class StandaloneAuthResponse(BaseModel):
@@ -73,7 +76,13 @@ async def authenticate_standalone_session(
             raise HTTPException(status_code=404, detail="Meeting not found.")
 
 
-async def create_standalone_session(user_id: str, language_hints: Optional[List[str]] = None) -> tuple[str, str]:
+async def create_standalone_session(
+    user_id: str,
+    language_hints: Optional[List[str]] = None,
+    translation_type: str = "one_way",
+    language_a: Optional[str] = None,
+    language_b: Optional[str] = None,
+) -> tuple[str, str]:
     """
     Creates a new standalone meeting record in the DB.
     Uses the host's existing 'microsoft' integration to link the meeting.
@@ -121,6 +130,18 @@ async def create_standalone_session(user_id: str, language_hints: Optional[List[
                 join_url,
                 None,
                 language_hints,
+            )
+
+            await conn.execute(
+                """
+                UPDATE MEETINGS
+                SET translation_type = $1, translation_language_a = $2, translation_language_b = $3
+                WHERE id = $4
+                """,
+                translation_type,
+                language_a,
+                language_b,
+                meeting_uuid,
             )
 
             logger.info(

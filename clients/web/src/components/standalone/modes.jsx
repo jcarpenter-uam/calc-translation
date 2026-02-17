@@ -9,19 +9,27 @@ import {
   BiLogoZoom,
   BiPlay,
   BiX,
-  BiSearch,
   BiCheck,
 } from "react-icons/bi";
+import { useTranslation } from "react-i18next";
 import { languages } from "./supported-langs";
 
-export default function TranslationModes({ onSubmit }) {
-  const [selectedLangs, setSelectedLangs] = useState([]);
+function LanguageMultiSelect({
+  selectedLangs,
+  setSelectedLangs,
+  maxSelections,
+  label,
+  accent = "blue",
+  helperText,
+  placeholderText,
+  noLanguagesText,
+  selectedCountText,
+}) {
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -32,25 +40,27 @@ export default function TranslationModes({ onSubmit }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleOneWayStart = () => {
-    const hints = selectedLangs.map((l) => l.code);
-    onSubmit({ mode: "host", languageHints: hints });
-  };
-
   const toggleLanguage = (lang) => {
     const isSelected = selectedLangs.some((l) => l.code === lang.code);
+    let nextSelectedCount = selectedLangs.length;
 
     if (isSelected) {
+      nextSelectedCount = selectedLangs.length - 1;
       setSelectedLangs(selectedLangs.filter((l) => l.code !== lang.code));
     } else {
-      if (selectedLangs.length >= 5) return;
+      if (selectedLangs.length >= maxSelections) return;
+      nextSelectedCount = selectedLangs.length + 1;
       setSelectedLangs([...selectedLangs, lang]);
     }
 
     setSearch("");
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 0);
+    if (nextSelectedCount >= maxSelections) {
+      setIsOpen(false);
+    } else {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
   };
 
   const filteredLanguages = languages.filter((lang) =>
@@ -66,11 +76,160 @@ export default function TranslationModes({ onSubmit }) {
       search === "" &&
       selectedLangs.length > 0
     ) {
-      // Optional: Delete last pill on backspace if input is empty
       const newLangs = [...selectedLangs];
       newLangs.pop();
       setSelectedLangs(newLangs);
     }
+  };
+
+  const isBlue = accent === "blue";
+  const pillClass = isBlue
+    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  const focusClass = isBlue
+    ? "focus-within:ring-blue-500/50 focus-within:border-blue-500"
+    : "focus-within:ring-emerald-500/50 focus-within:border-emerald-500";
+  const selectedColorClass = isBlue
+    ? "bg-blue-500/10 text-blue-400 cursor-pointer"
+    : "bg-emerald-500/10 text-emerald-400 cursor-pointer";
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div className="flex justify-between items-end mb-2">
+        <label className="block text-zinc-400 text-sm font-medium">{label}</label>
+        <span
+          className={`text-xs ${selectedLangs.length >= maxSelections ? "text-orange-400" : "text-zinc-600"}`}
+        >
+          {selectedCountText}
+        </span>
+      </div>
+
+      <div
+        className={`w-full min-h-[50px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-wrap gap-2 items-center cursor-pointer transition-all focus-within:ring-2 ${focusClass}`}
+        onClick={() => {
+          setIsOpen(true);
+          inputRef.current?.focus();
+        }}
+      >
+        {selectedLangs.map((lang) => (
+          <span
+            key={lang.code}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm animate-in zoom-in-95 duration-200 ${pillClass}`}
+          >
+            <img
+              src={
+                lang.flag.startsWith("http")
+                  ? lang.flag
+                  : `https://flagcdn.com/${lang.flag}.svg`
+              }
+              alt=""
+              className="w-4 h-4 rounded-full object-cover"
+            />
+            {lang.name}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleLanguage(lang);
+              }}
+              className="hover:text-white transition-colors"
+            >
+              <BiX className="w-4 h-4" />
+            </button>
+          </span>
+        ))}
+
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setIsOpen(true);
+          }}
+          onKeyDown={handleInputKeyDown}
+          onFocus={() => setIsOpen(true)}
+          placeholder={selectedLangs.length === 0 ? placeholderText : ""}
+          className="bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-500 flex-grow min-w-[20px] py-1 cursor-pointer"
+        />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-2 bg-[#1e1e24] border border-zinc-700 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-none">
+          {filteredLanguages.length > 0 ? (
+            filteredLanguages.map((lang) => {
+              const isSelected = selectedLangs.some((l) => l.code === lang.code);
+              const isDisabled = !isSelected && selectedLangs.length >= maxSelections;
+
+              return (
+                <button
+                  key={lang.code}
+                  disabled={isDisabled}
+                  onClick={() => toggleLanguage(lang)}
+                  className={`w-full text-left px-4 py-3 flex items-center justify-between transition-colors ${
+                    isSelected
+                      ? selectedColorClass
+                      : isDisabled
+                        ? "opacity-50 cursor-not-allowed text-zinc-500"
+                        : "text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={
+                        lang.flag.startsWith("http")
+                          ? lang.flag
+                          : `https://flagcdn.com/${lang.flag}.svg`
+                      }
+                      alt=""
+                      className={`w-5 h-5 rounded-full object-cover ${isDisabled ? "grayscale opacity-50" : ""}`}
+                    />
+                    <span>{lang.name}</span>
+                  </div>
+                  {isSelected && <BiCheck className="w-5 h-5" />}
+                </button>
+              );
+            })
+          ) : (
+            <div className="px-4 py-3 text-zinc-500 text-center text-sm">
+              {noLanguagesText}
+            </div>
+          )}
+        </div>
+      )}
+
+      {helperText && <p className="text-xs text-zinc-500 mt-2">{helperText}</p>}
+    </div>
+  );
+}
+
+export default function TranslationModes({ onSubmit }) {
+  const { t } = useTranslation();
+  const [selectedLangs, setSelectedLangs] = useState([]);
+  const [twoWayLangs, setTwoWayLangs] = useState([]);
+
+  const handleOneWayStart = () => {
+    const hints = selectedLangs.map((l) => l.code);
+    onSubmit({
+      mode: "host",
+      languageHints: hints,
+      translationType: "one_way",
+    });
+  };
+
+  const handleTwoWayStart = () => {
+    if (twoWayLangs.length !== 2) {
+      return;
+    }
+
+    const [langA, langB] = twoWayLangs;
+
+    onSubmit({
+      mode: "host",
+      languageHints: [langA.code, langB.code],
+      translationType: "two_way",
+      languageA: langA.code,
+      languageB: langB.code,
+    });
   };
 
   return (
@@ -83,123 +242,20 @@ export default function TranslationModes({ onSubmit }) {
           </div>
 
           <div className="mt-8 space-y-4">
-            {/* === Language Selector === */}
-            <div className="relative" ref={dropdownRef}>
-              <div className="flex justify-between items-end mb-2">
-                <label className="block text-zinc-400 text-sm font-medium">
-                  Spoken Languages (Hints)
-                </label>
-                <span
-                  className={`text-xs ${selectedLangs.length >= 5 ? "text-orange-400" : "text-zinc-600"}`}
-                >
-                  {selectedLangs.length}/5 selected
-                </span>
-              </div>
-
-              {/* Selected Pills Container */}
-              <div
-                className="w-full min-h-[50px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-wrap gap-2 items-center cursor-pointer transition-all focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500"
-                onClick={() => {
-                  setIsOpen(true);
-                  inputRef.current?.focus();
-                }}
-              >
-                {selectedLangs.map((lang) => (
-                  <span
-                    key={lang.code}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-sm animate-in zoom-in-95 duration-200"
-                  >
-                    <img
-                      src={
-                        lang.flag.startsWith("http")
-                          ? lang.flag
-                          : `https://flagcdn.com/${lang.flag}.svg`
-                      }
-                      alt=""
-                      className="w-4 h-4 rounded-full object-cover"
-                    />
-                    {lang.name}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLanguage(lang);
-                      }}
-                      className="hover:text-white transition-colors"
-                    >
-                      <BiX className="w-4 h-4" />
-                    </button>
-                  </span>
-                ))}
-
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setIsOpen(true);
-                  }}
-                  onKeyDown={handleInputKeyDown}
-                  onFocus={() => setIsOpen(true)}
-                  placeholder={
-                    selectedLangs.length === 0 ? "Select languages..." : ""
-                  }
-                  className="bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-500 flex-grow min-w-[20px] py-1 cursor-pointer"
-                />
-              </div>
-
-              {/* Dropdown Menu */}
-              {isOpen && (
-                <div className="absolute z-50 w-full mt-2 bg-[#1e1e24] border border-zinc-700 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-none">
-                  {filteredLanguages.length > 0 ? (
-                    filteredLanguages.map((lang) => {
-                      const isSelected = selectedLangs.some(
-                        (l) => l.code === lang.code,
-                      );
-                      const isDisabled =
-                        !isSelected && selectedLangs.length >= 5;
-
-                      return (
-                        <button
-                          key={lang.code}
-                          disabled={isDisabled}
-                          onClick={() => toggleLanguage(lang)}
-                          className={`w-full text-left px-4 py-3 flex items-center justify-between transition-colors ${
-                            isSelected
-                              ? "bg-blue-500/10 text-blue-400 cursor-pointer"
-                              : isDisabled
-                                ? "opacity-50 cursor-not-allowed text-zinc-500"
-                                : "text-zinc-300 hover:bg-zinc-800 cursor-pointer"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={
-                                lang.flag.startsWith("http")
-                                  ? lang.flag
-                                  : `https://flagcdn.com/${lang.flag}.svg`
-                              }
-                              alt=""
-                              className={`w-5 h-5 rounded-full object-cover ${isDisabled ? "grayscale opacity-50" : ""}`}
-                            />
-                            <span>{lang.name}</span>
-                          </div>
-                          {isSelected && <BiCheck className="w-5 h-5" />}
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="px-4 py-3 text-zinc-500 text-center text-sm">
-                      No languages found
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <p className="text-xs text-zinc-500 mt-2">
-                Select up to 5 spoken languages to improve accuracy.
-              </p>
-            </div>
+            <LanguageMultiSelect
+              selectedLangs={selectedLangs}
+              setSelectedLangs={setSelectedLangs}
+              maxSelections={5}
+              label={t("standalone_one_way_spoken_languages")}
+              accent="blue"
+              helperText={t("standalone_one_way_spoken_languages_helper")}
+              placeholderText={t("standalone_language_picker_placeholder")}
+              noLanguagesText={t("standalone_language_picker_no_results")}
+              selectedCountText={t("standalone_language_picker_selected_count", {
+                count: selectedLangs.length,
+                max: 5,
+              })}
+            />
 
             <button
               type="button"
@@ -209,10 +265,10 @@ export default function TranslationModes({ onSubmit }) {
               <div className="p-1 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
                 <BiPlay className="w-6 h-6 ml-0.5" />
               </div>
-              Start One-Way Meeting
+              {t("standalone_one_way_start")}
             </button>
             <p className="text-center text-zinc-500 text-sm mt-3">
-              Best for presentations & speeches
+              {t("standalone_one_way_footer")}
             </p>
           </div>
         </div>
@@ -223,31 +279,42 @@ export default function TranslationModes({ onSubmit }) {
             <TwoWay />
           </div>
 
-          {/* <div className="mt-8"> */}
-          {/*   <button */}
-          {/*     type="button" */}
-          {/*     onClick={handleTwoWayStart} */}
-          {/*     className="cursor-pointer group w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200" */}
-          {/*   > */}
-          {/*     <div className="p-1 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors"> */}
-          {/*       <BiPlay className="w-6 h-6 ml-0.5" /> */}
-          {/*     </div> */}
-          {/*     Start Two-Way Meeting */}
-          {/*   </button> */}
-          {/*   <p className="text-center text-zinc-500 text-sm mt-3"> */}
-          {/*     Best for conversations & interviews */}
-          {/*   </p> */}
-          {/* </div> */}
-          <div className="mt-8">
+          <div className="mt-8 space-y-4">
+            <LanguageMultiSelect
+              selectedLangs={twoWayLangs}
+              setSelectedLangs={setTwoWayLangs}
+              maxSelections={2}
+              label={t("standalone_two_way_language_pair")}
+              accent="emerald"
+              helperText={t("standalone_two_way_language_pair_helper")}
+              placeholderText={t("standalone_language_picker_placeholder")}
+              noLanguagesText={t("standalone_language_picker_no_results")}
+              selectedCountText={t("standalone_language_picker_selected_count", {
+                count: twoWayLangs.length,
+                max: 2,
+              })}
+            />
+
             <button
               type="button"
-              disabled
-              className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-zinc-800 border border-zinc-700 text-zinc-500 font-bold text-lg rounded-xl cursor-not-allowed opacity-80"
+              onClick={handleTwoWayStart}
+              disabled={twoWayLangs.length !== 2}
+              className="cursor-pointer group w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              Coming Soon
+              <div className="p-1 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
+                <BiPlay className="w-6 h-6 ml-0.5" />
+              </div>
+              {t("standalone_two_way_start")}
             </button>
+
+            {twoWayLangs.length !== 2 && (
+              <p className="text-center text-orange-400 text-sm">
+                {t("standalone_two_way_select_exactly_two")}
+              </p>
+            )}
+
             <p className="text-center text-zinc-600 text-sm mt-3">
-              Best for conversations & interviews
+              {t("standalone_two_way_footer")}
             </p>
           </div>
         </div>
@@ -280,18 +347,18 @@ function FeatureItem({ icon, title, desc, color = "blue" }) {
 }
 
 function OneWay() {
+  const { t } = useTranslation();
   return (
     <div className="space-y-10 h-full flex flex-col">
       <div>
         <h2 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-6">
-          One-Way Translation
+          {t("standalone_one_way_title")}
         </h2>
         <p className="text-zinc-400 text-lg leading-relaxed">
-          Everyone speaks their mind; you hear what matters. Our system
-          automatically translates all incoming audio into
+          {t("standalone_one_way_description_prefix")}
           <span className="text-white font-semibold">
             {" "}
-            each viewers preferred language
+            {t("standalone_one_way_description_highlight")}
           </span>
           .
         </p>
@@ -301,26 +368,26 @@ function OneWay() {
         <FeatureItem
           color="blue"
           icon={<BiCaptions className="w-6 h-6" />}
-          title="Read in your language"
-          desc="Regardless of what language is spoken, you receive the text in your native tongue."
+          title={t("standalone_one_way_feature_read_title")}
+          desc={t("standalone_one_way_feature_read_desc")}
         />
         <FeatureItem
           color="blue"
           icon={<BiMicrophone className="w-6 h-6" />}
-          title="Speak freely"
-          desc="Talk in the language you are most comfortable with. We handle the rest."
+          title={t("standalone_one_way_feature_speak_title")}
+          desc={t("standalone_one_way_feature_speak_desc")}
         />
         <FeatureItem
           color="blue"
           icon={<BiUser className="w-6 h-6" />}
-          title="Easy for users"
-          desc="Anyone within the meeting can freely change their preferred language without affecting anyone else."
+          title={t("standalone_one_way_feature_easy_title")}
+          desc={t("standalone_one_way_feature_easy_desc")}
         />
         <FeatureItem
           color="blue"
           icon={<BiLogoZoom className="w-6 h-6" />}
-          title="Used for Zoom"
-          desc="This is how our Zoom integration works"
+          title={t("standalone_one_way_feature_zoom_title")}
+          desc={t("standalone_one_way_feature_zoom_desc")}
         />
       </div>
     </div>
@@ -328,17 +395,19 @@ function OneWay() {
 }
 
 function TwoWay() {
+  const { t } = useTranslation();
   return (
     <div className="space-y-10 h-full flex flex-col">
       <div>
         <h2 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-6">
-          Two-Way Translation
+          {t("standalone_two_way_title")}
         </h2>
         <p className="text-zinc-400 text-lg leading-relaxed">
-          Seamlessly bridge the gap between two people. The host selects{" "}
-          <span className="text-white font-semibold">two active languages</span>
-          , allowing fluid, back-and-forth dialogue without pauses. Displaying
-          everything said in both languages.
+          {t("standalone_two_way_description_prefix")} {" "}
+          <span className="text-white font-semibold">
+            {t("standalone_two_way_description_highlight")}
+          </span>
+          , {t("standalone_two_way_description_suffix")}
         </p>
       </div>
 
@@ -346,20 +415,20 @@ function TwoWay() {
         <FeatureItem
           color="emerald"
           icon={<BiSelectMultiple className="w-6 h-6" />}
-          title="Host Controlled"
-          desc="The host selects the exact language pair (e.g., English & Spanish) for the session."
+          title={t("standalone_two_way_feature_host_title")}
+          desc={t("standalone_two_way_feature_host_desc")}
         />
         <FeatureItem
           color="emerald"
           icon={<BiConversation className="w-6 h-6" />}
-          title="Fluid Dialogue"
-          desc="No toggling required. Both parties simply speak, and the system handles the routing instantly."
+          title={t("standalone_two_way_feature_dialogue_title")}
+          desc={t("standalone_two_way_feature_dialogue_desc")}
         />
         <FeatureItem
           color="emerald"
           icon={<BiHeadphone className="w-6 h-6" />}
-          title="Exclusive Channel"
-          desc="Unlike One-Way mode, this is restricted to the two selected languages for maximum accuracy."
+          title={t("standalone_two_way_feature_channel_title")}
+          desc={t("standalone_two_way_feature_channel_desc")}
         />
       </div>
     </div>

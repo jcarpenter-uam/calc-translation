@@ -248,3 +248,39 @@ class TranscriptCache:
                 logger.info("Cleared all Redis language caches for session")
         finally:
             session_id_var.reset(session_token)
+
+    async def get_usage_stats(self, top_n: int = 10) -> Dict[str, Any]:
+        """
+        Returns approximate Redis transcript cache usage for observability.
+        """
+        pattern = f"{self._prefix}:transcript:*:*:meta"
+        total_bytes = 0
+        entries: List[Dict[str, Any]] = []
+
+        async for key in self._redis.scan_iter(match=pattern):
+            current_size = int((await self._redis.hget(key, "current_size")) or 0)
+            if current_size <= 0:
+                continue
+
+            # {prefix}:transcript:{session_id}:{language_code}:meta
+            parts = key.split(":")
+            if len(parts) < 5:
+                continue
+            session_id = parts[-3]
+            language_code = parts[-2]
+
+            total_bytes += current_size
+            entries.append(
+                {
+                    "session_id": session_id,
+                    "language_code": language_code,
+                    "size_bytes": current_size,
+                }
+            )
+
+        entries.sort(key=lambda x: x["size_bytes"], reverse=True)
+        return {
+            "total_bytes": total_bytes,
+            "total_mb": round(total_bytes / (1024 * 1024), 2),
+            "top_entries": entries[:top_n],
+        }

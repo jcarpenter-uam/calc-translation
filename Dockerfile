@@ -37,6 +37,7 @@ COPY server/core ./core/
 COPY server/api ./api/
 COPY server/integrations ./integrations/
 COPY server/services ./services/
+COPY server/models ./models/
 RUN mkdir -p /app/logs
 RUN mkdir -p /app/output
 

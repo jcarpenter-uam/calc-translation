@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import { FaEdit, FaTrash, FaSave, FaTimes } from "react-icons/fa";
 import { useTranslation } from "react-i18next";
+import {
+  AdminActionButton,
+  AdminCard,
+  AdminIconButton,
+  AdminSection,
+} from "./ui.jsx";
 
 /**
  * A single row in the user list, handling its own edit state for admin toggling.
@@ -34,7 +40,7 @@ function UserRow({ user, onToggleAdmin, onDelete }) {
 
   if (isEditing) {
     return (
-      <div className="p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm">
+      <AdminCard className="p-4 bg-white dark:bg-zinc-800">
         <div className="flex flex-col gap-3">
           <p className="font-semibold text-lg text-zinc-900 dark:text-zinc-100">
             {user.name || t("no_name_fallback")}
@@ -61,28 +67,28 @@ function UserRow({ user, onToggleAdmin, onDelete }) {
           </div>
 
           <div className="flex gap-2 justify-end mt-2">
-            <button
+            <AdminActionButton
               onClick={handleSave}
               title={t("save_btn")}
-              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1 cursor-pointer"
+              variant="primary"
             >
               <FaSave /> {t("save_btn")}
-            </button>
-            <button
+            </AdminActionButton>
+            <AdminActionButton
               onClick={handleCancel}
               title={t("cancel_btn")}
-              className="px-3 py-1 bg-zinc-500 text-white rounded-md hover:bg-zinc-600 transition-colors flex items-center gap-1 cursor-pointer"
+              variant="secondary"
             >
               <FaTimes /> {t("cancel_btn")}
-            </button>
+            </AdminActionButton>
           </div>
         </div>
-      </div>
+      </AdminCard>
     );
   }
 
   return (
-    <div className="p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm flex justify-between items-start">
+    <AdminCard className="p-4 bg-white dark:bg-zinc-800 flex justify-between items-start">
       <div>
         <p className="font-semibold text-lg text-zinc-900 dark:text-zinc-100">
           {user.name || t("no_name_fallback")}
@@ -98,23 +104,23 @@ function UserRow({ user, onToggleAdmin, onDelete }) {
           </span>
         )}
         <div className="flex gap-2">
-          <button
+          <AdminIconButton
             onClick={() => setIsEditing(true)}
             title={t("edit_admin_status_title")}
-            className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors cursor-pointer"
+            tone="blue"
           >
             <FaEdit />
-          </button>
-          <button
+          </AdminIconButton>
+          <AdminIconButton
             onClick={handleDelete}
             title={t("delete_btn_title")}
-            className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors cursor-pointer"
+            tone="red"
           >
             <FaTrash />
-          </button>
+          </AdminIconButton>
         </div>
       </div>
-    </div>
+    </AdminCard>
   );
 }
 
@@ -128,7 +134,7 @@ export default function UserManagement({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <AdminSection>
       <h2 className="text-2xl font-semibold mb-6 text-center">
         {t("user_mgmt_title")}
       </h2>
@@ -148,6 +154,6 @@ export default function UserManagement({
           </p>
         )}
       </div>
-    </div>
+    </AdminSection>
   );
 }

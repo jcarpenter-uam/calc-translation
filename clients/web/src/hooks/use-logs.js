@@ -1,4 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useState } from "react";
+import { API_ROUTES } from "../constants/routes.js";
+import { requestJson } from "../lib/api-client.js";
+import { usePolling } from "./use-polling.js";
 
 export function useLogs(intervalMs = 3000, lines = 200) {
   const [logs, setLogs] = useState([]);
@@ -7,10 +10,11 @@ export function useLogs(intervalMs = 3000, lines = 200) {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const response = await fetch(`/api/logs/?lines=${lines}`);
-      if (!response.ok) throw new Error("Failed to fetch logs");
-
-      const data = await response.json();
+      const data = await requestJson(
+        API_ROUTES.logs.byLines(lines),
+        {},
+        "Failed to fetch logs",
+      );
       setLogs(data.logs || []);
       setError(null);
     } catch (err) {
@@ -21,14 +25,7 @@ export function useLogs(intervalMs = 3000, lines = 200) {
     }
   }, [lines]);
 
-  useEffect(() => {
-    fetchLogs();
-
-    if (intervalMs > 0) {
-      const interval = setInterval(fetchLogs, intervalMs);
-      return () => clearInterval(interval);
-    }
-  }, [fetchLogs, intervalMs]);
+  usePolling(fetchLogs, intervalMs);
 
   return {
     logs,

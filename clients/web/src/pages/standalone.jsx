@@ -1,22 +1,20 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import TranslationModes from "../components/standalone/modes";
 import SupportedLangs from "../components/standalone/supported-langs";
+import { API_ROUTES } from "../constants/routes.js";
+import { JSON_HEADERS, apiFetch, getErrorMessage } from "../lib/api-client.js";
+import { useSessionNavigation } from "../hooks/use-session-navigation.js";
 
 export default function StandalonePage() {
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
+  const navigateToSession = useSessionNavigation();
 
   const handleJoin = async (data) => {
     setError(null);
     try {
-      const headers = {
-        "Content-Type": "application/json",
-      };
-
-      const response = await fetch("/api/auth/standalone", {
+      const response = await apiFetch(API_ROUTES.auth.standalone, {
         method: "POST",
-        headers,
+        headers: JSON_HEADERS,
         body: JSON.stringify({
           host: data.mode === "host",
           join_url: data.joinUrl,
@@ -28,19 +26,14 @@ export default function StandalonePage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail);
+        throw new Error(await getErrorMessage(response, "Join failed"));
       }
 
       const responseData = await response.json();
       const { sessionId, token, type, joinUrl } = responseData;
 
       const isHost = data.mode === "host";
-
-      navigate(
-        `/sessions/${type}/${encodeURIComponent(sessionId)}?token=${token}${isHost ? "&isHost=true" : ""}`,
-        { state: { joinUrl } },
-      );
+      navigateToSession(type, sessionId, token, isHost, joinUrl);
     } catch (err) {
       console.error("Join failed:", err);
       setError(err.message);

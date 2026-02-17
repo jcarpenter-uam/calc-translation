@@ -1,17 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
+import { API_ROUTES } from "../constants/routes.js";
+import {
+  JSON_HEADERS,
+  apiFetch,
+  getErrorMessage,
+  requestJson,
+} from "../lib/api-client.js";
 
 export function useTenants() {
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch all tenants
   const fetchTenants = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/tenant/");
-      if (!response.ok) throw new Error("Failed to fetch tenants");
-      const data = await response.json();
+      const data = await requestJson(
+        API_ROUTES.tenants.base,
+        {},
+        "Failed to fetch tenants",
+      );
       setTenants(data);
       setError(null);
     } catch (err) {
@@ -25,19 +33,17 @@ export function useTenants() {
     fetchTenants();
   }, [fetchTenants]);
 
-  // Create Tenant
   const createTenant = useCallback(async (createData) => {
     try {
-      const response = await fetch("/api/tenant/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createData),
-      });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Failed to create tenant");
-      }
-      const newTenant = await response.json();
+      const newTenant = await requestJson(
+        API_ROUTES.tenants.base,
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify(createData),
+        },
+        "Failed to create tenant",
+      );
       setTenants((prevTenants) => [...prevTenants, newTenant]);
       return { success: true };
     } catch (err) {
@@ -46,19 +52,18 @@ export function useTenants() {
     }
   }, []);
 
-  // Update Tenant
   const updateTenant = useCallback(async (tenantId, updateData) => {
     try {
-      const response = await fetch(`/api/tenant/${tenantId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updateData),
-      });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Failed to update tenant");
-      }
-      const updatedTenant = await response.json();
+      const updatedTenant = await requestJson(
+        API_ROUTES.tenants.byId(tenantId),
+        {
+          method: "PATCH",
+          headers: JSON_HEADERS,
+          body: JSON.stringify(updateData),
+        },
+        "Failed to update tenant",
+      );
+
       setTenants((prevTenants) =>
         prevTenants.map((t) => (t.tenant_id === tenantId ? updatedTenant : t)),
       );
@@ -69,16 +74,16 @@ export function useTenants() {
     }
   }, []);
 
-  // Delete Tenant
   const deleteTenant = useCallback(async (tenantId) => {
     try {
-      const response = await fetch(`/api/tenant/${tenantId}`, {
+      const response = await apiFetch(API_ROUTES.tenants.byId(tenantId), {
         method: "DELETE",
       });
+
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Failed to delete tenant");
+        throw new Error(await getErrorMessage(response, "Failed to delete tenant"));
       }
+
       setTenants((prevTenants) =>
         prevTenants.filter((t) => t.tenant_id !== tenantId),
       );

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AdminSection } from "./ui.jsx";
 
 export default function LogViewing({ logs = [], loading, error, onRefresh }) {
   const { t } = useTranslation();
@@ -22,7 +23,7 @@ export default function LogViewing({ logs = [], loading, error, onRefresh }) {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-4">
+    <AdminSection className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
@@ -78,6 +79,6 @@ export default function LogViewing({ logs = [], loading, error, onRefresh }) {
           </div>
         </div>
       )}
-    </div>
+    </AdminSection>
   );
 }

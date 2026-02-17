@@ -13,6 +13,13 @@ import {
   FaUnlink,
 } from "react-icons/fa";
 import { useTranslation } from "react-i18next";
+import {
+  AdminActionButton,
+  AdminCard,
+  AdminDangerTextButton,
+  AdminIconButton,
+  AdminSection,
+} from "./ui.jsx";
 
 /**
  * Helper to ensure we always work with domain objects { domain: "...", provider: "..." }
@@ -73,108 +80,110 @@ function CreateTenantForm({ onCreate }) {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm mb-6 grid grid-cols-1 md:grid-cols-2 gap-4"
-    >
-      <h3 className="text-lg font-semibold col-span-1 md:col-span-2">
-        {t("tenant_create_title")}
-      </h3>
-
-      <div className="col-span-1 md:col-span-2">
-        <label className="block text-xs font-semibold text-zinc-500 mb-1">
-          {t("org_name_placeholder")}
-        </label>
-        <input
-          name="organization_name"
-          value={formData.organization_name}
-          onChange={handleChange}
-          required
-          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-zinc-500 mb-1">
-          {t("tenant_primary_provider")}
-        </label>
-        <select
-          name="provider_type"
-          value={formData.provider_type}
-          onChange={handleChange}
-          className="cursor-pointer w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="microsoft">{t("provider_microsoft_full")}</option>
-          <option value="google">{t("provider_google_full")}</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-zinc-500 mb-1">
-          {formData.provider_type === "microsoft"
-            ? t("tenant_entra_id_label")
-            : t("tenant_google_id_label")}
-        </label>
-        <input
-          name="tenant_id"
-          value={formData.tenant_id}
-          onChange={handleChange}
-          required
-          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-zinc-500 mb-1">
-          {t("client_id_placeholder")}
-        </label>
-        <input
-          name="client_id"
-          value={formData.client_id}
-          onChange={handleChange}
-          required
-          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-zinc-500 mb-1">
-          {t("client_secret_placeholder")}
-        </label>
-        <input
-          name="client_secret"
-          type="password"
-          value={formData.client_secret}
-          onChange={handleChange}
-          required
-          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div className="col-span-1 md:col-span-2">
-        <label className="block text-xs font-semibold text-zinc-500 mb-1">
-          {t("domains_placeholder_hint")}
-        </label>
-        <input
-          name="domains"
-          value={formData.domains}
-          onChange={handleChange}
-          placeholder="example.com, myorg.com"
-          required
-          className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <p className="text-[10px] text-zinc-400 mt-1">
-          {t("tenant_create_domain_hint")}
-        </p>
-      </div>
-
-      <button
-        type="submit"
-        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 cursor-pointer col-span-1 md:col-span-2"
+    <AdminCard className="p-4 bg-white dark:bg-zinc-800 mb-6">
+      <form
+        onSubmit={handleSubmit}
+        className="grid grid-cols-1 md:grid-cols-2 gap-4"
       >
-        <FaPlus /> {t("create_tenant_btn")}
-      </button>
-    </form>
+        <h3 className="text-lg font-semibold col-span-1 md:col-span-2">
+          {t("tenant_create_title")}
+        </h3>
+
+        <div className="col-span-1 md:col-span-2">
+          <label className="block text-xs font-semibold text-zinc-500 mb-1">
+            {t("org_name_placeholder")}
+          </label>
+          <input
+            name="organization_name"
+            value={formData.organization_name}
+            onChange={handleChange}
+            required
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 mb-1">
+            {t("tenant_primary_provider")}
+          </label>
+          <select
+            name="provider_type"
+            value={formData.provider_type}
+            onChange={handleChange}
+            className="cursor-pointer w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="microsoft">{t("provider_microsoft_full")}</option>
+            <option value="google">{t("provider_google_full")}</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 mb-1">
+            {formData.provider_type === "microsoft"
+              ? t("tenant_entra_id_label")
+              : t("tenant_google_id_label")}
+          </label>
+          <input
+            name="tenant_id"
+            value={formData.tenant_id}
+            onChange={handleChange}
+            required
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 mb-1">
+            {t("client_id_placeholder")}
+          </label>
+          <input
+            name="client_id"
+            value={formData.client_id}
+            onChange={handleChange}
+            required
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 mb-1">
+            {t("client_secret_placeholder")}
+          </label>
+          <input
+            name="client_secret"
+            type="password"
+            value={formData.client_secret}
+            onChange={handleChange}
+            required
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="col-span-1 md:col-span-2">
+          <label className="block text-xs font-semibold text-zinc-500 mb-1">
+            {t("domains_placeholder_hint")}
+          </label>
+          <input
+            name="domains"
+            value={formData.domains}
+            onChange={handleChange}
+            placeholder="example.com, myorg.com"
+            required
+            className="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-300 dark:border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-[10px] text-zinc-400 mt-1">
+            {t("tenant_create_domain_hint")}
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 cursor-pointer col-span-1 md:col-span-2"
+        >
+          <FaPlus /> {t("create_tenant_btn")}
+        </button>
+      </form>
+    </AdminCard>
   );
 }
 
@@ -485,7 +494,7 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
 
   if (isEditing) {
     return (
-      <div className="p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm space-y-4">
+      <AdminCard className="p-4 bg-white dark:bg-zinc-800 space-y-4">
         {/* Header Inputs */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -581,14 +590,12 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
               {/* Delete Config Button */}
               {msConfig.has_secret && (
                 <div className="pt-2 border-t border-zinc-200 dark:border-zinc-600 mt-2">
-                  <button
-                    type="button"
+                  <AdminDangerTextButton
                     onClick={() => handleDeleteAuth("microsoft")}
-                    className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 flex items-center gap-1 cursor-pointer"
                   >
                     <FaTrash className="text-[10px]" />{" "}
                     {t("tenant_remove_microsoft")}
-                  </button>
+                  </AdminDangerTextButton>
                 </div>
               )}
             </div>
@@ -642,14 +649,12 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
               {/* Delete Config Button */}
               {googleConfig.has_secret && (
                 <div className="pt-2 border-t border-zinc-200 dark:border-zinc-600 mt-2">
-                  <button
-                    type="button"
+                  <AdminDangerTextButton
                     onClick={() => handleDeleteAuth("google")}
-                    className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 flex items-center gap-1 cursor-pointer"
                   >
                     <FaTrash className="text-[10px]" />{" "}
                     {t("tenant_remove_google")}
-                  </button>
+                  </AdminDangerTextButton>
                 </div>
               )}
             </div>
@@ -658,27 +663,27 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
 
         {/* Action Buttons */}
         <div className="flex gap-2 justify-end mt-2">
-          <button
+          <AdminActionButton
             onClick={handleSave}
             title={t("save_btn")}
-            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1 cursor-pointer"
+            variant="primary"
           >
             <FaSave /> {t("save_btn")}
-          </button>
-          <button
+          </AdminActionButton>
+          <AdminActionButton
             onClick={handleCancel}
             title={t("cancel_btn")}
-            className="px-3 py-1 bg-zinc-500 text-white rounded-md hover:bg-zinc-600 transition-colors flex items-center gap-1 cursor-pointer"
+            variant="secondary"
           >
             <FaTimes /> {t("cancel_btn")}
-          </button>
+          </AdminActionButton>
         </div>
-      </div>
+      </AdminCard>
     );
   }
 
   return (
-    <div className="p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm flex flex-col sm:flex-row justify-between items-start gap-4">
+    <AdminCard className="p-4 bg-white dark:bg-zinc-800 flex flex-col sm:flex-row justify-between items-start gap-4">
       <div className="flex-1 w-full">
         <div className="flex items-center gap-3">
           <p className="font-semibold text-lg text-zinc-900 dark:text-zinc-100">
@@ -719,22 +724,22 @@ function TenantRow({ tenant, onUpdate, onDelete, onRefresh }) {
       </div>
 
       <div className="flex gap-2 shrink-0">
-        <button
+        <AdminIconButton
           onClick={() => setIsEditing(true)}
           title={t("edit_btn_title")}
-          className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors cursor-pointer"
+          tone="blue"
         >
           <FaEdit />
-        </button>
-        <button
+        </AdminIconButton>
+        <AdminIconButton
           onClick={handleDelete}
           title={t("delete_btn_title")}
-          className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors cursor-pointer"
+          tone="red"
         >
           <FaTrash />
-        </button>
+        </AdminIconButton>
       </div>
-    </div>
+    </AdminCard>
   );
 }
 
@@ -748,7 +753,7 @@ export default function TenantManagement({
   const { t } = useTranslation();
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <AdminSection>
       <h2 className="text-2xl font-semibold mb-6 text-center">
         {t("tenant_mgmt_title")}
       </h2>
@@ -770,6 +775,6 @@ export default function TenantManagement({
           </p>
         )}
       </div>
-    </div>
+    </AdminSection>
   );
 }

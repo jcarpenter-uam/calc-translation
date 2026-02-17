@@ -1,17 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
+import { API_ROUTES } from "../constants/routes.js";
+import {
+  JSON_HEADERS,
+  apiFetch,
+  getErrorMessage,
+  requestJson,
+} from "../lib/api-client.js";
 
 export function useUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch all users
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/users/");
-      if (!response.ok) throw new Error("Failed to fetch users");
-      const data = await response.json();
+      const data = await requestJson(
+        API_ROUTES.users.base,
+        {},
+        "Failed to fetch users",
+      );
       setUsers(data);
       setError(null);
     } catch (err) {
@@ -25,18 +33,17 @@ export function useUsers() {
     fetchUsers();
   }, [fetchUsers]);
 
-  // Toggle Admin Status
   const toggleUserAdmin = useCallback(async (userId, isAdmin) => {
     try {
-      const response = await fetch(`/api/users/${userId}/admin`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_admin: isAdmin }),
-      });
-
-      if (!response.ok) throw new Error("Failed to update admin status");
-
-      const updatedUser = await response.json();
+      const updatedUser = await requestJson(
+        API_ROUTES.users.admin(userId),
+        {
+          method: "PUT",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ is_admin: isAdmin }),
+        },
+        "Failed to update admin status",
+      );
 
       setUsers((prevUsers) =>
         prevUsers.map((user) =>
@@ -50,14 +57,15 @@ export function useUsers() {
     }
   }, []);
 
-  // Delete User
   const deleteUser = useCallback(async (userId) => {
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await apiFetch(API_ROUTES.users.byId(userId), {
         method: "DELETE",
       });
 
-      if (!response.ok) throw new Error("Failed to delete user");
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, "Failed to delete user"));
+      }
 
       setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
       return { success: true };

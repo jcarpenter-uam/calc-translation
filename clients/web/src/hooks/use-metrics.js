@@ -1,4 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useState } from "react";
+import { API_ROUTES } from "../constants/routes.js";
+import { apiFetch } from "../lib/api-client.js";
+import { usePolling } from "./use-polling.js";
 
 export function useMetrics(intervalMs = 15000) {
   const [serverMetrics, setServerMetrics] = useState(null);
@@ -10,8 +13,8 @@ export function useMetrics(intervalMs = 15000) {
     setLoading(true);
     try {
       const [serverRes, zoomRes] = await Promise.all([
-        fetch("/api/metrics/server"),
-        fetch("/api/metrics/zoom"),
+        apiFetch(API_ROUTES.metrics.server),
+        apiFetch(API_ROUTES.metrics.zoom),
       ]);
 
       if (serverRes.ok) {
@@ -36,14 +39,7 @@ export function useMetrics(intervalMs = 15000) {
     }
   }, []);
 
-  useEffect(() => {
-    fetchMetrics();
-
-    if (intervalMs > 0) {
-      const interval = setInterval(fetchMetrics, intervalMs);
-      return () => clearInterval(interval);
-    }
-  }, [fetchMetrics, intervalMs]);
+  usePolling(fetchMetrics, intervalMs);
 
   return {
     serverMetrics,

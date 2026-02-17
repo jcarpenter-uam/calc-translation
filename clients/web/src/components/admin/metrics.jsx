@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AdminCard, AdminSection } from "./ui.jsx";
 
 const formatUptime = (seconds) => {
   const h = Math.floor(seconds / 3600);
@@ -24,7 +25,7 @@ const SystemCard = ({ title, data }) => {
     cpuPercent !== undefined ? `${cpuPercent.toFixed(1)}%` : "N/A";
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 p-4">
+    <AdminCard className="bg-white dark:bg-zinc-900 p-4">
       <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3 border-b border-zinc-100 dark:border-zinc-800 pb-2">
         {title}
       </h3>
@@ -131,7 +132,7 @@ const SystemCard = ({ title, data }) => {
           <div>Cache Total: {cacheStats.total_mb ?? 0} MB</div>
         </div>
       </div>
-    </div>
+    </AdminCard>
   );
 };
 
@@ -223,17 +224,17 @@ const Tooltip = ({ text }) => (
 const ActiveItemsTable = ({ title, items, columns, emptyMessage }) => {
   if (!items || items.length === 0) {
     return (
-      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 p-4">
+      <AdminCard className="bg-white dark:bg-zinc-900 p-4">
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
           {title}
         </h3>
         <p className="text-sm text-zinc-500">{emptyMessage}</p>
-      </div>
+      </AdminCard>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+    <AdminCard className="bg-white dark:bg-zinc-900 overflow-hidden">
       <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 flex justify-between items-center">
         <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
           {title} <span className="text-zinc-500 ml-1">({items.length})</span>
@@ -272,7 +273,7 @@ const ActiveItemsTable = ({ title, items, columns, emptyMessage }) => {
           </tbody>
         </table>
       </div>
-    </div>
+    </AdminCard>
   );
 };
 
@@ -373,7 +374,7 @@ export default function MetricsViewing({
   ];
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-4">
+    <AdminSection className="space-y-4">
       {/* Header Area */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
@@ -462,6 +463,6 @@ export default function MetricsViewing({
           </div>
         </>
       )}
-    </div>
+    </AdminSection>
   );
 }

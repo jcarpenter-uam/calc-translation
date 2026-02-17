@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { API_ROUTES } from "../constants/routes.js";
+import { apiFetch, getErrorMessage } from "../lib/api-client.js";
 
 export function useCalendar(startDate = null, endDate = null) {
   const [events, setEvents] = useState([]);
@@ -15,10 +17,10 @@ export function useCalendar(startDate = null, endDate = null) {
 
       const queryString = params.toString();
       const url = queryString
-        ? `/api/calender/?${queryString}`
-        : "/api/calender/";
+        ? `${API_ROUTES.calendar.base}?${queryString}`
+        : API_ROUTES.calendar.base;
 
-      const response = await fetch(url);
+      const response = await apiFetch(url);
       if (response.ok) {
         const data = await response.json();
         setEvents(data);
@@ -37,11 +39,10 @@ export function useCalendar(startDate = null, endDate = null) {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/calender/sync");
+      const response = await apiFetch(API_ROUTES.calendar.sync);
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || "Failed to sync calendar.");
+        throw new Error(await getErrorMessage(response, "Failed to sync calendar."));
       }
 
       await fetchCalendar();

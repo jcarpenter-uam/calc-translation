@@ -1,0 +1,18 @@
+from .calendar_events import SCHEMA_STATEMENTS as CALENDAR_EVENTS_SCHEMA
+from .integrations import SCHEMA_STATEMENTS as INTEGRATIONS_SCHEMA
+from .meetings import SCHEMA_STATEMENTS as MEETINGS_SCHEMA
+from .summaries import SCHEMA_STATEMENTS as SUMMARIES_SCHEMA
+from .tenants import SCHEMA_STATEMENTS as TENANTS_SCHEMA
+from .transcripts import SCHEMA_STATEMENTS as TRANSCRIPTS_SCHEMA
+from .users import SCHEMA_STATEMENTS as USERS_SCHEMA
+
+# Order matters because of foreign key dependencies.
+SCHEMA_STATEMENTS = [
+    *USERS_SCHEMA,
+    *TENANTS_SCHEMA,
+    *INTEGRATIONS_SCHEMA,
+    *MEETINGS_SCHEMA,
+    *CALENDAR_EVENTS_SCHEMA,
+    *TRANSCRIPTS_SCHEMA,
+    *SUMMARIES_SCHEMA,
+]

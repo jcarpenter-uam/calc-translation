@@ -4,6 +4,7 @@ import logging
 import asyncpg
 from core.config import settings
 from core.logging_setup import log_step
+from models import SCHEMA_STATEMENTS
 
 logger = logging.getLogger(__name__)
 
@@ -29,153 +30,8 @@ async def init_db():
             DB_POOL = await asyncpg.create_pool(dsn=POSTGRES_DSN)
             async with DB_POOL.acquire() as conn:
                 async with conn.transaction():
-
-                    # Users
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS USERS (
-                            id TEXT PRIMARY KEY,
-                            name TEXT,
-                            email TEXT,
-                            language_code TEXT,
-                            is_admin BOOLEAN DEFAULT FALSE
-                        )
-                        """
-                    )
-
-                    # Tenant Domains
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS TENANT_DOMAINS (
-                            domain TEXT PRIMARY KEY,
-                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE,
-                            provider_type TEXT
-                        )
-                        """
-                    )
-
-                    # Tenant Auth Configs
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS TENANT_AUTH_CONFIGS (
-                            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                            tenant_id TEXT REFERENCES TENANTS(tenant_id) ON DELETE CASCADE,
-                            provider_type TEXT NOT NULL, -- 'microsoft' or 'google'
-                            client_id TEXT NOT NULL,
-                            client_secret_encrypted TEXT NOT NULL,
-                            tenant_hint TEXT, -- Stores Entra Tenant ID or Google Customer ID
-                            UNIQUE(tenant_id, provider_type)
-                        )
-                        """
-                    )
-
-                    # Integrations
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS INTEGRATIONS (
-                            id SERIAL PRIMARY KEY,
-                            user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
-                            platform TEXT,
-                            platform_user_id TEXT,
-                            access_token TEXT,
-                            refresh_token TEXT,
-                            expires_at BIGINT,
-                            UNIQUE(user_id, platform)
-                        )
-                        """
-                    )
-                    await conn.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_integrations_platform_id ON INTEGRATIONS(platform, platform_user_id);"
-                    )
-
-                    # Meetings & Languages
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS MEETINGS (
-                            id TEXT PRIMARY KEY,
-                            integration_id INTEGER REFERENCES INTEGRATIONS(id) ON DELETE SET NULL,
-                            passcode TEXT,
-                            platform TEXT,
-                            readable_id TEXT,
-                            meeting_time TIMESTAMPTZ,
-                            join_url TEXT,
-                            topic TEXT,
-                            started_at TIMESTAMPTZ,
-                            ended_at TIMESTAMPTZ,
-                            attendees TEXT[] DEFAULT '{}',
-                            language_hints TEXT[] DEFAULT '{}',
-                            translation_type TEXT DEFAULT 'one_way',
-                            translation_language_a TEXT,
-                            translation_language_b TEXT
-                        )
-                        """
-                    )
-                    await conn.execute(
-                        "ALTER TABLE MEETINGS ADD COLUMN IF NOT EXISTS translation_type TEXT DEFAULT 'one_way'"
-                    )
-                    await conn.execute(
-                        "ALTER TABLE MEETINGS ADD COLUMN IF NOT EXISTS translation_language_a TEXT"
-                    )
-                    await conn.execute(
-                        "ALTER TABLE MEETINGS ADD COLUMN IF NOT EXISTS translation_language_b TEXT"
-                    )
-                    await conn.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_meetings_readable ON MEETINGS(platform, readable_id);"
-                    )
-                    await conn.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_meetings_started_at ON MEETINGS(started_at);"
-                    )
-
-                    # Calendar Events
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS CALENDAR_EVENTS (
-                            id TEXT PRIMARY KEY, -- Microsoft Event ID
-                            user_id TEXT REFERENCES USERS(id) ON DELETE CASCADE,
-                            subject TEXT,
-                            body_content TEXT,
-                            start_time TIMESTAMPTZ,
-                            end_time TIMESTAMPTZ,
-                            location TEXT,
-                            join_url TEXT,
-                            web_link TEXT,
-                            organizer TEXT,
-                            is_cancelled BOOLEAN DEFAULT FALSE,
-                            full_event_data JSONB
-                        )
-                        """
-                    )
-                    await conn.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_calendar_user_time ON CALENDAR_EVENTS(user_id, start_time);"
-                    )
-
-                    # Transcripts
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS TRANSCRIPTS (
-                            id SERIAL PRIMARY KEY,
-                            meeting_id TEXT REFERENCES MEETINGS(id) ON DELETE CASCADE,
-                            language_code TEXT NOT NULL,
-                            file_name TEXT NOT NULL,
-                            creation_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                            UNIQUE (meeting_id, language_code)
-                        );
-                        """
-                    )
-
-                    # Summaries
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS SUMMARIES (
-                            id SERIAL PRIMARY KEY,
-                            meeting_id TEXT REFERENCES MEETINGS(id) ON DELETE CASCADE,
-                            language_code TEXT NOT NULL,
-                            file_name TEXT NOT NULL,
-                            creation_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                            UNIQUE (meeting_id, language_code)
-                        );
-                        """
-                    )
+                    for statement in SCHEMA_STATEMENTS:
+                        await conn.execute(statement)
 
             with log_step(LOG_STEP):
                 logger.info(

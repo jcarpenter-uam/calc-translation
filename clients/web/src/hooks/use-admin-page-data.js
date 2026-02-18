@@ -1,4 +1,3 @@
-import { useMetrics } from "./use-metrics";
 import { useLogs } from "./use-logs.js";
 import { useUsers } from "./use-users.js";
 import { useTenants } from "./use-tenants";
@@ -21,14 +20,6 @@ export function useAdminPageData() {
     deleteTenant,
     refetch: refetchTenants,
   } = useTenants();
-
-  const {
-    serverMetrics,
-    zoomMetrics,
-    loading: metricsLoading,
-    error: metricsError,
-    refetch: fetchMetrics,
-  } = useMetrics(15000);
 
   const {
     logs,
@@ -54,13 +45,6 @@ export function useAdminPageData() {
       updateTenant,
       deleteTenant,
       refetchTenants,
-    },
-    metrics: {
-      serverMetrics,
-      zoomMetrics,
-      loading: metricsLoading,
-      error: metricsError,
-      fetchMetrics,
     },
     logs: {
       data: logs,

@@ -1,6 +1,5 @@
 import UserManagement from "./user-management.jsx";
 import TenantManagement from "./tenant-management.jsx";
-import MetricsViewing from "./metrics.jsx";
 import LogViewing from "./log-viewing.jsx";
 import { useAdmin } from "../../context/admin.jsx";
 
@@ -30,20 +29,6 @@ export function TenantManagementSection() {
   );
 }
 
-export function MetricsSection() {
-  const { metrics } = useAdmin();
-
-  return (
-    <MetricsViewing
-      serverMetrics={metrics.serverMetrics}
-      zoomMetrics={metrics.zoomMetrics}
-      loading={metrics.loading}
-      error={metrics.error}
-      onRefresh={metrics.fetchMetrics}
-    />
-  );
-}
-
 export function LogViewingSection() {
   const { logs } = useAdmin();
 
@@ -52,7 +37,7 @@ export function LogViewingSection() {
       logs={logs.data}
       loading={logs.loading}
       error={logs.error}
-      refetch={logs.fetchLogs}
+      onRefresh={logs.fetchLogs}
     />
   );
 }

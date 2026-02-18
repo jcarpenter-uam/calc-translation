@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useState } from "react";
+import useSWR from "swr";
 import { API_ROUTES } from "../constants/routes.js";
 import {
   JSON_HEADERS,
@@ -7,33 +8,27 @@ import {
   requestJson,
 } from "../lib/api-client.js";
 
+async function fetchTenants() {
+  return requestJson(API_ROUTES.tenants.base, {}, "Failed to fetch tenants");
+}
+
 export function useTenants() {
-  const [tenants, setTenants] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [mutationError, setMutationError] = useState(null);
 
-  const fetchTenants = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await requestJson(
-        API_ROUTES.tenants.base,
-        {},
-        "Failed to fetch tenants",
-      );
-      setTenants(data);
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data,
+    error: fetchError,
+    isLoading,
+    mutate,
+  } = useSWR(API_ROUTES.tenants.base, fetchTenants);
 
-  useEffect(() => {
-    fetchTenants();
-  }, [fetchTenants]);
+  const refetch = useCallback(async () => {
+    setMutationError(null);
+    await mutate();
+  }, [mutate]);
 
   const createTenant = useCallback(async (createData) => {
+    setMutationError(null);
     try {
       const newTenant = await requestJson(
         API_ROUTES.tenants.base,
@@ -44,15 +39,19 @@ export function useTenants() {
         },
         "Failed to create tenant",
       );
-      setTenants((prevTenants) => [...prevTenants, newTenant]);
+
+      await mutate((prevTenants = []) => [...prevTenants, newTenant], {
+        revalidate: false,
+      });
       return { success: true };
     } catch (err) {
-      setError(err.message);
+      setMutationError(err.message);
       return { success: false, error: err.message };
     }
-  }, []);
+  }, [mutate]);
 
   const updateTenant = useCallback(async (tenantId, updateData) => {
+    setMutationError(null);
     try {
       const updatedTenant = await requestJson(
         API_ROUTES.tenants.byId(tenantId),
@@ -64,17 +63,22 @@ export function useTenants() {
         "Failed to update tenant",
       );
 
-      setTenants((prevTenants) =>
-        prevTenants.map((t) => (t.tenant_id === tenantId ? updatedTenant : t)),
+      await mutate(
+        (prevTenants = []) =>
+          prevTenants.map((tenant) =>
+            tenant.tenant_id === tenantId ? updatedTenant : tenant,
+          ),
+        { revalidate: false },
       );
       return { success: true };
     } catch (err) {
-      setError(err.message);
+      setMutationError(err.message);
       return { success: false, error: err.message };
     }
-  }, []);
+  }, [mutate]);
 
   const deleteTenant = useCallback(async (tenantId) => {
+    setMutationError(null);
     try {
       const response = await apiFetch(API_ROUTES.tenants.byId(tenantId), {
         method: "DELETE",
@@ -84,21 +88,23 @@ export function useTenants() {
         throw new Error(await getErrorMessage(response, "Failed to delete tenant"));
       }
 
-      setTenants((prevTenants) =>
-        prevTenants.filter((t) => t.tenant_id !== tenantId),
+      await mutate(
+        (prevTenants = []) =>
+          prevTenants.filter((tenant) => tenant.tenant_id !== tenantId),
+        { revalidate: false },
       );
       return { success: true };
     } catch (err) {
-      setError(err.message);
+      setMutationError(err.message);
       return { success: false, error: err.message };
     }
-  }, []);
+  }, [mutate]);
 
   return {
-    tenants,
-    loading,
-    error,
-    refetch: fetchTenants,
+    tenants: data ?? [],
+    loading: isLoading,
+    error: mutationError || fetchError?.message || null,
+    refetch,
     createTenant,
     updateTenant,
     deleteTenant,

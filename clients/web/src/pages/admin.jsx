@@ -5,7 +5,6 @@ import { AdminProvider } from "../context/admin.jsx";
 import {
   UserManagementSection,
   TenantManagementSection,
-  MetricsSection,
   LogViewingSection,
 } from "../components/admin/sections.jsx";
 
@@ -38,8 +37,6 @@ export default function AdminPage() {
           <UserManagementSection />
           <hr className="border-zinc-200 dark:border-zinc-700" />
           <TenantManagementSection />
-          <hr className="border-zinc-200 dark:border-zinc-700" />
-          <MetricsSection />
           <hr className="border-zinc-200 dark:border-zinc-700" />
           <LogViewingSection />
         </div>

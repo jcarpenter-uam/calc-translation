@@ -1,51 +1,49 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
+import useSWR from "swr";
 import { API_ROUTES } from "../constants/routes.js";
 import { apiFetch } from "../lib/api-client.js";
-import { usePolling } from "./use-polling.js";
 
 export function useMetrics(intervalMs = 15000) {
-  const [serverMetrics, setServerMetrics] = useState(null);
-  const [zoomMetrics, setZoomMetrics] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
   const fetchMetrics = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [serverRes, zoomRes] = await Promise.all([
-        apiFetch(API_ROUTES.metrics.server),
-        apiFetch(API_ROUTES.metrics.zoom),
-      ]);
+    const [serverRes, zoomRes] = await Promise.all([
+      apiFetch(API_ROUTES.metrics.server),
+      apiFetch(API_ROUTES.metrics.zoom),
+    ]);
 
-      if (serverRes.ok) {
-        const text = await serverRes.text();
-        setServerMetrics(text);
-      } else {
-        console.error("Failed to fetch server metrics");
-      }
+    const metricsData = {
+      serverMetrics: null,
+      zoomMetrics: null,
+    };
 
-      if (zoomRes.ok) {
-        const text = await zoomRes.text();
-        setZoomMetrics(text);
-      } else {
-        console.error("Failed to fetch zoom metrics");
-      }
-
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (serverRes.ok) {
+      metricsData.serverMetrics = await serverRes.text();
+    } else {
+      console.error("Failed to fetch server metrics");
     }
+
+    if (zoomRes.ok) {
+      metricsData.zoomMetrics = await zoomRes.text();
+    } else {
+      console.error("Failed to fetch zoom metrics");
+    }
+
+    return metricsData;
   }, []);
 
-  usePolling(fetchMetrics, intervalMs);
+  const { data, error, isLoading, mutate } = useSWR("metrics", fetchMetrics, {
+    refreshInterval: intervalMs > 0 ? intervalMs : 0,
+    dedupingInterval: 5_000,
+  });
+
+  const refetch = useCallback(async () => {
+    await mutate();
+  }, [mutate]);
 
   return {
-    serverMetrics,
-    zoomMetrics,
-    loading,
-    error,
-    refetch: fetchMetrics,
+    serverMetrics: data?.serverMetrics ?? null,
+    zoomMetrics: data?.zoomMetrics ?? null,
+    loading: isLoading,
+    error: error?.message || null,
+    refetch,
   };
 }

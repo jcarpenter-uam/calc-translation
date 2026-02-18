@@ -1,43 +1,39 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
+import useSWR from "swr";
 import { API_ROUTES } from "../constants/routes.js";
-import { apiFetch, getErrorMessage } from "../lib/api-client.js";
+import { apiFetch, getErrorMessage, requestJson } from "../lib/api-client.js";
 
 export function useCalendar(startDate = null, endDate = null) {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const fetchCalendar = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append("start", startDate.toISOString());
-      if (endDate) params.append("end", endDate.toISOString());
+  const calendarUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (startDate) params.append("start", startDate.toISOString());
+    if (endDate) params.append("end", endDate.toISOString());
 
-      const queryString = params.toString();
-      const url = queryString
-        ? `${API_ROUTES.calendar.base}?${queryString}`
-        : API_ROUTES.calendar.base;
-
-      const response = await apiFetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        setEvents(data);
-      } else {
-        console.warn("Failed to fetch initial calendar data");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load calendar.");
-    } finally {
-      setLoading(false);
-    }
+    const queryString = params.toString();
+    return queryString
+      ? `${API_ROUTES.calendar.base}?${queryString}`
+      : API_ROUTES.calendar.base;
   }, [startDate, endDate]);
 
+  const fetchCalendar = useCallback(
+    async (url) => requestJson(url, {}, "Failed to load calendar."),
+    [],
+  );
+
+  const {
+    data,
+    error: fetchError,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useSWR(calendarUrl, fetchCalendar, { keepPreviousData: true });
+
   const syncCalendar = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setIsSyncing(true);
+    setSyncError(null);
     try {
       const response = await apiFetch(API_ROUTES.calendar.sync);
 
@@ -45,18 +41,25 @@ export function useCalendar(startDate = null, endDate = null) {
         throw new Error(await getErrorMessage(response, "Failed to sync calendar."));
       }
 
-      await fetchCalendar();
+      await mutate();
     } catch (err) {
       console.error(err);
-      setError(err.message);
+      setSyncError(err.message);
     } finally {
-      setLoading(false);
+      setIsSyncing(false);
     }
-  }, [fetchCalendar]);
+  }, [mutate]);
 
-  useEffect(() => {
-    fetchCalendar();
-  }, [fetchCalendar]);
+  const refetch = useCallback(async () => {
+    setSyncError(null);
+    await mutate();
+  }, [mutate]);
 
-  return { events, loading, error, syncCalendar, refetch: fetchCalendar };
+  return {
+    events: data ?? [],
+    loading: isLoading || isValidating || isSyncing,
+    error: syncError || fetchError?.message || null,
+    syncCalendar,
+    refetch,
+  };
 }

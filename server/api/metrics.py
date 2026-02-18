@@ -99,21 +99,41 @@ async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str
     active_viewer_connections = sum(
         int(session.get("viewers", 0)) for session in active_sessions
     )
-    active_participants_estimated = active_viewer_connections + len(active_sessions)
+    active_participants = 0
+    active_host_plus_viewers = 0
 
     active_sessions_by_integration: dict[str, int] = {}
     active_sessions_by_mode: dict[str, int] = {}
     active_standalone_by_mode = {"one_way": 0, "two_way": 0}
+    active_sessions_enriched: list[dict[str, Any]] = []
 
     for session in active_sessions:
         integration = session.get("integration") or "unknown"
         mode = "two_way" if session.get("shared_two_way_mode") else "one_way"
+        viewers = int(session.get("viewers", 0))
+        if integration == "standalone":
+            participants = max(viewers - 1, 0)
+            host_plus_viewers = viewers
+        else:
+            participants = viewers
+            host_plus_viewers = viewers
+
+        active_participants += participants
+        active_host_plus_viewers += host_plus_viewers
+
         active_sessions_by_integration[integration] = (
             active_sessions_by_integration.get(integration, 0) + 1
         )
         active_sessions_by_mode[mode] = active_sessions_by_mode.get(mode, 0) + 1
         if integration == "standalone":
             active_standalone_by_mode[mode] = active_standalone_by_mode.get(mode, 0) + 1
+        active_sessions_enriched.append(
+            {
+                **session,
+                "participants": participants,
+                "host_plus_viewers": host_plus_viewers,
+            }
+        )
 
     return {
         "uptime_seconds": uptime_seconds,
@@ -147,11 +167,13 @@ async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str
         "active_viewer_sessions": len(active_sessions),
         "active_sessions_total": len(active_sessions),
         "active_viewer_connections": active_viewer_connections,
-        "active_participants_estimated": active_participants_estimated,
+        "active_participants": active_participants,
+        "active_host_plus_viewers": active_host_plus_viewers,
+        "active_participants_estimated": active_host_plus_viewers,
         "active_sessions_by_integration": active_sessions_by_integration,
         "active_sessions_by_mode": active_sessions_by_mode,
         "active_standalone_by_mode": active_standalone_by_mode,
-        "active_sessions": active_sessions,
+        "active_sessions": active_sessions_enriched,
     }
 
 
@@ -324,9 +346,21 @@ def _to_prometheus_text(metrics: dict[str, Any]) -> str:
     )
     _format_metric(
         lines,
+        "calc_translation_active_participants",
+        metrics["active_participants"],
+        "Estimated participants excluding host.",
+    )
+    _format_metric(
+        lines,
+        "calc_translation_active_host_plus_viewers",
+        metrics["active_host_plus_viewers"],
+        "Estimated host plus viewers.",
+    )
+    _format_metric(
+        lines,
         "calc_translation_active_participants_estimated",
         metrics["active_participants_estimated"],
-        "Estimated participants: one host per active session plus connected viewers.",
+        "Legacy alias for host plus viewers.",
     )
 
     cpu_per_core = metrics["cpu_percent_per_core"]
@@ -389,6 +423,14 @@ def _to_prometheus_text(metrics: dict[str, Any]) -> str:
         "# HELP calc_translation_session_participants_estimated Estimated participants per active session (host + viewers)."
     )
     lines.append("# TYPE calc_translation_session_participants_estimated gauge")
+    lines.append(
+        "# HELP calc_translation_session_participants Estimated participants per active session excluding host."
+    )
+    lines.append("# TYPE calc_translation_session_participants gauge")
+    lines.append(
+        "# HELP calc_translation_session_host_plus_viewers Estimated host plus viewers per active session."
+    )
+    lines.append("# TYPE calc_translation_session_host_plus_viewers gauge")
     for session in metrics["active_sessions"]:
         session_id = session.get("session_id") or "unknown"
         integration = session.get("integration") or "unknown"
@@ -397,12 +439,19 @@ def _to_prometheus_text(metrics: dict[str, Any]) -> str:
         integration_safe = _escape_label_value(integration)
         mode_safe = _escape_label_value(mode)
         viewers = int(session.get("viewers", 0))
-        participants_estimated = viewers + 1
+        participants = int(session.get("participants", viewers))
+        host_plus_viewers = int(session.get("host_plus_viewers", viewers))
         lines.append(
             f'calc_translation_session_viewers{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {viewers}'
         )
         lines.append(
-            f'calc_translation_session_participants_estimated{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {participants_estimated}'
+            f'calc_translation_session_participants{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {participants}'
+        )
+        lines.append(
+            f'calc_translation_session_host_plus_viewers{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {host_plus_viewers}'
+        )
+        lines.append(
+            f'calc_translation_session_participants_estimated{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {host_plus_viewers}'
         )
 
     return "\n".join(lines) + "\n"

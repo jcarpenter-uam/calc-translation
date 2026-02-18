@@ -1,20 +1,14 @@
 import asyncio
 import gc
-import logging
 import os
 import time
 from typing import Any
 
-import httpx
 import psutil
-from core.authentication import get_admin_user_payload
-from core.config import settings
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 from services.receiver import ACTIVE_SESSIONS
 from services.connection_manager import ConnectionManager
-
-logger = logging.getLogger(__name__)
 
 START_TIME = time.time()
 
@@ -323,44 +317,8 @@ def create_metrics_router(viewer_manager: ConnectionManager):
             media_type="text/plain; version=0.0.4; charset=utf-8",
         )
 
-    @router.get("/metrics", response_class=PlainTextResponse)
+    @router.get("/api/metrics", response_class=PlainTextResponse)
     async def get_prometheus_metrics():
         return await _build_server_metrics_response()
-
-    @router.get(
-        "/api/metrics/server",
-        response_class=PlainTextResponse,
-        dependencies=[Depends(get_admin_user_payload)],
-    )
-    async def get_server_metrics():
-        return await _build_server_metrics_response()
-
-    @router.get("/api/metrics/zoom", response_class=PlainTextResponse)
-    async def get_zoom_metrics(
-        _user: dict = Depends(get_admin_user_payload),
-    ):
-        """
-        Proxies the metrics from the zoom microservice.
-        """
-        target_url = settings.ZM_METRICS_URL
-
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(target_url, timeout=5.0)
-
-                if response.status_code != 200:
-                    logger.error(f"Zoom service returned status {response.status_code}")
-                    raise HTTPException(status_code=502, detail="Zoom service error")
-
-                return PlainTextResponse(
-                    content=response.text,
-                    media_type=response.headers.get(
-                        "content-type", "text/plain; charset=utf-8"
-                    ),
-                )
-
-        except httpx.RequestError as exc:
-            logger.error(f"Error requesting Zoom metrics: {exc}")
-            raise HTTPException(status_code=503, detail="Zoom service unavailable")
 
     return router

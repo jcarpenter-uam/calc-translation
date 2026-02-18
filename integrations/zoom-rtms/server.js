@@ -69,7 +69,13 @@ function attemptPromotion(meetingUuid, oldStreamId) {
   }
 }
 
-// TODO: Needs to be protected somehow
+function escapePrometheusLabel(value) {
+  return String(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("\n", "\\n")
+    .replaceAll('"', '\\"');
+}
+
 app.get("/metrics", (req, res) => {
   const uptime = process.uptime();
   const memory = process.memoryUsage();
@@ -86,32 +92,131 @@ app.get("/metrics", (req, res) => {
   lastCpuUsage = currentCpu;
   lastCpuTime = now;
 
-  const streams = Array.from(activeWorkers.values()).map((entry) => {
-    return {
-      streamId: entry.streamId,
-      meetingUuid: entry.metadata?.meeting_uuid || "unknown",
-      role: entry.isPrimary ? "PRIMARY" : "STANDBY",
-      pid: entry.worker.pid,
-      startTime: new Date(entry.startTime).toISOString(),
-      durationSeconds: Math.floor((Date.now() - entry.startTime) / 1000),
-      usage: entry.metrics || { status: "waiting_for_report" },
-    };
-  });
+  const lines = [];
 
-  res.json({
-    status: "ok",
-    system: {
-      uptimeSeconds: Math.floor(uptime),
-      memoryMB: {
-        rss: Math.round(memory.rss / 1024 / 1024),
-      },
-      cpuPercent: parseFloat(cpuPercent.toFixed(1)),
-      loadAverage: os.loadavg(),
-    },
-    activeStreamsCount: activeWorkers.size,
-    activeMeetingsCount: activeMeetings.size,
-    streams: streams,
-  });
+  lines.push(
+    "# HELP calc_translation_zoom_process_uptime_seconds RTMS service uptime in seconds.",
+  );
+  lines.push("# TYPE calc_translation_zoom_process_uptime_seconds counter");
+  lines.push(`calc_translation_zoom_process_uptime_seconds ${Math.floor(uptime)}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_process_resident_memory_bytes RTMS process RSS memory in bytes.",
+  );
+  lines.push("# TYPE calc_translation_zoom_process_resident_memory_bytes gauge");
+  lines.push(`calc_translation_zoom_process_resident_memory_bytes ${memory.rss}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_process_heap_used_bytes RTMS process heap used in bytes.",
+  );
+  lines.push("# TYPE calc_translation_zoom_process_heap_used_bytes gauge");
+  lines.push(`calc_translation_zoom_process_heap_used_bytes ${memory.heapUsed}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_process_external_memory_bytes RTMS process external memory in bytes.",
+  );
+  lines.push("# TYPE calc_translation_zoom_process_external_memory_bytes gauge");
+  lines.push(`calc_translation_zoom_process_external_memory_bytes ${memory.external}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_process_cpu_percent RTMS process CPU percent.",
+  );
+  lines.push("# TYPE calc_translation_zoom_process_cpu_percent gauge");
+  lines.push(`calc_translation_zoom_process_cpu_percent ${cpuPercent.toFixed(4)}`);
+
+  const loadAverage = os.loadavg();
+  lines.push(
+    "# HELP calc_translation_zoom_system_load_average_1m Host load average over 1 minute.",
+  );
+  lines.push("# TYPE calc_translation_zoom_system_load_average_1m gauge");
+  lines.push(`calc_translation_zoom_system_load_average_1m ${loadAverage[0]}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_system_load_average_5m Host load average over 5 minutes.",
+  );
+  lines.push("# TYPE calc_translation_zoom_system_load_average_5m gauge");
+  lines.push(`calc_translation_zoom_system_load_average_5m ${loadAverage[1]}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_system_load_average_15m Host load average over 15 minutes.",
+  );
+  lines.push("# TYPE calc_translation_zoom_system_load_average_15m gauge");
+  lines.push(`calc_translation_zoom_system_load_average_15m ${loadAverage[2]}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_active_streams Number of active RTMS streams.",
+  );
+  lines.push("# TYPE calc_translation_zoom_active_streams gauge");
+  lines.push(`calc_translation_zoom_active_streams ${activeWorkers.size}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_active_meetings Number of meetings with active RTMS streams.",
+  );
+  lines.push("# TYPE calc_translation_zoom_active_meetings gauge");
+  lines.push(`calc_translation_zoom_active_meetings ${activeMeetings.size}`);
+
+  lines.push(
+    "# HELP calc_translation_zoom_worker_up Worker status by stream (1=running).",
+  );
+  lines.push("# TYPE calc_translation_zoom_worker_up gauge");
+  lines.push(
+    "# HELP calc_translation_zoom_worker_duration_seconds Worker runtime by stream in seconds.",
+  );
+  lines.push("# TYPE calc_translation_zoom_worker_duration_seconds gauge");
+  lines.push(
+    "# HELP calc_translation_zoom_worker_memory_rss_megabytes Worker RSS memory in MB.",
+  );
+  lines.push("# TYPE calc_translation_zoom_worker_memory_rss_megabytes gauge");
+  lines.push(
+    "# HELP calc_translation_zoom_worker_memory_heap_megabytes Worker heap usage in MB.",
+  );
+  lines.push("# TYPE calc_translation_zoom_worker_memory_heap_megabytes gauge");
+  lines.push(
+    "# HELP calc_translation_zoom_worker_memory_external_megabytes Worker external memory in MB.",
+  );
+  lines.push("# TYPE calc_translation_zoom_worker_memory_external_megabytes gauge");
+  lines.push(
+    "# HELP calc_translation_zoom_worker_cpu_percent Worker CPU percent.",
+  );
+  lines.push("# TYPE calc_translation_zoom_worker_cpu_percent gauge");
+
+  for (const entry of activeWorkers.values()) {
+    const streamId = escapePrometheusLabel(entry.streamId || "unknown");
+    const meetingUuid = escapePrometheusLabel(
+      entry.metadata?.meeting_uuid || "unknown",
+    );
+    const role = escapePrometheusLabel(entry.isPrimary ? "primary" : "standby");
+    const pid = escapePrometheusLabel(entry.worker?.pid || "unknown");
+    const labels = `{stream_id="${streamId}",meeting_uuid="${meetingUuid}",role="${role}",worker_pid="${pid}"}`;
+
+    const durationSeconds = Math.floor((Date.now() - entry.startTime) / 1000);
+    lines.push(`calc_translation_zoom_worker_up${labels} 1`);
+    lines.push(`calc_translation_zoom_worker_duration_seconds${labels} ${durationSeconds}`);
+
+    const usage = entry.metrics || {};
+    const rssMb = Number.parseFloat(usage.rss);
+    const heapMb = Number.parseFloat(usage.heap);
+    const extMb = Number.parseFloat(usage.ext);
+    const workerCpuPercent = Number.parseFloat(usage.cpu);
+
+    if (!Number.isNaN(rssMb)) {
+      lines.push(`calc_translation_zoom_worker_memory_rss_megabytes${labels} ${rssMb}`);
+    }
+    if (!Number.isNaN(heapMb)) {
+      lines.push(`calc_translation_zoom_worker_memory_heap_megabytes${labels} ${heapMb}`);
+    }
+    if (!Number.isNaN(extMb)) {
+      lines.push(`calc_translation_zoom_worker_memory_external_megabytes${labels} ${extMb}`);
+    }
+    if (!Number.isNaN(workerCpuPercent)) {
+      lines.push(`calc_translation_zoom_worker_cpu_percent${labels} ${workerCpuPercent}`);
+    }
+  }
+
+  res
+    .status(200)
+    .set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+    .send(`${lines.join("\n")}\n`);
 });
 
 app.post("/zoom", (req, res) => {

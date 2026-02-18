@@ -5,29 +5,12 @@ import { apiFetch } from "../lib/api-client.js";
 
 export function useMetrics(intervalMs = 15000) {
   const fetchMetrics = useCallback(async () => {
-    const [serverRes, zoomRes] = await Promise.all([
-      apiFetch(API_ROUTES.metrics.server),
-      apiFetch(API_ROUTES.metrics.zoom),
-    ]);
-
-    const metricsData = {
-      serverMetrics: null,
-      zoomMetrics: null,
-    };
-
-    if (serverRes.ok) {
-      metricsData.serverMetrics = await serverRes.text();
-    } else {
-      console.error("Failed to fetch server metrics");
+    const res = await apiFetch(API_ROUTES.metrics.all);
+    if (!res.ok) {
+      console.error("Failed to fetch metrics");
+      return { metrics: null };
     }
-
-    if (zoomRes.ok) {
-      metricsData.zoomMetrics = await zoomRes.text();
-    } else {
-      console.error("Failed to fetch zoom metrics");
-    }
-
-    return metricsData;
+    return { metrics: await res.text() };
   }, []);
 
   const { data, error, isLoading, mutate } = useSWR("metrics", fetchMetrics, {
@@ -40,8 +23,8 @@ export function useMetrics(intervalMs = 15000) {
   }, [mutate]);
 
   return {
-    serverMetrics: data?.serverMetrics ?? null,
-    zoomMetrics: data?.zoomMetrics ?? null,
+    serverMetrics: data?.metrics ?? null,
+    zoomMetrics: null,
     loading: isLoading,
     error: error?.message || null,
     refetch,

@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     ZM_PUBLIC_KEY: str
     ZM_RTMS_CLIENT: str
     ZM_RTMS_SECRET: str
-    ZM_METRICS_URL: str = "http://localhost:8080/metrics"
 
     MAILER_TENANT_ID: str
     MAILER_CLIENT_ID: str

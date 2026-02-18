@@ -16,8 +16,7 @@ export const API_ROUTES = {
     byId: (tenantId) => `/api/tenant/${tenantId}`,
   },
   metrics: {
-    server: "/api/metrics/server",
-    zoom: "/api/metrics/zoom",
+    all: "/api/metrics",
   },
   logs: {
     byLines: (lines) => `/api/logs/?lines=${lines}`,

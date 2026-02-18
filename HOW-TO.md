@@ -33,7 +33,6 @@ services:
       - ZM_PUBLIC_KEY=${ZM_PUBLIC_KEY}
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
-      - ZM_METRICS_URL=http://zoom-rtms:8080/metrics
       - MAILER_TENANT_ID=${MAILER_TENANT_ID}
       - MAILER_CLIENT_ID=${MAILER_CLIENT_ID}
       - MAILER_CLIENT_SECRET=${MAILER_CLIENT_SECRET}
@@ -157,10 +156,6 @@ RECEIVER_LEASE_HEARTBEAT_SECONDS=10 # Default if not set
 #
 # How long a reconnecting receiver waits to acquire lease before rejecting
 RECEIVER_LEASE_WAIT_SECONDS=6 # Default if not set
-#
-# Endpoint for the zoom microservice metrics
-# This fetches the metrics and returns them for the admin page
-ZM_METRICS_URL="http://localhost:8080/metrics" # Default if not set
 #
 # Ollama Summerization
 # This sends meeting summaries to each user in their language

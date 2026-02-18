@@ -1,55 +1,32 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
+import useSWR from "swr";
+import { API_ROUTES } from "../constants/routes.js";
+import { apiFetch } from "../lib/api-client.js";
 
 export function useMetrics(intervalMs = 15000) {
-  const [serverMetrics, setServerMetrics] = useState(null);
-  const [zoomMetrics, setZoomMetrics] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
   const fetchMetrics = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [serverRes, zoomRes] = await Promise.all([
-        fetch("/api/metrics/server"),
-        fetch("/api/metrics/zoom"),
-      ]);
-
-      if (serverRes.ok) {
-        const text = await serverRes.text();
-        setServerMetrics(text);
-      } else {
-        console.error("Failed to fetch server metrics");
-      }
-
-      if (zoomRes.ok) {
-        const text = await zoomRes.text();
-        setZoomMetrics(text);
-      } else {
-        console.error("Failed to fetch zoom metrics");
-      }
-
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    const res = await apiFetch(API_ROUTES.metrics.all);
+    if (!res.ok) {
+      console.error("Failed to fetch metrics");
+      return { metrics: null };
     }
+    return { metrics: await res.text() };
   }, []);
 
-  useEffect(() => {
-    fetchMetrics();
+  const { data, error, isLoading, mutate } = useSWR("metrics", fetchMetrics, {
+    refreshInterval: intervalMs > 0 ? intervalMs : 0,
+    dedupingInterval: 5_000,
+  });
 
-    if (intervalMs > 0) {
-      const interval = setInterval(fetchMetrics, intervalMs);
-      return () => clearInterval(interval);
-    }
-  }, [fetchMetrics, intervalMs]);
+  const refetch = useCallback(async () => {
+    await mutate();
+  }, [mutate]);
 
   return {
-    serverMetrics,
-    zoomMetrics,
-    loading,
-    error,
-    refetch: fetchMetrics,
+    serverMetrics: data?.metrics ?? null,
+    zoomMetrics: null,
+    loading: isLoading,
+    error: error?.message || null,
+    refetch,
   };
 }

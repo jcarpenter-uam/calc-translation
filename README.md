@@ -13,6 +13,7 @@ This project is a comprehensive real-time transcription and translation platform
 * **Smart Backfill:** Utilizing Alibaba's Qwen LLM, the system instantly translates the entire session history when a user joins late or switches their target language, ensuring no context is lost.
 * **AI Summaries:** Using the meeting transcript a meeting summary is emailed to each meeting attendee at the end of a meeting.
 * **Calendar Sync:** Integrates with Microsoft 365 to automatically fetch upcoming meetings and generate one-click join links.
+* **Redis-Backed Stateless Runtime:** Transcript history is stored in Redis, session events/control use Redis Pub/Sub for cross-instance coordination, and receiver ownership uses Redis leases for failover.
 
 ## How It Works
 

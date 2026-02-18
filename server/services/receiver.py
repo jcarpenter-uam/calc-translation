@@ -2,9 +2,11 @@ import asyncio
 import base64
 import json
 import logging
+import uuid
 from datetime import datetime
 from typing import Dict, Optional, List
 
+from core.config import settings
 from core.db import AsyncSessionLocal
 from core.logging_setup import (
     add_session_log_handler,
@@ -17,6 +19,7 @@ from core.logging_setup import (
 from fastapi import WebSocket, WebSocketDisconnect
 from models.meetings import Meeting
 from models.users import User
+from redis import asyncio as aioredis
 from sqlalchemy import select, update
 
 from .backfill import BackfillService
@@ -35,6 +38,104 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_SESSIONS: Dict[str, "MeetingSession"] = {}
 SESSION_LOCK = asyncio.Lock()
+RECEIVER_REDIS = aioredis.from_url(
+    settings.REDIS_URL, encoding="utf-8", decode_responses=True
+)
+
+
+async def close_receiver_resources():
+    await RECEIVER_REDIS.aclose()
+
+
+class ReceiverLease:
+    def __init__(
+        self,
+        session_id: str,
+        owner_instance: str,
+        ttl_seconds: int = settings.RECEIVER_LEASE_TTL_SECONDS,
+        heartbeat_interval: int = settings.RECEIVER_LEASE_HEARTBEAT_SECONDS,
+    ):
+        self.session_id = session_id
+        self.owner_instance = owner_instance
+        self.ttl_seconds = ttl_seconds
+        self.heartbeat_interval = heartbeat_interval
+        self._token = str(uuid.uuid4())
+        self.owner_value = f"{self.owner_instance}:{self._token}"
+        self.key = f"{settings.REDIS_KEY_PREFIX}:receiver:lease:{self.session_id}"
+        self._heartbeat_task: Optional[asyncio.Task] = None
+
+    async def _compare_and_expire(self) -> bool:
+        lua = """
+        if redis.call('get', KEYS[1]) == ARGV[1] then
+            return redis.call('expire', KEYS[1], tonumber(ARGV[2]))
+        else
+            return 0
+        end
+        """
+        result = await RECEIVER_REDIS.eval(
+            lua, 1, self.key, self.owner_value, str(self.ttl_seconds)
+        )
+        return bool(result)
+
+    async def _compare_and_delete(self) -> bool:
+        lua = """
+        if redis.call('get', KEYS[1]) == ARGV[1] then
+            return redis.call('del', KEYS[1])
+        else
+            return 0
+        end
+        """
+        result = await RECEIVER_REDIS.eval(lua, 1, self.key, self.owner_value)
+        return bool(result)
+
+    async def acquire(self, wait_timeout_seconds: int = 6) -> bool:
+        deadline = asyncio.get_running_loop().time() + wait_timeout_seconds
+        while asyncio.get_running_loop().time() < deadline:
+            current = await RECEIVER_REDIS.get(self.key)
+            if current == self.owner_value:
+                await RECEIVER_REDIS.expire(self.key, self.ttl_seconds)
+                return True
+
+            acquired = await RECEIVER_REDIS.set(
+                self.key, self.owner_value, ex=self.ttl_seconds, nx=True
+            )
+            if acquired:
+                return True
+
+            await asyncio.sleep(0.5)
+        return False
+
+    async def start_heartbeat(self):
+        if self._heartbeat_task:
+            return
+
+        async def _heartbeat():
+            try:
+                while True:
+                    await asyncio.sleep(self.heartbeat_interval)
+                    ok = await self._compare_and_expire()
+                    if not ok:
+                        logger.warning(
+                            f"Receiver lease lost for session {self.session_id}. "
+                            "Another instance may have taken ownership."
+                        )
+                        break
+            except asyncio.CancelledError:
+                pass
+
+        self._heartbeat_task = asyncio.create_task(_heartbeat())
+
+    async def stop(self, release: bool = True):
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            self._heartbeat_task = None
+
+        if release:
+            await self._compare_and_delete()
 
 
 class StreamHandler:
@@ -272,7 +373,14 @@ class MeetingSession:
     This survives across WebSocket disconnects/reconnects.
     """
 
-    def __init__(self, session_id: str, integration: str, viewer_manager, loop):
+    def __init__(
+        self,
+        session_id: str,
+        integration: str,
+        viewer_manager,
+        loop,
+        lease: ReceiverLease,
+    ):
         self.session_id = session_id
         self.integration = integration
         self.viewer_manager = viewer_manager
@@ -294,6 +402,7 @@ class MeetingSession:
         self.translation_type: str = "one_way"
         self.translation_language_a: Optional[str] = None
         self.translation_language_b: Optional[str] = None
+        self.lease = lease
 
     async def initialize(self):
         """Called only once when the session is first created."""
@@ -334,11 +443,12 @@ class MeetingSession:
         except Exception as e:
             logger.error(f"Failed to migrate waiting room sessions: {e}", exc_info=True)
 
-        self.viewer_manager.register_transcription_session(
+        await self.viewer_manager.register_transcription_session(
             self.session_id,
             self.integration,
             shared_two_way_mode=self._is_two_way_session(),
         )
+        await self.lease.start_heartbeat()
         await self.viewer_manager.broadcast_to_session(
             self.session_id,
             {
@@ -495,7 +605,7 @@ class MeetingSession:
                 await handler.close()
 
         if language_code != "en":
-            self.viewer_manager.cache.clear_language_cache(
+            await self.viewer_manager.cache.clear_language_cache(
                 self.session_id, language_code
             )
 
@@ -564,7 +674,8 @@ class MeetingSession:
 
         asyncio.create_task(run_post_processing())
 
-        self.viewer_manager.deregister_transcription_session(self.session_id)
+        await self.viewer_manager.deregister_transcription_session(self.session_id)
+        await self.lease.stop(release=True)
         if self.session_log_handler:
             remove_session_log_handler(self.session_log_handler)
 
@@ -675,17 +786,43 @@ async def handle_receiver_session(
     loop = asyncio.get_running_loop()
     graceful_exit = False
     meeting_session = None
+    instance_id = getattr(viewer_manager, "_instance_id", "unknown-instance")
+    lease = ReceiverLease(session_id=session_id, owner_instance=instance_id)
 
     try:
         async with SESSION_LOCK:
             if session_id in ACTIVE_SESSIONS:
                 meeting_session = ACTIVE_SESSIONS[session_id]
+                acquired = await meeting_session.lease.acquire(wait_timeout_seconds=1)
+                if not acquired:
+                    logger.warning(
+                        f"Local receiver session {session_id} no longer owns lease."
+                    )
+                    await websocket.close(
+                        code=1013,
+                        reason="Session ownership moved to another server instance.",
+                    )
+                    return
                 meeting_session.cancel_cleanup()
                 logger.info(f"Resuming existing session: {session_id}")
             else:
+                acquired = await lease.acquire(
+                    wait_timeout_seconds=settings.RECEIVER_LEASE_WAIT_SECONDS
+                )
+                if not acquired:
+                    logger.warning(
+                        f"Receiver lease unavailable for {session_id}. "
+                        "Another instance is currently handling this session."
+                    )
+                    await websocket.close(
+                        code=1013,
+                        reason="Session is currently active on another server instance.",
+                    )
+                    return
+
                 logger.info(f"Initializing new session: {session_id}")
                 meeting_session = MeetingSession(
-                    session_id, integration, viewer_manager, loop
+                    session_id, integration, viewer_manager, loop, lease=lease
                 )
                 await meeting_session.initialize()
                 ACTIVE_SESSIONS[session_id] = meeting_session

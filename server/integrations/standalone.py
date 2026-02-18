@@ -97,7 +97,7 @@ async def create_standalone_session(
                 meeting_time=now,
                 join_url=join_url,
                 topic=None,
-                language_hints=language_hints,
+                language_hints=language_hints or [],
                 translation_type=translation_type,
                 translation_language_a=language_a,
                 translation_language_b=language_b,

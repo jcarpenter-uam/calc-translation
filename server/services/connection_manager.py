@@ -1,12 +1,16 @@
 import asyncio
+import json
 import logging
 import threading
+import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Set
 
+from core.config import settings
 from core.db import AsyncSessionLocal
 from core.logging_setup import log_step, session_id_var
 from fastapi import WebSocket
+from redis import asyncio as aioredis
 from sqlalchemy import text
 
 from .cache import TranscriptCache
@@ -31,9 +35,44 @@ class ConnectionManager:
 
         self.cache = cache
         self._session_lock = threading.Lock()
+        self._instance_id = str(uuid.uuid4())
+        self._redis = aioredis.from_url(
+            settings.REDIS_URL, encoding="utf-8", decode_responses=True
+        )
+        self._redis_prefix = settings.REDIS_KEY_PREFIX
+        self._session_events_pattern = f"{self._redis_prefix}:session:*:events"
+        self._control_channel = (
+            f"{self._redis_prefix}:control:{self._instance_id}"
+        )
+        self._pubsub_task: asyncio.Task | None = None
 
         with log_step("CONN-MANAGER"):
-            logger.debug("ConnectionManager initialized.")
+            logger.debug(
+                f"ConnectionManager initialized. Instance ID: {self._instance_id}"
+            )
+
+    async def start(self):
+        if not self._pubsub_task:
+            self._pubsub_task = asyncio.create_task(self._pubsub_loop())
+
+    async def close(self):
+        if self._pubsub_task:
+            self._pubsub_task.cancel()
+            try:
+                await self._pubsub_task
+            except asyncio.CancelledError:
+                pass
+            self._pubsub_task = None
+        await self._redis.aclose()
+
+    def _session_meta_key(self, session_id: str) -> str:
+        return f"{self._redis_prefix}:session:{session_id}:meta"
+
+    def _session_events_channel(self, session_id: str) -> str:
+        return f"{self._redis_prefix}:session:{session_id}:events"
+
+    def _receiver_lease_key(self, session_id: str) -> str:
+        return f"{self._redis_prefix}:receiver:lease:{session_id}"
 
     def get_all_clients(self) -> List[Dict[str, Any]]:
         """Returns a list of all active transcription sessions."""
@@ -50,9 +89,68 @@ class ConnectionManager:
             if data.get("integration") == integration
         ]
 
+    async def get_global_active_sessions(self) -> List[Dict[str, Any]]:
+        sessions: List[Dict[str, Any]] = []
+        pattern = f"{self._redis_prefix}:session:*:meta"
+        async for key in self._redis.scan_iter(match=pattern):
+            data = await self._redis.hgetall(key)
+            if data.get("active") != "1":
+                continue
+
+            # calc-translation:session:{session_id}:meta
+            parts = key.split(":")
+            if len(parts) < 4:
+                continue
+            session_id = parts[-2]
+            if not await self._redis.exists(self._receiver_lease_key(session_id)):
+                continue
+
+            local_sockets = self.sessions.get(session_id, [])
+            language_counts = {}
+            for ws in local_sockets:
+                lang = self.socket_languages.get(ws, "unknown")
+                language_counts[lang] = language_counts.get(lang, 0) + 1
+
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "integration": data.get("integration"),
+                    "start_time": data.get("start_time"),
+                    "shared_two_way_mode": data.get("shared_two_way_mode") == "1",
+                    "owner_instance": data.get("owner_instance"),
+                    "viewers": len(local_sockets),
+                    "viewer_languages": language_counts,
+                }
+            )
+        return sessions
+
     def is_session_active(self, session_id: str) -> bool:
         """Checks if a transcription session is currently active."""
         return session_id in self.active_transcription_sessions
+
+    async def is_session_active_global(self, session_id: str) -> bool:
+        if session_id in self.active_transcription_sessions:
+            return True
+        meta_key = self._session_meta_key(session_id)
+        is_active = (await self._redis.hget(meta_key, "active")) == "1"
+        if not is_active:
+            return False
+        return bool(await self._redis.exists(self._receiver_lease_key(session_id)))
+
+    async def get_session_metadata_global(self, session_id: str) -> Dict[str, Any]:
+        if session_id in self.active_transcription_sessions:
+            return self.active_transcription_sessions[session_id]
+        meta_key = self._session_meta_key(session_id)
+        data = await self._redis.hgetall(meta_key)
+        if not data:
+            return {}
+        if not await self._redis.exists(self._receiver_lease_key(session_id)):
+            return {}
+        return {
+            "integration": data.get("integration"),
+            "start_time": data.get("start_time"),
+            "shared_two_way_mode": data.get("shared_two_way_mode") == "1",
+        }
 
     def _is_shared_two_way_mode(self, session_id: str) -> bool:
         session_data = self.active_transcription_sessions.get(session_id, {})
@@ -96,6 +194,139 @@ class ConnectionManager:
                 if lang:
                     languages.add(lang)
         return languages
+
+    async def _handle_control_message(self, command: Dict[str, Any]):
+        session_id = command.get("session_id")
+        language_code = command.get("language_code")
+        cmd_type = command.get("command")
+
+        if not session_id or not language_code or not cmd_type:
+            return
+
+        if cmd_type == "language_request":
+            callback = self.language_request_callbacks.get(session_id)
+        elif cmd_type == "language_remove":
+            callback = self.language_removal_callbacks.get(session_id)
+        else:
+            return
+
+        if not callback:
+            return
+
+        try:
+            if asyncio.iscoroutinefunction(callback):
+                await callback(language_code)
+            else:
+                callback(language_code)
+        except Exception as e:
+            logger.error(
+                f"Error handling control message '{cmd_type}' for session {session_id}: {e}"
+            )
+
+    async def _send_to_local_viewers(self, session_id: str, payload: Dict[str, Any]):
+        if session_id not in self.sessions:
+            return
+
+        payload_lang = payload.get("target_language")
+        session_meta = await self.get_session_metadata_global(session_id)
+        is_shared_two_way_mode = bool(session_meta.get("shared_two_way_mode"))
+        connections_to_send = []
+
+        for conn in self.sessions[session_id]:
+            user_lang = self.socket_languages.get(conn)
+            if is_shared_two_way_mode or not payload_lang or user_lang == payload_lang:
+                connections_to_send.append(conn)
+
+        if connections_to_send:
+            tasks = [conn.send_json(payload) for conn in connections_to_send]
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _pubsub_loop(self):
+        pubsub = self._redis.pubsub()
+        await pubsub.psubscribe(self._session_events_pattern)
+        await pubsub.subscribe(self._control_channel)
+
+        with log_step("CONN-MANAGER"):
+            logger.info(
+                f"Redis pubsub loop started for instance {self._instance_id}."
+            )
+
+        try:
+            while True:
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
+                if not message:
+                    await asyncio.sleep(0.05)
+                    continue
+
+                msg_type = message.get("type")
+                data = message.get("data")
+                if not data:
+                    continue
+
+                try:
+                    parsed = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+
+                if msg_type == "pmessage":
+                    sender_instance = parsed.get("sender_instance")
+                    if sender_instance == self._instance_id:
+                        continue
+                    session_id = parsed.get("session_id")
+                    payload = parsed.get("payload")
+                    if session_id and isinstance(payload, dict):
+                        await self._send_to_local_viewers(session_id, payload)
+                        if (
+                            payload.get("type") == "status"
+                            and payload.get("status") == "active"
+                            and session_id in self.sessions
+                        ):
+                            requested = set()
+                            for ws in self.sessions[session_id]:
+                                lang = self.socket_languages.get(ws)
+                                if lang and lang != "two_way":
+                                    requested.add(lang)
+                            for lang in requested:
+                                await self._publish_control_to_owner(
+                                    session_id, "language_request", lang
+                                )
+
+                elif msg_type == "message":
+                    await self._handle_control_message(parsed)
+        except asyncio.CancelledError:
+            with log_step("CONN-MANAGER"):
+                logger.info("Redis pubsub loop cancelled.")
+            raise
+        finally:
+            await pubsub.aclose()
+
+    async def _publish_control_to_owner(
+        self, session_id: str, command: str, language_code: str
+    ):
+        meta_key = self._session_meta_key(session_id)
+        owner_instance = await self._redis.hget(meta_key, "owner_instance")
+        if not owner_instance:
+            await self._handle_control_message(
+                {
+                    "session_id": session_id,
+                    "command": command,
+                    "language_code": language_code,
+                }
+            )
+            return
+
+        channel = f"{self._redis_prefix}:control:{owner_instance}"
+        payload = json.dumps(
+            {
+                "session_id": session_id,
+                "command": command,
+                "language_code": language_code,
+            },
+            separators=(",", ":"),
+        )
+        await self._redis.publish(channel, payload)
 
     async def _record_attendee(self, session_id: str, user_id: str):
         """
@@ -173,7 +404,7 @@ class ConnectionManager:
         try:
             await asyncio.sleep(20)
 
-            if not self.is_session_active(session_id):
+            if not await self.is_session_active_global(session_id):
                 with log_step("CONN-MANAGER"):
                     logger.debug(
                         f"Session '{session_id}' is no longer active. Skipping cleanup for '{language_code}'."
@@ -185,18 +416,9 @@ class ConnectionManager:
                     logger.info(
                         f"Language '{language_code}' for session '{session_id}' idle for 20s. Triggering cleanup."
                     )
-
-                if session_id in self.language_removal_callbacks:
-                    try:
-                        callback = self.language_removal_callbacks[session_id]
-                        if asyncio.iscoroutinefunction(callback):
-                            await callback(language_code)
-                        else:
-                            callback(language_code)
-                    except Exception as e:
-                        logger.error(
-                            f"Error triggering language removal callback for session {session_id}: {e}"
-                        )
+                await self._publish_control_to_owner(
+                    session_id, "language_remove", language_code
+                )
         except asyncio.CancelledError:
             with log_step("CONN-MANAGER"):
                 logger.debug(
@@ -224,7 +446,9 @@ class ConnectionManager:
                 self.sessions[session_id] = []
             self.sessions[session_id].append(websocket)
 
-            effective_language = self._get_effective_language(session_id, language_code)
+            session_meta = await self.get_session_metadata_global(session_id)
+            is_shared_two_way_mode = bool(session_meta.get("shared_two_way_mode"))
+            effective_language = "two_way" if is_shared_two_way_mode else language_code
             self.socket_languages[websocket] = effective_language
             self.socket_users[websocket] = user_id
 
@@ -235,23 +459,15 @@ class ConnectionManager:
                 self.cleanup_tasks[session_id][effective_language].cancel()
                 del self.cleanup_tasks[session_id][effective_language]
 
-            is_shared_two_way_mode = self._is_shared_two_way_mode(session_id)
-
-            if self.is_session_active(session_id):
-                if not is_shared_two_way_mode and session_id in self.language_request_callbacks:
-                    try:
-                        callback = self.language_request_callbacks[session_id]
-                        if asyncio.iscoroutinefunction(callback):
-                            await callback(effective_language)
-                        else:
-                            callback(effective_language)
-                    except Exception as e:
-                        logger.error(
-                            f"Error triggering language request callback for session {session_id}: {e}"
-                        )
+            is_active_global = await self.is_session_active_global(session_id)
+            if is_active_global:
+                if not is_shared_two_way_mode:
+                    await self._publish_control_to_owner(
+                        session_id, "language_request", effective_language
+                    )
                 asyncio.create_task(self._record_attendee(session_id, user_id))
 
-            history = self.cache.get_history(session_id, effective_language)
+            history = await self.cache.get_history(session_id, effective_language)
 
             with log_step("CONN-MANAGER"):
                 logger.debug(
@@ -281,7 +497,7 @@ class ConnectionManager:
         finally:
             session_id_var.reset(session_token)
 
-    def disconnect(self, websocket: WebSocket, session_id: str):
+    async def disconnect(self, websocket: WebSocket, session_id: str):
         """Removes a WebSocket connection from the active list for a session."""
 
         session_token = session_id_var.set(session_id)
@@ -305,7 +521,8 @@ class ConnectionManager:
             if language_code:
                 lang_count = self.get_viewer_count(session_id, language_code)
 
-            if not self.is_session_active(session_id):
+            is_active_global = await self.is_session_active_global(session_id)
+            if not is_active_global:
                 with log_step("CONN-MANAGER"):
                     logger.debug(
                         f"Viewer disconnected from inactive/waiting session (Lang: {language_code})."
@@ -323,10 +540,13 @@ class ConnectionManager:
                     f"Active Viewers: Total={total_count}, {language_code}={lang_count}"
                 )
 
+            session_meta = await self.get_session_metadata_global(session_id)
+            is_shared_two_way_mode = bool(session_meta.get("shared_two_way_mode"))
+
             if (
                 language_code
                 and language_code != "en"
-                and not self._is_shared_two_way_mode(session_id)
+                and not is_shared_two_way_mode
             ):
                 remaining_viewers = self.get_viewer_count(session_id, language_code)
                 if remaining_viewers == 0:
@@ -361,21 +581,20 @@ class ConnectionManager:
         effective_payload_lang = "two_way" if is_shared_two_way_mode else payload_lang
 
         if payload.get("message_id") and effective_payload_lang:
-            self.cache.process_message(session_id, effective_payload_lang, payload)
+            await self.cache.process_message(session_id, effective_payload_lang, payload)
+        await self._send_to_local_viewers(session_id, payload)
 
-        if session_id in self.sessions:
-            connections_to_send = []
+        envelope = json.dumps(
+            {
+                "session_id": session_id,
+                "sender_instance": self._instance_id,
+                "payload": payload,
+            },
+            separators=(",", ":"),
+        )
+        await self._redis.publish(self._session_events_channel(session_id), envelope)
 
-            for conn in self.sessions[session_id]:
-                user_lang = self.socket_languages.get(conn)
-                if is_shared_two_way_mode or not payload_lang or user_lang == payload_lang:
-                    connections_to_send.append(conn)
-
-            if connections_to_send:
-                tasks = [conn.send_json(payload) for conn in connections_to_send]
-                await asyncio.gather(*tasks, return_exceptions=True)
-
-    def register_transcription_session(
+    async def register_transcription_session(
         self,
         session_id: str,
         integration: str,
@@ -388,6 +607,7 @@ class ConnectionManager:
         """
         session_token = session_id_var.set(session_id)
         try:
+            session_data: Dict[str, Any] | None = None
             with self._session_lock:
                 if session_id in self.active_transcription_sessions:
                     with log_step("CONN-MANAGER"):
@@ -403,19 +623,31 @@ class ConnectionManager:
                 }
                 self.active_transcription_sessions[session_id] = session_data
 
-                with log_step("CONN-MANAGER"):
-                    logger.info(
-                        f"Transcription session registered as active for integration '{integration}'."
-                    )
-                return True
+            await self._redis.hset(
+                self._session_meta_key(session_id),
+                mapping={
+                    "active": "1",
+                    "integration": integration,
+                    "start_time": session_data["start_time"],
+                    "shared_two_way_mode": "1" if shared_two_way_mode else "0",
+                    "owner_instance": self._instance_id,
+                },
+            )
+
+            with log_step("CONN-MANAGER"):
+                logger.info(
+                    f"Transcription session registered as active for integration '{integration}'."
+                )
+            return True
         finally:
             session_id_var.reset(session_token)
 
-    def deregister_transcription_session(self, session_id: str):
+    async def deregister_transcription_session(self, session_id: str):
         """Atomically marks a transcription session as inactive."""
 
         session_token = session_id_var.set(session_id)
         try:
+            integration = None
             with self._session_lock:
                 if session_id in self.active_transcription_sessions:
                     session_data = self.active_transcription_sessions.pop(session_id)
@@ -430,9 +662,11 @@ class ConnectionManager:
                             task.cancel()
                         del self.cleanup_tasks[session_id]
 
-                    with log_step("CONN-MANAGER"):
-                        logger.info(
-                            f"Transcription session deregistered for integration '{integration}'."
-                        )
+            if integration is not None:
+                await self._redis.delete(self._session_meta_key(session_id))
+                with log_step("CONN-MANAGER"):
+                    logger.info(
+                        f"Transcription session deregistered for integration '{integration}'."
+                    )
         finally:
             session_id_var.reset(session_token)

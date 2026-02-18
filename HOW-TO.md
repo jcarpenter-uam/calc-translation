@@ -22,13 +22,17 @@ services:
       - SONIOX_API_KEY=${SONIOX_API_KEY}
       - ALIBABA_API_KEY=${ALIBABA_API_KEY}
       - MAX_CACHE_MB=${MAX_CACHE_MB}
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX}
+      - RECEIVER_LEASE_TTL_SECONDS=${RECEIVER_LEASE_TTL_SECONDS}
+      - RECEIVER_LEASE_HEARTBEAT_SECONDS=${RECEIVER_LEASE_HEARTBEAT_SECONDS}
+      - RECEIVER_LEASE_WAIT_SECONDS=${RECEIVER_LEASE_WAIT_SECONDS}
       - DATABASE_URL=${DATABASE_URL}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - ZM_PUBLIC_KEY=${ZM_PUBLIC_KEY}
       - ZM_RTMS_CLIENT=${ZM_RTMS_CLIENT}
       - ZM_RTMS_SECRET=${ZM_RTMS_SECRET}
-      - ZM_METRICS_URL=http://zoom-rtms:8080/metrics
       - MAILER_TENANT_ID=${MAILER_TENANT_ID}
       - MAILER_CLIENT_ID=${MAILER_CLIENT_ID}
       - MAILER_CLIENT_SECRET=${MAILER_CLIENT_SECRET}
@@ -132,13 +136,26 @@ MAILER_SENDER_EMAIL="translation@your-domain.com"
 # Session log files are always saved at a detailed level.
 LOGGING_LEVEL=INFO # Default if not set
 #
-# The max size (in MB) for each session's in-memory transcript cache.
+# The max size (in MB) for each session/language Redis transcript cache.
 # Once exceeded, the oldest entries are evicted.
 MAX_CACHE_MB=10 # Default if not set
 #
-# Endpoint for the zoom microservice metrics
-# This fetches the metrics and returns them for the admin page
-ZM_METRICS_URL="http://localhost:8080/metrics" # Default if not set
+# Redis URL for transcript cache/session cache state
+REDIS_URL="redis://redis:6379/0" # Default if not set
+#
+# Prefix used for Redis keys
+REDIS_KEY_PREFIX="calc-translation" # Default if not set
+#
+# Redis is also used for cross-instance Pub/Sub session fanout and language control routing.
+#
+# Lease TTL for active receiver ownership (host transcription socket failover window)
+RECEIVER_LEASE_TTL_SECONDS=30 # Default if not set
+#
+# How often the active receiver refreshes the ownership lease
+RECEIVER_LEASE_HEARTBEAT_SECONDS=10 # Default if not set
+#
+# How long a reconnecting receiver waits to acquire lease before rejecting
+RECEIVER_LEASE_WAIT_SECONDS=6 # Default if not set
 #
 # Ollama Summerization
 # This sends meeting summaries to each user in their language

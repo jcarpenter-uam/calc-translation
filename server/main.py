@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from services.cache import TranscriptCache
 from services.connection_manager import ConnectionManager
+from services.receiver import close_receiver_resources
 
 app = FastAPI(
     title="CALC Transcription and Translation API",
@@ -39,10 +40,19 @@ async def startup_event():
     This ensures the DB file and tables are ready before handling requests.
     """
     await db.init_db()
+    await transcript_cache.ping()
+    await viewer_manager.start()
 
 
 transcript_cache = TranscriptCache()
 viewer_manager = ConnectionManager(cache=transcript_cache)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await viewer_manager.close()
+    await transcript_cache.close()
+    await close_receiver_resources()
 
 transcribe_router = create_transcribe_router(viewer_manager=viewer_manager)
 app.include_router(transcribe_router)

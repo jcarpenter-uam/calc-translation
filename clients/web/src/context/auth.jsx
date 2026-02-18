@@ -1,35 +1,36 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useCallback, useContext } from "react";
+import useSWR from "swr";
+import { apiFetch } from "../lib/api-client.js";
 
 const AuthContext = createContext(null);
 
+async function fetchCurrentUser() {
+  const response = await apiFetch("/api/users/me");
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, mutate } = useSWR("/api/users/me", fetchCurrentUser);
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await fetch("/api/users/me");
+  const setUser = useCallback(
+    (nextUser) => {
+      mutate(
+        (currentUser) =>
+          typeof nextUser === "function" ? nextUser(currentUser) : nextUser,
+        { revalidate: false },
+      );
+    },
+    [mutate],
+  );
 
-        if (!response.ok) {
-          throw new Error("Not authenticated");
-        }
-
-        const userData = await response.json();
-        setUser(userData);
-      } catch (error) {
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUser();
-  }, []);
-
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
-      const response = await fetch("/api/auth/logout", { method: "POST" });
+      const response = await apiFetch("/api/auth/logout", { method: "POST" });
 
       if (!response.ok) {
         console.warn(
@@ -39,12 +40,12 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.error("Network error during logout:", error);
     } finally {
-      setUser(null);
+      mutate(null, { revalidate: false });
       window.location.href = "/login";
     }
-  };
+  }, [mutate]);
 
-  const value = { user, setUser, isLoading, logout };
+  const value = { user: data ?? null, setUser, isLoading, logout };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

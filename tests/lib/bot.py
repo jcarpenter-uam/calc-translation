@@ -10,8 +10,6 @@ from datetime import datetime, timedelta, timezone
 import aiohttp
 import jwt
 
-WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000/ws/transcribe")
-
 CHUNK_SIZE = 4096
 SAMPLE_RATE = 16000
 CHANNELS = 1
@@ -25,11 +23,18 @@ SPEECH_URL = (
 
 
 class ZoomRTMSBot:
-    def __init__(self, meeting_uuid=None, host_id=None, user_name="Test Bot"):
+    def __init__(
+        self,
+        meeting_uuid=None,
+        host_id=None,
+        user_name="Test Bot",
+        websocket_url=None,
+    ):
         self.meeting_uuid = meeting_uuid or f"test-{uuid.uuid4()}"
         self.host_id = host_id or f"host-{uuid.uuid4().hex[:8]}"
         self.stream_id = f"st_{uuid.uuid4().hex[:8]}"
         self.user_name = user_name
+        self.websocket_url = websocket_url
 
         self.ws = None
         self.session = None
@@ -103,13 +108,16 @@ class ZoomRTMSBot:
         return jwt.encode(payload, self.private_key, algorithm="RS256")
 
     async def connect(self, reconnect=False, invalid_auth=False):
+        if not self.websocket_url:
+            raise ValueError("Missing websocket_url.")
+
         try:
             token = self.generate_token(invalid_signature=invalid_auth)
         except Exception as e:
             print(f"Token generation failed: {e}")
             return False
 
-        url = f"{WEBSOCKET_URL.rstrip('/')}/zoom/{self.meeting_uuid}"
+        url = f"{self.websocket_url.rstrip('/')}/zoom/{self.meeting_uuid}"
         headers = {"Authorization": f"Bearer {token}"}
 
         self.session = aiohttp.ClientSession()

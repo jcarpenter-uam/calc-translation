@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AdminCard, AdminSection } from "./ui.jsx";
 
 const formatUptime = (seconds) => {
   const h = Math.floor(seconds / 3600);
@@ -15,12 +16,16 @@ const SystemCard = ({ title, data }) => {
   const { uptimeSeconds, managerMemoryMB, memoryMB, loadAverage, cpuPercent } =
     data.system;
   const rss = managerMemoryMB?.rss || memoryMB?.rss || 0;
+  const memoryPercent = data.system?.memoryPercent;
+  const perCore = data.system?.cpuPercentPerCore || [];
+  const appWorkload = data.system?.appWorkload || {};
+  const cacheStats = appWorkload.transcriptCache || {};
 
   const cpuDisplay =
     cpuPercent !== undefined ? `${cpuPercent.toFixed(1)}%` : "N/A";
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 p-4">
+    <AdminCard className="bg-white dark:bg-zinc-900 p-4">
       <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3 border-b border-zinc-100 dark:border-zinc-800 pb-2">
         {title}
       </h3>
@@ -44,6 +49,11 @@ const SystemCard = ({ title, data }) => {
             <Tooltip text={t("tooltip_memory")} />
           </div>
           <p className="font-mono text-zinc-700 dark:text-zinc-200">{rss} MB</p>
+          {memoryPercent !== undefined && (
+            <p className="font-mono text-[11px] text-zinc-500">
+              Process: {memoryPercent.toFixed(1)}%
+            </p>
+          )}
         </div>
 
         {/* CPU Usage (Container/Process Specific) */}
@@ -76,7 +86,111 @@ const SystemCard = ({ title, data }) => {
           </p>
         </div>
       </div>
-    </div>
+
+      <div className="mt-4 border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-2">
+        <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+          Memory Breakdown
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-mono text-zinc-700 dark:text-zinc-200">
+          <div>RSS: {memoryMB?.rss ?? 0} MB</div>
+          <div>USS: {memoryMB?.uss ?? 0} MB</div>
+          <div>Shared: {memoryMB?.shared ?? 0} MB</div>
+          <div>VMS: {memoryMB?.vms ?? 0} MB</div>
+          <div>PSS: {memoryMB?.pss ?? 0} MB</div>
+          <div>Swap: {memoryMB?.swap ?? 0} MB</div>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-2">
+        <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+          CPU Per Core
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {perCore.length === 0 ? (
+            <span className="text-xs text-zinc-500">N/A</span>
+          ) : (
+            perCore.map((v, i) => (
+              <span
+                key={i}
+                className="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-xs font-mono border border-zinc-200 dark:border-zinc-700"
+              >
+                c{i}: {Number(v).toFixed(0)}%
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-2">
+        <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+          App Workload
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono text-zinc-700 dark:text-zinc-200">
+          <div>Receiver Sessions: {appWorkload.activeReceiverSessions ?? 0}</div>
+          <div>Stream Handlers: {appWorkload.activeStreamHandlers ?? 0}</div>
+          <div>Backfill Tasks: {appWorkload.activeBackfillTasks ?? 0}</div>
+          <div>Cache Total: {cacheStats.total_mb ?? 0} MB</div>
+        </div>
+      </div>
+    </AdminCard>
+  );
+};
+
+const TopThreadsCard = ({ system }) => {
+  const rows = system?.threads?.topByCpuSeconds || [];
+  return (
+    <ActiveItemsTable
+      title="Top CPU Threads"
+      items={rows}
+      emptyMessage="No thread data."
+      columns={[
+        { header: "Thread ID", key: "thread_id" },
+        { header: "Name", key: "name" },
+        {
+          header: "CPU sec",
+          key: "cpu_seconds",
+          align: "right",
+          render: (r) => Number(r.cpu_seconds || 0).toFixed(2),
+        },
+        {
+          header: "User sec",
+          key: "user_seconds",
+          align: "right",
+          render: (r) => Number(r.user_seconds || 0).toFixed(2),
+        },
+        {
+          header: "Sys sec",
+          key: "system_seconds",
+          align: "right",
+          render: (r) => Number(r.system_seconds || 0).toFixed(2),
+        },
+      ]}
+    />
+  );
+};
+
+const CacheEntriesCard = ({ system }) => {
+  const rows = system?.appWorkload?.transcriptCache?.top_entries || [];
+  return (
+    <ActiveItemsTable
+      title="Largest Transcript Cache Entries"
+      items={rows}
+      emptyMessage="No transcript cache entries."
+      columns={[
+        {
+          header: "Session",
+          key: "session_id",
+          className: "break-all",
+        },
+        { header: "Lang", key: "language_code" },
+        {
+          header: "Size MB",
+          key: "size_bytes",
+          align: "right",
+          render: (r) => ((Number(r.size_bytes || 0) / 1024 / 1024).toFixed(2)),
+        },
+      ]}
+    />
   );
 };
 
@@ -110,17 +224,17 @@ const Tooltip = ({ text }) => (
 const ActiveItemsTable = ({ title, items, columns, emptyMessage }) => {
   if (!items || items.length === 0) {
     return (
-      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 p-4">
+      <AdminCard className="bg-white dark:bg-zinc-900 p-4">
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
           {title}
         </h3>
         <p className="text-sm text-zinc-500">{emptyMessage}</p>
-      </div>
+      </AdminCard>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+    <AdminCard className="bg-white dark:bg-zinc-900 overflow-hidden">
       <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 flex justify-between items-center">
         <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
           {title} <span className="text-zinc-500 ml-1">({items.length})</span>
@@ -159,7 +273,7 @@ const ActiveItemsTable = ({ title, items, columns, emptyMessage }) => {
           </tbody>
         </table>
       </div>
-    </div>
+    </AdminCard>
   );
 };
 
@@ -260,7 +374,7 @@ export default function MetricsViewing({
   ];
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-4">
+    <AdminSection className="space-y-4">
       {/* Header Area */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
@@ -324,6 +438,8 @@ export default function MetricsViewing({
                   title={t("server_backend_title")}
                   data={serverData}
                 />
+                <TopThreadsCard system={serverData?.system} />
+                <CacheEntriesCard system={serverData?.system} />
                 <ActiveItemsTable
                   title={t("server_sessions_title")}
                   items={serverData?.sessions || []}
@@ -347,6 +463,6 @@ export default function MetricsViewing({
           </div>
         </>
       )}
-    </div>
+    </AdminSection>
   );
 }

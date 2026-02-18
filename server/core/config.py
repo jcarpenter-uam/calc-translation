@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     ALIBABA_API_KEY: str = ""
 
     MAX_CACHE_MB: int = 10
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_KEY_PREFIX: str = "calc-translation"
+    RECEIVER_LEASE_TTL_SECONDS: int = 30
+    RECEIVER_LEASE_HEARTBEAT_SECONDS: int = 10
+    RECEIVER_LEASE_WAIT_SECONDS: int = 6
 
     DATABASE_URL: str
 
@@ -30,7 +35,6 @@ class Settings(BaseSettings):
     ZM_PUBLIC_KEY: str
     ZM_RTMS_CLIENT: str
     ZM_RTMS_SECRET: str
-    ZM_METRICS_URL: str = "http://localhost:8080/metrics"
 
     MAILER_TENANT_ID: str
     MAILER_CLIENT_ID: str

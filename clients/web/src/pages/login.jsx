@@ -3,6 +3,9 @@ import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useLanguage } from "../context/language.jsx";
 import { FaMicrosoft, FaGoogle } from "react-icons/fa";
+import { API_ROUTES } from "../constants/routes.js";
+import { JSON_HEADERS, apiFetch, getErrorMessage } from "../lib/api-client.js";
+import ProviderLoginButton from "../components/auth/provider-login-button.jsx";
 
 export default function Login() {
   const { t } = useTranslation();
@@ -12,7 +15,7 @@ export default function Login() {
   const [availableProviders, setAvailableProviders] = useState([]);
 
   const [searchParams] = useSearchParams();
-  const { language } = useLanguage();
+  const { uiLanguage } = useLanguage();
 
   const [infoMessageKey, setInfoMessageKey] = useState(null);
   useEffect(() => {
@@ -21,33 +24,32 @@ export default function Login() {
     }
   }, [searchParams]);
 
-  /**
-   * Handles the login flow.
-   * @param {string|null} forcedProvider - Optional. If set, forces specific provider login.
-   */
   const handleLogin = async (e, forcedProvider = null) => {
     if (e) e.preventDefault();
     setError(null);
     setIsLoading(true);
 
     try {
-      const payload = { email, language };
+      const payload = { email, language: uiLanguage };
 
       if (forcedProvider) {
         payload.provider = forcedProvider;
       }
 
-      const response = await fetch("/api/auth/login", {
+      const response = await apiFetch(API_ROUTES.auth.login, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        if (response.status === 403)
+        if (response.status === 403) {
           throw new Error(t("domain_not_configured"));
-        throw new Error(errData.detail || t("login_error_generic"));
+        }
+
+        throw new Error(
+          await getErrorMessage(response, t("login_error_generic")),
+        );
       }
 
       const data = await response.json();
@@ -90,23 +92,19 @@ export default function Login() {
           {availableProviders.length > 0 ? (
             <div className="space-y-3 animate-fade-in">
               {availableProviders.includes("microsoft") && (
-                <button
+                <ProviderLoginButton
                   onClick={() => handleLogin(null, "microsoft")}
-                  className="cursor-pointer w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 font-medium rounded-md border border-zinc-300 dark:border-zinc-600 flex items-center justify-center gap-3 transition-colors"
-                >
-                  <FaMicrosoft className="text-[#00a4ef] text-lg" />
-                  {t("signin_microsoft")}
-                </button>
+                  icon={<FaMicrosoft className="text-[#00a4ef] text-lg" />}
+                  label={t("signin_microsoft")}
+                />
               )}
 
               {availableProviders.includes("google") && (
-                <button
+                <ProviderLoginButton
                   onClick={() => handleLogin(null, "google")}
-                  className="cursor-pointer w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 font-medium rounded-md border border-zinc-300 dark:border-zinc-600 flex items-center justify-center gap-3 transition-colors"
-                >
-                  <FaGoogle className="text-red-500 text-lg" />
-                  {t("signin_google")}
-                </button>
+                  icon={<FaGoogle className="text-red-500 text-lg" />}
+                  label={t("signin_google")}
+                />
               )}
 
               <button

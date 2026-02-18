@@ -1,77 +1,88 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useState } from "react";
+import useSWR from "swr";
+import { API_ROUTES } from "../constants/routes.js";
+import {
+  JSON_HEADERS,
+  apiFetch,
+  getErrorMessage,
+  requestJson,
+} from "../lib/api-client.js";
+
+async function fetchUsers() {
+  return requestJson(API_ROUTES.users.base, {}, "Failed to fetch users");
+}
 
 export function useUsers() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [mutationError, setMutationError] = useState(null);
 
-  // Fetch all users
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/users/");
-      if (!response.ok) throw new Error("Failed to fetch users");
-      const data = await response.json();
-      setUsers(data);
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data,
+    error: fetchError,
+    isLoading,
+    mutate,
+  } = useSWR(API_ROUTES.users.base, fetchUsers);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  const refetch = useCallback(async () => {
+    setMutationError(null);
+    await mutate();
+  }, [mutate]);
 
-  // Toggle Admin Status
   const toggleUserAdmin = useCallback(async (userId, isAdmin) => {
+    setMutationError(null);
     try {
-      const response = await fetch(`/api/users/${userId}/admin`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_admin: isAdmin }),
-      });
+      const updatedUser = await requestJson(
+        API_ROUTES.users.admin(userId),
+        {
+          method: "PUT",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ is_admin: isAdmin }),
+        },
+        "Failed to update admin status",
+      );
 
-      if (!response.ok) throw new Error("Failed to update admin status");
-
-      const updatedUser = await response.json();
-
-      setUsers((prevUsers) =>
-        prevUsers.map((user) =>
-          user.id === userId ? { ...user, ...updatedUser } : user,
-        ),
+      await mutate(
+        (prevUsers = []) =>
+          prevUsers.map((user) =>
+            user.id === userId ? { ...user, ...updatedUser } : user,
+          ),
+        { revalidate: false },
       );
       return { success: true };
     } catch (err) {
-      setError(err.message);
+      setMutationError(err.message);
       return { success: false, error: err.message };
     }
-  }, []);
+  }, [mutate]);
 
-  // Delete User
   const deleteUser = useCallback(async (userId) => {
+    setMutationError(null);
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await apiFetch(API_ROUTES.users.byId(userId), {
         method: "DELETE",
       });
 
-      if (!response.ok) throw new Error("Failed to delete user");
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, "Failed to delete user"));
+      }
 
-      setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
+      await mutate(
+        (prevUsers = []) =>
+          prevUsers.filter((user) => user.id !== userId),
+        { revalidate: false },
+      );
       return { success: true };
     } catch (err) {
       console.error("Delete error:", err);
+      setMutationError(err.message);
       return { success: false, error: err.message };
     }
-  }, []);
+  }, [mutate]);
 
   return {
-    users,
-    loading,
-    error,
-    refetch: fetchUsers,
+    users: data ?? [],
+    loading: isLoading,
+    error: mutationError || fetchError?.message || null,
+    refetch,
     toggleUserAdmin,
     deleteUser,
   };

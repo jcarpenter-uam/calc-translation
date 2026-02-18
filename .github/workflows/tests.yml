@@ -1,0 +1,30 @@
+name: On-Demand Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      STAGING_BASE_DOMAIN: ${{ secrets.STAGING_BASE_DOMAIN }}
+      PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+      STRESS_SOAK_SECONDS: "180"
+      SOAK_MAX_MEMORY_INCREASE_PCT: "10"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && pip install -r tests/requirements.txt
+
+      - name: Run all tests
+        run: pytest -q tests -s

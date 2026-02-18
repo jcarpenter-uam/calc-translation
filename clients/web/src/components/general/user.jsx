@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
-import { useAuth } from "../../context/auth";
-import SettingsModal from "../settings/modal";
+import React, { useCallback, useRef, useState } from "react";
+import { useAuth } from "../../context/auth.jsx";
+import SettingsModal from "../settings/modal.jsx";
 import { useTranslation } from "react-i18next";
+import { useClickOutside } from "../../hooks/use-click-outside.js";
 
 /**
  * Generates initials from a full name.
@@ -28,17 +29,11 @@ export default function UserAvatar() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [dropdownRef]);
+  const closeDropdown = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
+  useClickOutside(dropdownRef, closeDropdown);
 
   if (isLoading || !user) {
     return null;

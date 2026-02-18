@@ -25,18 +25,16 @@ async def test_api_authz_matrix(http_base_url):
 # Purpose: verify long-running load does not exceed configured memory growth threshold.
 @pytest.mark.asyncio
 @pytest.mark.stress
-async def test_long_soak_memory_stability(transcribe_url, http_base_url):
+async def test_long_soak_memory_stability(
+    transcribe_url,
+    http_base_url,
+    session_ram_baseline_bytes,
+):
     soak_seconds = int(os.getenv("STRESS_SOAK_SECONDS", "180"))
-    max_mem_increase_pct = float(os.getenv("SOAK_MAX_MEMORY_INCREASE_PCT", "60"))
+    max_residual_growth_pct = float(os.getenv("SOAK_MAX_MEMORY_INCREASE_PCT", "10"))
 
     metrics_url = f"{http_base_url}/api/metrics"
-    async with aiohttp.ClientSession() as http_session:
-        async with http_session.get(metrics_url) as resp:
-            before_text = await resp.text()
-
-    before = parse_prometheus_metric(
-        before_text, "calc_translation_process_resident_memory_bytes"
-    )
+    baseline = float(session_ram_baseline_bytes)
 
     bot = ZoomRTMSBot(websocket_url=transcribe_url)
     assert await bot.connect()
@@ -52,8 +50,11 @@ async def test_long_soak_memory_stability(transcribe_url, http_base_url):
         after_text, "calc_translation_process_resident_memory_bytes"
     )
 
-    if before is not None and after is not None and before > 0:
-        increase_pct = ((after - before) / before) * 100
+    if after is not None and baseline > 0:
+        increase_pct = ((after - baseline) / baseline) * 100
         assert (
-            increase_pct <= max_mem_increase_pct
-        ), f"Memory increase too high in soak test: {increase_pct:.2f}%"
+            increase_pct <= max_residual_growth_pct
+        ), (
+            "Residual memory growth too high after soak run: "
+            f"{increase_pct:.2f}% (baseline={baseline:.0f}, after={after:.0f})"
+        )

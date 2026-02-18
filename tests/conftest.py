@@ -1,3 +1,6 @@
+import json
+from urllib.request import urlopen
+
 import pytest
 
 from lib.config import (
@@ -7,6 +10,7 @@ from lib.config import (
     resolve_transcribe_url,
     resolve_view_url,
 )
+from lib.staging_harness import parse_prometheus_metric
 
 
 @pytest.fixture(scope="session")
@@ -22,6 +26,23 @@ def view_url() -> str:
 @pytest.fixture(scope="session")
 def http_base_url() -> str:
     return resolve_http_base_url()
+
+
+@pytest.fixture(scope="session")
+def session_ram_baseline_bytes(http_base_url: str) -> float:
+    """
+    Captures process RSS once near session start so late stability checks can
+    detect residual memory growth after all test activity.
+    """
+    metrics_url = f"{http_base_url}/api/metrics"
+    with urlopen(metrics_url, timeout=20) as response:
+        raw = response.read().decode("utf-8")
+    baseline = parse_prometheus_metric(
+        raw, "calc_translation_process_resident_memory_bytes"
+    )
+    if baseline is None:
+        raise RuntimeError("Could not read baseline RSS metric from /api/metrics")
+    return baseline
 
 
 @pytest.fixture(scope="session")

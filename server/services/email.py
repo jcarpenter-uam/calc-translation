@@ -5,9 +5,9 @@ import os
 import urllib.parse
 from datetime import datetime
 
-import httpx
 import msal
 from core.config import settings
+from core.http_client import get_http_client
 from core.logging_setup import log_step
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,24 @@ class EmailService:
             desc = result.get("error_description")
             raise Exception(f"Could not acquire token: {error} - {desc}")
 
+    async def _read_binary_file(self, path: str) -> bytes:
+        def _read() -> bytes:
+            with open(path, "rb") as f:
+                return f.read()
+
+        return await asyncio.to_thread(_read)
+
+    async def _read_text_file(self, path: str) -> str:
+        def _read() -> str:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+
+        return await asyncio.to_thread(_read)
+
     async def _send_graph_email(
         self,
         to_email: str,
+        token: str,
         subject: str,
         body_html: str,
         attachment_path: str = None,
@@ -63,7 +78,6 @@ class EmailService:
         """
         with log_step(LOG_STEP):
             try:
-                token = self._get_access_token()
                 endpoint = f"https://graph.microsoft.com/v1.0/users/{self.sender_email}/sendMail"
 
                 message = {
@@ -76,9 +90,7 @@ class EmailService:
 
                 if attachment_path and os.path.exists(attachment_path):
                     try:
-                        with open(attachment_path, "rb") as f:
-                            file_content = f.read()
-
+                        file_content = await self._read_binary_file(attachment_path)
                         content_bytes = base64.b64encode(file_content).decode("utf-8")
 
                         message["attachments"] = [
@@ -101,18 +113,18 @@ class EmailService:
                     "Content-Type": "application/json",
                 }
 
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        endpoint, json=payload, headers=headers
-                    )
+                client = get_http_client()
+                response = await client.post(
+                    endpoint, json=payload, headers=headers
+                )
 
-                    if response.status_code == 202:
-                        return True
-                    else:
-                        logger.error(
-                            f"Graph API Error ({response.status_code}): {response.text}"
-                        )
-                        return False
+                if response.status_code == 202:
+                    return True
+                else:
+                    logger.error(
+                        f"Graph API Error ({response.status_code}): {response.text}"
+                    )
+                    return False
 
             except Exception as e:
                 logger.exception(f"CRITICAL FAILURE sending to {to_email}")
@@ -134,6 +146,12 @@ class EmailService:
             return
 
         with log_step(LOG_STEP):
+            try:
+                token = self._get_access_token()
+            except Exception as e:
+                logger.error(f"Failed to acquire Graph access token for batch send: {e}")
+                return
+
             safe_session_id = urllib.parse.quote(session_id, safe="")
             output_dir = os.path.join("output", integration, safe_session_id)
 
@@ -143,7 +161,6 @@ class EmailService:
                 f"Distributing transcripts and summaries to {len(attendees)} attendees for session {session_id}..."
             )
 
-            loop = asyncio.get_running_loop()
             tasks = []
 
             for row in attendees:
@@ -191,8 +208,7 @@ class EmailService:
 
                 if os.path.exists(summary_path):
                     try:
-                        with open(summary_path, "r", encoding="utf-8") as f:
-                            raw_summary = f.read()
+                        raw_summary = await self._read_text_file(summary_path)
                         summary_content = raw_summary.replace("\n", "<br>")
                     except Exception as e:
                         logger.warning(
@@ -267,6 +283,7 @@ class EmailService:
                     tasks.append(
                         self._send_graph_email(
                             email,
+                            token,
                             subject,
                             body,
                             vtt_path,

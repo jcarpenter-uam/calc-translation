@@ -3,9 +3,9 @@ import logging
 from datetime import datetime, time, timedelta, timezone
 from typing import List, Optional
 
-import httpx
 from core.authentication import get_current_user_payload
 from core.db import AsyncSessionLocal
+from core.http_client import get_http_client
 from core.logging_setup import log_step
 from fastapi import APIRouter, Depends, HTTPException
 from integrations.entra import get_valid_microsoft_token
@@ -54,10 +54,10 @@ def create_calender_router() -> APIRouter:
             f"&$orderby=start/dateTime"
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                url, headers={"Authorization": f"Bearer {access_token}"}
-            )
+        client = get_http_client()
+        response = await client.get(
+            url, headers={"Authorization": f"Bearer {access_token}"}
+        )
 
         if response.status_code != 200:
             logger.error(f"Microsoft Graph API Error: {response.text}")
@@ -82,10 +82,10 @@ def create_calender_router() -> APIRouter:
             f"&orderBy=startTime"
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                url, headers={"Authorization": f"Bearer {access_token}"}
-            )
+        client = get_http_client()
+        response = await client.get(
+            url, headers={"Authorization": f"Bearer {access_token}"}
+        )
 
         if response.status_code != 200:
             logger.error(f"Google Calendar API Error: {response.text}")

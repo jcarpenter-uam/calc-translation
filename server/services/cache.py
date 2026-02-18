@@ -195,6 +195,21 @@ class TranscriptCache:
         finally:
             session_id_var.reset(session_token)
 
+    async def get_message(
+        self, session_id: str, language_code: str, message_id: str
+    ) -> Dict[str, Any] | None:
+        session_token = session_id_var.set(session_id)
+        try:
+            if not message_id:
+                return None
+            items_key = self._language_items_key(session_id, language_code)
+            payload = await self._redis.hget(items_key, message_id)
+            if not payload:
+                return None
+            return json.loads(payload)
+        finally:
+            session_id_var.reset(session_token)
+
     async def clear_language_cache(self, session_id: str, language_code: str):
         """
         Removes the cache for a specific language.

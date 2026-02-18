@@ -16,6 +16,7 @@ from sqlalchemy.dialects.postgresql import insert
 logger = logging.getLogger(__name__)
 
 LOG_STEP = "SUMMARY"
+SUMMARY_CONCURRENCY = 3
 
 
 class SummaryService:
@@ -31,6 +32,21 @@ class SummaryService:
 
             self.client = ollama.AsyncClient(**client_kwargs)
             self.model = settings.OLLAMA_MODEL
+            self._semaphore = asyncio.Semaphore(SUMMARY_CONCURRENCY)
+
+    async def _read_text_file(self, path: str) -> str:
+        def _read() -> str:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+
+        return await asyncio.to_thread(_read)
+
+    async def _write_text_file(self, path: str, content: str):
+        def _write():
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+        await asyncio.to_thread(_write)
 
     def _clean_vtt_content(self, vtt_content: str) -> str:
         lines = vtt_content.splitlines()
@@ -70,60 +86,60 @@ class SummaryService:
         self, source_text: str, target_lang: str, output_dir: str, session_id: str
     ):
         """Helper to run one Ollama generation task."""
-        with log_step(LOG_STEP):
-            try:
-                logger.info(
-                    f"Generating {target_lang} summary for session {session_id} using {self.model}..."
-                )
-
-                system_prompt = (
-                    f"Your task is to analyze the provided meeting transcript and generate a structured summary corresponding to this language code '{target_lang}'.\n\n"
-                    "Do NOT include timestamps or preamble. Your job is to only provide the summary in the target language."
-                )
-
-                response = await self.client.chat(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": system_prompt,
-                        },
-                        {
-                            "role": "user",
-                            "content": f"TRANSCRIPT:\n{source_text}",
-                        },
-                    ],
-                )
-
-                summary_text = response["message"]["content"]
-
-                filename = f"summary_{target_lang}.txt"
-                path = os.path.join(output_dir, filename)
-
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(summary_text)
-
-                async with AsyncSessionLocal() as session:
-                    stmt = insert(Summary).values(
-                        meeting_id=session_id,
-                        language_code=target_lang,
-                        file_name=filename,
+        async with self._semaphore:
+            with log_step(LOG_STEP):
+                try:
+                    logger.info(
+                        f"Generating {target_lang} summary for session {session_id} using {self.model}..."
                     )
-                    stmt = stmt.on_conflict_do_update(
-                        index_elements=[Summary.meeting_id, Summary.language_code],
-                        set_={
-                            "file_name": stmt.excluded.file_name,
-                        },
+
+                    system_prompt = (
+                        f"Your task is to analyze the provided meeting transcript and generate a structured summary corresponding to this language code '{target_lang}'.\n\n"
+                        "Do NOT include timestamps or preamble. Your job is to only provide the summary in the target language."
                     )
-                    await session.execute(stmt)
-                    await session.commit()
 
-                logger.info(f"Completed {target_lang} summary for {session_id}.")
-                return True
+                    response = await self.client.chat(
+                        model=self.model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": system_prompt,
+                            },
+                            {
+                                "role": "user",
+                                "content": f"TRANSCRIPT:\n{source_text}",
+                            },
+                        ],
+                    )
 
-            except Exception as e:
-                logger.error(f"Failed to generate {target_lang} summary: {e}")
-                return False
+                    summary_text = response["message"]["content"]
+
+                    filename = f"summary_{target_lang}.txt"
+                    path = os.path.join(output_dir, filename)
+
+                    await self._write_text_file(path, summary_text)
+
+                    async with AsyncSessionLocal() as session:
+                        stmt = insert(Summary).values(
+                            meeting_id=session_id,
+                            language_code=target_lang,
+                            file_name=filename,
+                        )
+                        stmt = stmt.on_conflict_do_update(
+                            index_elements=[Summary.meeting_id, Summary.language_code],
+                            set_={
+                                "file_name": stmt.excluded.file_name,
+                            },
+                        )
+                        await session.execute(stmt)
+                        await session.commit()
+
+                    logger.info(f"Completed {target_lang} summary for {session_id}.")
+                    return True
+
+                except Exception as e:
+                    logger.error(f"Failed to generate {target_lang} summary: {e}")
+                    return False
 
     async def generate_summaries_for_attendees(self, session_id: str, integration: str):
         """
@@ -186,8 +202,7 @@ class SummaryService:
                     )
                     return
 
-                with open(source_vtt_path, "r", encoding="utf-8") as f:
-                    raw_content = f.read()
+                raw_content = await self._read_text_file(source_vtt_path)
 
                 clean_source_text = self._clean_vtt_content(raw_content)
                 if not clean_source_text:

@@ -8,6 +8,7 @@ from datetime import datetime
 import httpx
 from core.config import settings
 from core.db import AsyncSessionLocal
+from core.http_client import get_http_client
 from core.logging_setup import log_step
 from fastapi import HTTPException
 from models.integrations import Integration
@@ -52,18 +53,17 @@ async def exchange_code_for_token(code: str, redirect_uri: str, user_id: str):
         }
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(token_url, headers=headers, data=data)
+            client = get_http_client()
+            response = await client.post(token_url, headers=headers, data=data)
             response.raise_for_status()
             token_data = response.json()
 
-            async with httpx.AsyncClient() as client:
-                user_resp = await client.get(
-                    "https://api.zoom.us/v2/users/me",
-                    headers={"Authorization": f"Bearer {token_data['access_token']}"},
-                )
-                user_resp.raise_for_status()
-                zoom_user_id = user_resp.json().get("id")
+            user_resp = await client.get(
+                "https://api.zoom.us/v2/users/me",
+                headers={"Authorization": f"Bearer {token_data['access_token']}"},
+            )
+            user_resp.raise_for_status()
+            zoom_user_id = user_resp.json().get("id")
 
             expires_at = int(time.time()) + token_data["expires_in"]
 
@@ -109,15 +109,15 @@ async def _ensure_active_token(integration: Integration) -> tuple[str, int]:
         basic_auth_header = f"Basic {base64.b64encode(creds.encode()).decode()}"
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://zoom.us/oauth/token",
-                    headers={
-                        "Authorization": basic_auth_header,
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    data={"grant_type": "refresh_token", "refresh_token": integration.refresh_token},
-                )
+            client = get_http_client()
+            response = await client.post(
+                "https://zoom.us/oauth/token",
+                headers={
+                    "Authorization": basic_auth_header,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data={"grant_type": "refresh_token", "refresh_token": integration.refresh_token},
+            )
             response.raise_for_status()
             new_data = response.json()
 
@@ -206,8 +206,8 @@ async def get_meeting_data(
             meeting_url = f"https://api.zoom.us/v2/meetings/{encoded_uuid}"
             headers = {"Authorization": f"Bearer {access_token}"}
 
-            async with httpx.AsyncClient() as client:
-                response = await client.get(meeting_url, headers=headers)
+            client = get_http_client()
+            response = await client.get(meeting_url, headers=headers)
 
             if response.status_code != 200:
                 raise Exception(f"Zoom API returned status {response.status_code}")

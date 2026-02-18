@@ -5,10 +5,10 @@ import urllib.parse
 import uuid
 from datetime import timedelta
 
-import httpx
 from core.authentication import decrypt, generate_jwt_token
 from core.config import settings
 from core.db import AsyncSessionLocal
+from core.http_client import get_http_client
 from core.logging_setup import log_step
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
@@ -130,8 +130,8 @@ async def get_valid_google_token(user_id: str) -> str | None:
             "grant_type": "refresh_token",
         }
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(GOOGLE_TOKEN_URL, data=data)
+        client = get_http_client()
+        resp = await client.post(GOOGLE_TOKEN_URL, data=data)
 
         if resp.status_code != 200:
             logger.error(f"Failed to refresh Google token: {resp.text}")
@@ -226,8 +226,8 @@ async def handle_callback(request: Request) -> RedirectResponse:
             "grant_type": "authorization_code",
         }
 
-        async with httpx.AsyncClient() as client:
-            token_resp = await client.post(GOOGLE_TOKEN_URL, data=token_data)
+        client = get_http_client()
+        token_resp = await client.post(GOOGLE_TOKEN_URL, data=token_data)
         if token_resp.status_code != 200:
             raise HTTPException(status_code=400, detail="Failed to retrieve access token.")
 
@@ -236,8 +236,9 @@ async def handle_callback(request: Request) -> RedirectResponse:
         refresh_token = tokens.get("refresh_token")
         expires_at = int(time.time()) + tokens.get("expires_in", 3600)
 
-        async with httpx.AsyncClient() as client:
-            user_resp = await client.get(GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"})
+        user_resp = await client.get(
+            GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"}
+        )
         if user_resp.status_code != 200:
             raise HTTPException(status_code=400, detail="Failed to retrieve user profile.")
 

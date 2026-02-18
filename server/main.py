@@ -5,6 +5,7 @@ from core.logging_setup import setup_logging
 setup_logging()
 
 from core.config import settings
+from core.http_client import close_http_client, init_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ async def startup_event():
     """
     app.state.backfill_service = BackfillService()
     app.state.summary_service = SummaryService()
+    await init_http_client()
     await db.init_db()
     await transcript_cache.ping()
     await viewer_manager.start()
@@ -57,6 +59,7 @@ async def shutdown_event():
     await viewer_manager.close()
     await transcript_cache.close()
     await close_receiver_resources()
+    await close_http_client()
 
 transcribe_router = create_transcribe_router(viewer_manager=viewer_manager)
 app.include_router(transcribe_router)

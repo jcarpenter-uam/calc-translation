@@ -40,6 +40,7 @@ class ConnectionManager:
             settings.REDIS_URL, encoding="utf-8", decode_responses=True
         )
         self._redis_prefix = settings.REDIS_KEY_PREFIX
+        self._active_sessions_key = f"{self._redis_prefix}:session:active_ids"
         self._session_events_pattern = f"{self._redis_prefix}:session:*:events"
         self._control_channel = (
             f"{self._redis_prefix}:control:{self._instance_id}"
@@ -91,18 +92,14 @@ class ConnectionManager:
 
     async def get_global_active_sessions(self) -> List[Dict[str, Any]]:
         sessions: List[Dict[str, Any]] = []
-        pattern = f"{self._redis_prefix}:session:*:meta"
-        async for key in self._redis.scan_iter(match=pattern):
-            data = await self._redis.hgetall(key)
+        session_ids = await self._redis.smembers(self._active_sessions_key)
+        for session_id in session_ids:
+            data = await self._redis.hgetall(self._session_meta_key(session_id))
             if data.get("active") != "1":
+                await self._redis.srem(self._active_sessions_key, session_id)
                 continue
-
-            # calc-translation:session:{session_id}:meta
-            parts = key.split(":")
-            if len(parts) < 4:
-                continue
-            session_id = parts[-2]
             if not await self._redis.exists(self._receiver_lease_key(session_id)):
+                await self._redis.srem(self._active_sessions_key, session_id)
                 continue
 
             local_sockets = self.sessions.get(session_id, [])
@@ -633,6 +630,7 @@ class ConnectionManager:
                     "owner_instance": self._instance_id,
                 },
             )
+            await self._redis.sadd(self._active_sessions_key, session_id)
 
             with log_step("CONN-MANAGER"):
                 logger.info(
@@ -664,6 +662,7 @@ class ConnectionManager:
 
             if integration is not None:
                 await self._redis.delete(self._session_meta_key(session_id))
+                await self._redis.srem(self._active_sessions_key, session_id)
                 with log_step("CONN-MANAGER"):
                     logger.info(
                         f"Transcription session deregistered for integration '{integration}'."

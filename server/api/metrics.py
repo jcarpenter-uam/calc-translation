@@ -1,5 +1,6 @@
 import asyncio
 import gc
+import logging
 import os
 import time
 from typing import Any
@@ -11,6 +12,7 @@ from services.receiver import ACTIVE_SESSIONS
 from services.connection_manager import ConnectionManager
 
 START_TIME = time.time()
+logger = logging.getLogger(__name__)
 
 
 def _read_int_file(path: str) -> int | None:
@@ -47,11 +49,11 @@ def _escape_label_value(value: str) -> str:
     )
 
 
-async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str, Any]:
+def _collect_process_metrics() -> dict[str, Any]:
     uptime_seconds = int(time.time() - START_TIME)
 
     process = psutil.Process()
-    cpu_percent = process.cpu_percent(interval=0.1)
+    cpu_percent = process.cpu_percent(interval=None)
     cpu_percent_by_core = psutil.cpu_percent(interval=None, percpu=True)
     cpu_times = process.cpu_times()
 
@@ -83,6 +85,32 @@ async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str
         net_connections_count = len(process.net_connections(kind="inet"))
     except Exception:
         pass
+
+    return {
+        "uptime_seconds": uptime_seconds,
+        "process_rss_bytes": mem_info.rss,
+        "process_vms_bytes": mem_info.vms,
+        "process_shared_bytes": getattr(mem_info, "shared", 0),
+        "process_uss_bytes": getattr(mem_full, "uss", 0),
+        "process_pss_bytes": getattr(mem_full, "pss", 0),
+        "process_swap_bytes": getattr(mem_full, "swap", 0),
+        "process_memory_percent": round(process.memory_percent(), 4),
+        "process_cpu_percent": round(cpu_percent, 4),
+        "cpu_percent_per_core": cpu_percent_by_core,
+        "process_cpu_time_user_seconds": round(getattr(cpu_times, "user", 0.0), 6),
+        "process_cpu_time_system_seconds": round(getattr(cpu_times, "system", 0.0), 6),
+        "load_1": round(load_avg[0], 4),
+        "load_5": round(load_avg[1], 4),
+        "load_15": round(load_avg[2], 4),
+        "threads_count": process.num_threads(),
+        "open_files_count": open_files_count,
+        "net_connections_count": net_connections_count,
+        "num_fds": num_fds,
+    }
+
+
+async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str, Any]:
+    process_metrics = await asyncio.to_thread(_collect_process_metrics)
 
     cgroup_mem_current = _read_int_file("/sys/fs/cgroup/memory.current")
     cgroup_mem_max = _read_int_file("/sys/fs/cgroup/memory.max")
@@ -136,31 +164,13 @@ async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str
         )
 
     return {
-        "uptime_seconds": uptime_seconds,
-        "process_rss_bytes": mem_info.rss,
-        "process_vms_bytes": mem_info.vms,
-        "process_shared_bytes": getattr(mem_info, "shared", 0),
-        "process_uss_bytes": getattr(mem_full, "uss", 0),
-        "process_pss_bytes": getattr(mem_full, "pss", 0),
-        "process_swap_bytes": getattr(mem_full, "swap", 0),
-        "process_memory_percent": round(process.memory_percent(), 4),
+        **process_metrics,
         "container_memory_current_bytes": cgroup_mem_current,
         "container_memory_max_bytes": cgroup_mem_max,
-        "process_cpu_percent": round(cpu_percent, 4),
-        "cpu_percent_per_core": cpu_percent_by_core,
-        "process_cpu_time_user_seconds": round(getattr(cpu_times, "user", 0.0), 6),
-        "process_cpu_time_system_seconds": round(getattr(cpu_times, "system", 0.0), 6),
-        "load_1": round(load_avg[0], 4),
-        "load_5": round(load_avg[1], 4),
-        "load_15": round(load_avg[2], 4),
-        "threads_count": process.num_threads(),
         "asyncio_task_count": len(asyncio.all_tasks()),
         "gc_count_gen0": gc.get_count()[0],
         "gc_count_gen1": gc.get_count()[1],
         "gc_count_gen2": gc.get_count()[2],
-        "open_files_count": open_files_count,
-        "net_connections_count": net_connections_count,
-        "num_fds": num_fds,
         "active_receiver_sessions": active_receiver_sessions,
         "active_stream_handlers": active_stream_handlers,
         "active_backfill_tasks": active_backfill_tasks,
@@ -449,9 +459,51 @@ def create_metrics_router(viewer_manager: ConnectionManager):
     Requires viewer_manager to access active session data.
     """
     router = APIRouter()
+    snapshot: dict[str, Any] = {}
+    snapshot_lock = asyncio.Lock()
+    refresh_task: asyncio.Task | None = None
+    refresh_interval_seconds = 1.0
+
+    async def _refresh_metrics_loop():
+        while True:
+            try:
+                metrics = await _collect_server_metrics(viewer_manager)
+                async with snapshot_lock:
+                    snapshot.clear()
+                    snapshot.update(metrics)
+                await asyncio.sleep(refresh_interval_seconds)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Metrics refresh loop error: {e}", exc_info=True)
+                await asyncio.sleep(refresh_interval_seconds)
+
+    @router.on_event("startup")
+    async def _startup_metrics_loop():
+        nonlocal refresh_task
+        if refresh_task is None:
+            metrics = await _collect_server_metrics(viewer_manager)
+            async with snapshot_lock:
+                snapshot.clear()
+                snapshot.update(metrics)
+            refresh_task = asyncio.create_task(_refresh_metrics_loop())
+
+    @router.on_event("shutdown")
+    async def _shutdown_metrics_loop():
+        nonlocal refresh_task
+        if refresh_task:
+            refresh_task.cancel()
+            try:
+                await refresh_task
+            except asyncio.CancelledError:
+                pass
+            refresh_task = None
 
     async def _build_server_metrics_response() -> PlainTextResponse:
-        metrics = await _collect_server_metrics(viewer_manager)
+        async with snapshot_lock:
+            metrics = dict(snapshot)
+        if not metrics:
+            metrics = await _collect_server_metrics(viewer_manager)
         body = _to_prometheus_text(metrics)
         return PlainTextResponse(
             content=body,

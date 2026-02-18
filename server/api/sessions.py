@@ -78,6 +78,7 @@ def create_sessions_router() -> APIRouter:
                 language_code = language
                 resolved_session_id = session_id
                 file_name = None
+                meeting_date_for_filename = datetime.now()
 
                 async with AsyncSessionLocal() as session:
                     m_result = await session.execute(
@@ -92,10 +93,19 @@ def create_sessions_router() -> APIRouter:
                     )
                     if is_shared_two_way_mode:
                         language_code = "two_way"
+                    if m_row:
+                        meeting_date_for_filename = (
+                            m_row.started_at or m_row.meeting_time or meeting_date_for_filename
+                        )
 
                     if m_row and m_row.readable_id:
                         t_result = await session.execute(
-                            select(Transcript.file_name, Transcript.meeting_id)
+                            select(
+                                Transcript.file_name,
+                                Transcript.meeting_id,
+                                Meeting.started_at,
+                                Meeting.meeting_time,
+                            )
                             .join(Meeting, Transcript.meeting_id == Meeting.id)
                             .where(
                                 Meeting.readable_id == m_row.readable_id,
@@ -110,6 +120,11 @@ def create_sessions_router() -> APIRouter:
                         if t_row:
                             file_name = t_row.file_name
                             resolved_session_id = t_row.meeting_id
+                            meeting_date_for_filename = (
+                                t_row.started_at
+                                or t_row.meeting_time
+                                or meeting_date_for_filename
+                            )
                             logger.info(
                                 f"Resolved latest transcript via readable_id: {session_id} -> {resolved_session_id}"
                             )
@@ -149,26 +164,6 @@ def create_sessions_router() -> APIRouter:
                 logger.debug(
                     f"User '{cookie_user_id}' downloading transcript. File: {file_path}"
                 )
-
-                meeting_date_for_filename = datetime.now()
-                try:
-                    async with AsyncSessionLocal() as session:
-                        m_result = await session.execute(
-                            select(Meeting.started_at, Meeting.meeting_time).where(
-                                Meeting.id == resolved_session_id
-                            )
-                        )
-                        filename_row = m_result.first()
-                    if filename_row:
-                        meeting_date_for_filename = (
-                            filename_row.started_at
-                            or filename_row.meeting_time
-                            or meeting_date_for_filename
-                        )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to resolve meeting date for download filename: {e}"
-                    )
 
                 date_token = meeting_date_for_filename.strftime("%m-%d-%y")
 

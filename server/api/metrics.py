@@ -169,7 +169,6 @@ async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str
         "active_viewer_connections": active_viewer_connections,
         "active_participants": active_participants,
         "active_host_plus_viewers": active_host_plus_viewers,
-        "active_participants_estimated": active_host_plus_viewers,
         "active_sessions_by_integration": active_sessions_by_integration,
         "active_sessions_by_mode": active_sessions_by_mode,
         "active_standalone_by_mode": active_standalone_by_mode,
@@ -356,12 +355,6 @@ def _to_prometheus_text(metrics: dict[str, Any]) -> str:
         metrics["active_host_plus_viewers"],
         "Estimated host plus viewers.",
     )
-    _format_metric(
-        lines,
-        "calc_translation_active_participants_estimated",
-        metrics["active_participants_estimated"],
-        "Legacy alias for host plus viewers.",
-    )
 
     cpu_per_core = metrics["cpu_percent_per_core"]
     lines.append(
@@ -420,10 +413,6 @@ def _to_prometheus_text(metrics: dict[str, Any]) -> str:
     )
     lines.append("# TYPE calc_translation_session_viewers gauge")
     lines.append(
-        "# HELP calc_translation_session_participants_estimated Estimated participants per active session (host + viewers)."
-    )
-    lines.append("# TYPE calc_translation_session_participants_estimated gauge")
-    lines.append(
         "# HELP calc_translation_session_participants Estimated participants per active session excluding host."
     )
     lines.append("# TYPE calc_translation_session_participants gauge")
@@ -449,9 +438,6 @@ def _to_prometheus_text(metrics: dict[str, Any]) -> str:
         )
         lines.append(
             f'calc_translation_session_host_plus_viewers{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {host_plus_viewers}'
-        )
-        lines.append(
-            f'calc_translation_session_participants_estimated{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {host_plus_viewers}'
         )
 
     return "\n".join(lines) + "\n"

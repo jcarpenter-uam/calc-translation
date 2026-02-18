@@ -125,11 +125,23 @@ def create_transcribe_router(viewer_manager):
                     return
 
                 logger.info(f"Handing off session {session_id} to receiver.")
+                backfill_service = getattr(websocket.app.state, "backfill_service", None)
+                summary_service = getattr(websocket.app.state, "summary_service", None)
+                if backfill_service is None or summary_service is None:
+                    logger.error("Shared services are not initialized.")
+                    await websocket.close(
+                        code=1011,
+                        reason="Server error: services not initialized.",
+                    )
+                    return
+
                 await handle_receiver_session(
                     websocket=websocket,
                     integration=integration,
                     session_id=session_id,
                     viewer_manager=viewer_manager,
+                    backfill_service=backfill_service,
+                    summary_service=summary_service,
                 )
 
             except HTTPException as e:

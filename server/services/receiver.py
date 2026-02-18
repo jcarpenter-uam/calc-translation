@@ -380,6 +380,8 @@ class MeetingSession:
         viewer_manager,
         loop,
         lease: ReceiverLease,
+        backfill_service: BackfillService,
+        summary_service: SummaryService,
     ):
         self.session_id = session_id
         self.integration = integration
@@ -393,7 +395,8 @@ class MeetingSession:
         self.db_start_written = False
         self.session_log_handler = None
 
-        self.backfill_service = BackfillService()
+        self.backfill_service = backfill_service
+        self.summary_service = summary_service
         self.active_backfill_tasks = set()
 
         self.cleanup_task: Optional[asyncio.Task] = None
@@ -659,8 +662,7 @@ class MeetingSession:
 
         async def run_post_processing():
             try:
-                summary_service = SummaryService()
-                await summary_service.generate_summaries_for_attendees(
+                await self.summary_service.generate_summaries_for_attendees(
                     self.session_id, self.integration
                 )
 
@@ -780,7 +782,12 @@ class MeetingSession:
 
 
 async def handle_receiver_session(
-    websocket: WebSocket, integration: str, session_id: str, viewer_manager
+    websocket: WebSocket,
+    integration: str,
+    session_id: str,
+    viewer_manager,
+    backfill_service: BackfillService,
+    summary_service: SummaryService,
 ):
     session_token = session_id_var.set(session_id)
     loop = asyncio.get_running_loop()
@@ -822,7 +829,13 @@ async def handle_receiver_session(
 
                 logger.info(f"Initializing new session: {session_id}")
                 meeting_session = MeetingSession(
-                    session_id, integration, viewer_manager, loop, lease=lease
+                    session_id,
+                    integration,
+                    viewer_manager,
+                    loop,
+                    lease=lease,
+                    backfill_service=backfill_service,
+                    summary_service=summary_service,
                 )
                 await meeting_session.initialize()
                 ACTIVE_SESSIONS[session_id] = meeting_session

@@ -26,6 +26,8 @@ from fastapi.staticfiles import StaticFiles
 from services.cache import TranscriptCache
 from services.connection_manager import ConnectionManager
 from services.receiver import close_receiver_resources
+from services.backfill import BackfillService
+from services.summary import SummaryService
 
 app = FastAPI(
     title="CALC Transcription and Translation API",
@@ -39,6 +41,8 @@ async def startup_event():
     On application startup, initialize the database.
     This ensures the DB file and tables are ready before handling requests.
     """
+    app.state.backfill_service = BackfillService()
+    app.state.summary_service = SummaryService()
     await db.init_db()
     await transcript_cache.ping()
     await viewer_manager.start()

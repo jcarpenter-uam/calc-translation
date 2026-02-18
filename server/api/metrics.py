@@ -38,6 +38,15 @@ def _format_metric(
     lines.append(f"{name} {value}")
 
 
+def _escape_label_value(value: str) -> str:
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("\n", "\\n")
+        .replace('"', '\\"')
+    )
+
+
 async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str, Any]:
     uptime_seconds = int(time.time() - START_TIME)
 
@@ -87,6 +96,24 @@ async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str
     )
 
     active_sessions = await viewer_manager.get_global_active_sessions()
+    active_viewer_connections = sum(
+        int(session.get("viewers", 0)) for session in active_sessions
+    )
+    active_participants_estimated = active_viewer_connections + len(active_sessions)
+
+    active_sessions_by_integration: dict[str, int] = {}
+    active_sessions_by_mode: dict[str, int] = {}
+    active_standalone_by_mode = {"one_way": 0, "two_way": 0}
+
+    for session in active_sessions:
+        integration = session.get("integration") or "unknown"
+        mode = "two_way" if session.get("shared_two_way_mode") else "one_way"
+        active_sessions_by_integration[integration] = (
+            active_sessions_by_integration.get(integration, 0) + 1
+        )
+        active_sessions_by_mode[mode] = active_sessions_by_mode.get(mode, 0) + 1
+        if integration == "standalone":
+            active_standalone_by_mode[mode] = active_standalone_by_mode.get(mode, 0) + 1
 
     return {
         "uptime_seconds": uptime_seconds,
@@ -118,6 +145,13 @@ async def _collect_server_metrics(viewer_manager: ConnectionManager) -> dict[str
         "active_stream_handlers": active_stream_handlers,
         "active_backfill_tasks": active_backfill_tasks,
         "active_viewer_sessions": len(active_sessions),
+        "active_sessions_total": len(active_sessions),
+        "active_viewer_connections": active_viewer_connections,
+        "active_participants_estimated": active_participants_estimated,
+        "active_sessions_by_integration": active_sessions_by_integration,
+        "active_sessions_by_mode": active_sessions_by_mode,
+        "active_standalone_by_mode": active_standalone_by_mode,
+        "active_sessions": active_sessions,
     }
 
 
@@ -274,7 +308,25 @@ def _to_prometheus_text(metrics: dict[str, Any]) -> str:
         lines,
         "calc_translation_active_viewer_sessions",
         metrics["active_viewer_sessions"],
-        "Active viewer session count.",
+        "Active session count (legacy metric name kept for compatibility).",
+    )
+    _format_metric(
+        lines,
+        "calc_translation_active_sessions_total",
+        metrics["active_sessions_total"],
+        "Total active transcription sessions.",
+    )
+    _format_metric(
+        lines,
+        "calc_translation_active_viewer_connections",
+        metrics["active_viewer_connections"],
+        "Total connected viewer sockets across active sessions (host not included).",
+    )
+    _format_metric(
+        lines,
+        "calc_translation_active_participants_estimated",
+        metrics["active_participants_estimated"],
+        "Estimated participants: one host per active session plus connected viewers.",
     )
 
     cpu_per_core = metrics["cpu_percent_per_core"]
@@ -297,6 +349,60 @@ def _to_prometheus_text(metrics: dict[str, Any]) -> str:
     for idx, value in enumerate(gc_counts):
         lines.append(
             f'calc_translation_runtime_gc_objects_by_generation{{generation="{idx}"}} {value}'
+        )
+
+    lines.append(
+        "# HELP calc_translation_active_sessions_by_integration Active sessions grouped by integration."
+    )
+    lines.append("# TYPE calc_translation_active_sessions_by_integration gauge")
+    for integration, count in metrics["active_sessions_by_integration"].items():
+        integration_safe = _escape_label_value(integration)
+        lines.append(
+            f'calc_translation_active_sessions_by_integration{{integration="{integration_safe}"}} {count}'
+        )
+
+    lines.append(
+        "# HELP calc_translation_active_sessions_by_mode Active sessions grouped by translation mode."
+    )
+    lines.append("# TYPE calc_translation_active_sessions_by_mode gauge")
+    for mode, count in metrics["active_sessions_by_mode"].items():
+        mode_safe = _escape_label_value(mode)
+        lines.append(
+            f'calc_translation_active_sessions_by_mode{{mode="{mode_safe}"}} {count}'
+        )
+
+    lines.append(
+        "# HELP calc_translation_active_standalone_sessions_by_mode Active standalone sessions grouped by translation mode."
+    )
+    lines.append("# TYPE calc_translation_active_standalone_sessions_by_mode gauge")
+    for mode, count in metrics["active_standalone_by_mode"].items():
+        mode_safe = _escape_label_value(mode)
+        lines.append(
+            f'calc_translation_active_standalone_sessions_by_mode{{mode="{mode_safe}"}} {count}'
+        )
+
+    lines.append(
+        "# HELP calc_translation_session_viewers Connected viewers per active session."
+    )
+    lines.append("# TYPE calc_translation_session_viewers gauge")
+    lines.append(
+        "# HELP calc_translation_session_participants_estimated Estimated participants per active session (host + viewers)."
+    )
+    lines.append("# TYPE calc_translation_session_participants_estimated gauge")
+    for session in metrics["active_sessions"]:
+        session_id = session.get("session_id") or "unknown"
+        integration = session.get("integration") or "unknown"
+        mode = "two_way" if session.get("shared_two_way_mode") else "one_way"
+        session_id_safe = _escape_label_value(session_id)
+        integration_safe = _escape_label_value(integration)
+        mode_safe = _escape_label_value(mode)
+        viewers = int(session.get("viewers", 0))
+        participants_estimated = viewers + 1
+        lines.append(
+            f'calc_translation_session_viewers{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {viewers}'
+        )
+        lines.append(
+            f'calc_translation_session_participants_estimated{{session_id="{session_id_safe}",integration="{integration_safe}",mode="{mode_safe}"}} {participants_estimated}'
         )
 
     return "\n".join(lines) + "\n"

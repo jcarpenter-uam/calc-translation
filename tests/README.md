@@ -2,9 +2,10 @@
 
 This suite is split into:
 
-- `test_bot_unit.py`: fast unit coverage for bot behavior (no network required)
-- `test_functional.py`, `test_auth.py`, `test_latency.py`: staging integration coverage
-- `test_stability.py`: staging stress/load coverage
+- `test_auth.py`: security authentication checks
+- `test_latency.py`: latency performance checks
+- `test_stability.py`: staged stress + SLO checks
+- `test_system_working_order.py`: additional security/stress checks
 
 ## Required staging environment variables
 
@@ -18,21 +19,25 @@ By default the suite refuses localhost URLs. For local-only runs, set:
 
 ## Stress test tuning
 
-- `STRESS_BOT_COUNTS` comma-separated staged load levels after baseline (default: `5,10,20,40,60`)
-- `STRESS_DURATION_SECONDS` per-stage load duration in seconds (default: `30`)
-- `STRESS_LATENCY_INCREASE_PCT` threshold increase from baseline latency where test reports breakpoint (default: `50`)
-- `STRESS_PROBE_TIMEOUT_SECONDS` max wait for probe transcript event (default: `90`)
+- Stage/SLO parameters for `tests/test_stability.py` are hardcoded directly in that file.
 - `STRESS_SOAK_SECONDS` soak-test runtime for long stability test (default: `180`)
 - `SOAK_MAX_MEMORY_INCREASE_PCT` allowed RSS increase during soak test (default: `60`)
+
+## Stage SLO gates
+
+- Stage SLO thresholds for `tests/test_stability.py` are hardcoded directly in that file.
 
 ## Example commands
 
 ```bash
-# unit only
-./tests/venv/bin/pytest -q tests/test_bot_unit.py
+# security only
+./tests/venv/bin/pytest -q tests/test_auth.py tests/test_system_working_order.py::test_api_authz_matrix
 
-# full staging integration + stress
-./tests/venv/bin/pytest -q tests -m "integration or stress"
+# latency only
+./tests/venv/bin/pytest -q tests/test_latency.py -s
+
+# stress only
+./tests/venv/bin/pytest -q tests/test_stability.py tests/test_system_working_order.py::test_long_soak_memory_stability -s
 
 # all tests
 ./tests/venv/bin/pytest -q tests

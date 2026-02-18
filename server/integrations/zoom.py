@@ -232,7 +232,7 @@ async def get_meeting_data(
                     meeting_time=parsed_start_time,
                     join_url=join_url,
                     topic=topic,
-                    language_hints=None,
+                    language_hints=[],
                 )
                 stmt = stmt.on_conflict_do_nothing(index_elements=[Meeting.id])
                 await session.execute(stmt)
@@ -253,7 +253,7 @@ async def get_meeting_data(
                         meeting_time=datetime.now(),
                         join_url=None,
                         topic=None,
-                        language_hints=None,
+                        language_hints=[],
                     )
                     stmt = stmt.on_conflict_do_nothing(index_elements=[Meeting.id])
                     await session.execute(stmt)

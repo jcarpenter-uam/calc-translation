@@ -1,4 +1,4 @@
-# ----- server -----
+# server
 __pycache__/
 venv/
 *.db
@@ -8,17 +8,15 @@ server/output/*
 !server/output/README.md
 server/server.log
 
-# ----- web/desktop -----
+# clients
 node_modules/
 dist/
 out/
 
-# ----- integrations -----
-# ----- zoom -----
+# zoom-rtms
 integrations/zoom-rtms/logs/*
 !integrations/zoom-rtms/logs/README.md
 logs/node*
 
 # Secrets
 .env
-ngrok-conf.yaml

@@ -452,5 +452,8 @@
   "standalone_two_way_feature_dialogue_title": "Dialog Lancar",
   "standalone_two_way_feature_dialogue_desc": "Tidak perlu beralih. Kedua pihak cukup berbicara, dan sistem menangani perutean secara instan.",
   "standalone_two_way_feature_channel_title": "Kanal Eksklusif",
-  "standalone_two_way_feature_channel_desc": "Tidak seperti mode satu arah, mode ini dibatasi pada dua bahasa terpilih untuk akurasi maksimal."
+  "standalone_two_way_feature_channel_desc": "Tidak seperti mode satu arah, mode ini dibatasi pada dua bahasa terpilih untuk akurasi maksimal.",
+  "standalone_supported_langs_title": "Bekerja dalam {{count}} bahasa",
+  "standalone_supported_langs_search_placeholder": "Cari bahasa Anda...",
+  "standalone_supported_langs_no_match": "Tidak ada bahasa yang cocok dengan \"{{query}}\""
 }

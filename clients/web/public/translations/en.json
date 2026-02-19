@@ -447,5 +447,8 @@
   "standalone_two_way_feature_dialogue_title": "Fluid Dialogue",
   "standalone_two_way_feature_dialogue_desc": "No toggling required. Both parties simply speak, and the system handles the routing instantly.",
   "standalone_two_way_feature_channel_title": "Exclusive Channel",
-  "standalone_two_way_feature_channel_desc": "Unlike One-Way mode, this is restricted to the two selected languages for maximum accuracy."
+  "standalone_two_way_feature_channel_desc": "Unlike One-Way mode, this is restricted to the two selected languages for maximum accuracy.",
+  "standalone_supported_langs_title": "Works across {{count}} languages",
+  "standalone_supported_langs_search_placeholder": "Find your language...",
+  "standalone_supported_langs_no_match": "No languages found matching \"{{query}}\""
 }

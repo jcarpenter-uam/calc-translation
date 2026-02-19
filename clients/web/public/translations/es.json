@@ -452,5 +452,8 @@
   "standalone_two_way_feature_dialogue_title": "Diálogo fluido",
   "standalone_two_way_feature_dialogue_desc": "No se requiere alternar. Ambas partes simplemente hablan y el sistema maneja el enrutamiento al instante.",
   "standalone_two_way_feature_channel_title": "Canal exclusivo",
-  "standalone_two_way_feature_channel_desc": "A diferencia del modo unidireccional, este modo se limita a los dos idiomas seleccionados para máxima precisión."
+  "standalone_two_way_feature_channel_desc": "A diferencia del modo unidireccional, este modo se limita a los dos idiomas seleccionados para máxima precisión.",
+  "standalone_supported_langs_title": "Funciona en {{count}} idiomas",
+  "standalone_supported_langs_search_placeholder": "Encuentra tu idioma...",
+  "standalone_supported_langs_no_match": "No se encontraron idiomas que coincidan con \"{{query}}\""
 }

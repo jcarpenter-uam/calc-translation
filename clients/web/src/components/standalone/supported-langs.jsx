@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { BiSearch } from "react-icons/bi";
+import { useTranslation } from "react-i18next";
 
 export const languages = [
   { name: "Afrikaans", flag: "za", code: "af" },
@@ -77,6 +78,7 @@ export const languages = [
 ];
 
 export default function SupportedLangs() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
 
   const filteredLanguages = languages.filter((lang) =>
@@ -110,7 +112,7 @@ export default function SupportedLangs() {
 
       <div className="container mx-auto px-4 flex flex-col items-center">
         <h2 className="text-3xl font-semibold text-center mb-8 tracking-tight">
-          Works across {languages.length} languages
+          {t("standalone_supported_langs_title", { count: languages.length })}
         </h2>
 
         <div className="relative w-full max-w-lg mb-12 group">
@@ -119,7 +121,7 @@ export default function SupportedLangs() {
           </div>
           <input
             type="text"
-            placeholder="Find your language..."
+            placeholder={t("standalone_supported_langs_search_placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full bg-[#1e1e24] border border-gray-800 text-white text-base rounded-full pl-12 pr-6 py-4 
@@ -138,7 +140,9 @@ export default function SupportedLangs() {
               ))
             ) : (
               <div className="col-span-full text-center text-gray-500 py-12">
-                <p className="text-lg">No languages found matching "{query}"</p>
+                <p className="text-lg">
+                  {t("standalone_supported_langs_no_match", { query })}
+                </p>
               </div>
             )}
           </div>

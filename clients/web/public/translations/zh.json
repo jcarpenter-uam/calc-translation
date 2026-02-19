@@ -451,5 +451,8 @@
   "standalone_two_way_feature_dialogue_title": "流畅对话",
   "standalone_two_way_feature_dialogue_desc": "无需切换。双方只需开口说话，系统会立即完成语言路由。",
   "standalone_two_way_feature_channel_title": "专属通道",
-  "standalone_two_way_feature_channel_desc": "不同于单向模式，该模式仅限两种所选语言，以获得最高准确性。"
+  "standalone_two_way_feature_channel_desc": "不同于单向模式，该模式仅限两种所选语言，以获得最高准确性。",
+  "standalone_supported_langs_title": "支持 {{count}} 种语言",
+  "standalone_supported_langs_search_placeholder": "查找你的语言...",
+  "standalone_supported_langs_no_match": "未找到与“{{query}}”匹配的语言"
 }

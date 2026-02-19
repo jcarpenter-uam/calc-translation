@@ -158,7 +158,7 @@ export default function SettingsModal({ isOpen, onClose }) {
               }}
               className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
             >
-              Redo Onboarding Tour
+              {t("redo_onboarding_tour_btn")}
             </button>
           </div>
         </div>

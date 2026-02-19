@@ -142,7 +142,16 @@ export default function LandingPage() {
             </button>
           </div>
 
-          <div className="p-6">
+          <div
+            id={
+              integration === "zoom"
+                ? "landing-zoom-panel-web"
+                : integration === "standalone"
+                  ? "landing-standalone-panel-web"
+                  : undefined
+            }
+            className="p-6"
+          >
             {renderForm()}
             {error && (
               <p className="mt-4 text-center text-sm font-medium text-red-600">

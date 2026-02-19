@@ -50,18 +50,40 @@ export function getOnboardingTourSteps(navigate) {
         "We use your calendar to display scheduled Zoom meetings here. Pick one and start transcription in one click.",
     },
     {
-      target: "#landing-zoom-tab-web",
+      target: "#landing-zoom-panel-web",
       group: TOUR_GROUP,
       title: "Zoom Integration",
       content:
         "Our Zoom integration lets you join using the meeting URL or credentials from the Zoom app.",
+      beforeEnter: async () => {
+        const zoomTab = document.querySelector("#landing-zoom-tab-web");
+        zoomTab?.click();
+        await waitForSelector("#landing-zoom-panel-web");
+      },
     },
     {
-      target: "#landing-standalone-tab-web",
+      target: "#landing-add-app-to-zoom-btn-web",
+      group: TOUR_GROUP,
+      title: "Add App To Zoom",
+      content:
+        "Use this button to install our Zoom app so your Zoom meetings can run inside this application.",
+      beforeEnter: async () => {
+        const zoomTab = document.querySelector("#landing-zoom-tab-web");
+        zoomTab?.click();
+        await waitForSelector("#landing-add-app-to-zoom-btn-web");
+      },
+    },
+    {
+      target: "#landing-standalone-panel-web",
       group: TOUR_GROUP,
       title: "Standalone Mode",
       content:
         "The Standalone integration is where you start or join a standalone meeting using a host-provided link.",
+      beforeEnter: async () => {
+        const standaloneTab = document.querySelector("#landing-standalone-tab-web");
+        standaloneTab?.click();
+        await waitForSelector("#landing-standalone-panel-web");
+      },
     },
     {
       target: "#landing-to-standalone-btn-web",

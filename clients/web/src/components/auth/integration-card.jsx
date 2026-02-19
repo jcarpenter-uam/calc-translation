@@ -77,6 +77,7 @@ export function ZoomForm({ onSubmit }) {
           {t("add_to_zoom")}
         </p>
         <a
+          id="landing-add-app-to-zoom-btn-web"
           href="https://zoom.us/oauth/authorize?response_type=code&client_id=LvEJnDi1TtGpWjUba7xxfg&redirect_uri=https://translator.my-uam.com/api/auth/zoom/callback"
           target="_blank"
           rel="noreferrer"

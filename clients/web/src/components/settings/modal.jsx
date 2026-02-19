@@ -80,6 +80,7 @@ export default function SettingsModal({ isOpen, onClose }) {
             {t("settings_title")}
           </h2>
           <button
+            id="settings-close-btn-web"
             onClick={onClose}
             className="
               p-1 
@@ -146,6 +147,19 @@ export default function SettingsModal({ isOpen, onClose }) {
                 <DisplayMode />
               </div>
             </div>
+          </div>
+
+          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
+            <button
+              id="settings-restart-tour-btn-web"
+              onClick={() => {
+                onClose();
+                window.dispatchEvent(new CustomEvent("restart-onboarding-tour"));
+              }}
+              className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              Redo Onboarding Tour
+            </button>
           </div>
         </div>
       </div>

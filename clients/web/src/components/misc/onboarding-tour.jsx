@@ -24,6 +24,87 @@ function waitForFrames(frames = 2) {
   });
 }
 
+function addClasses(element, classNames) {
+  if (!element) {
+    return;
+  }
+  element.classList.add(...classNames);
+}
+
+function applyTourUtilityClasses(tg) {
+  const dialog = tg?.dialog || document.querySelector(".tg-dialog");
+  if (!dialog) {
+    return;
+  }
+
+  addClasses(dialog, [
+    "w-[min(460px,calc(100vw-2rem))]",
+    "max-w-[min(460px,calc(100vw-2rem))]",
+    "rounded-xl",
+    "border",
+    "border-zinc-300",
+    "bg-white",
+    "text-zinc-900",
+  ]);
+
+  addClasses(dialog.querySelector(".tg-dialog-title"), ["text-zinc-900"]);
+  addClasses(dialog.querySelector(".tg-dialog-body"), ["break-words", "text-zinc-700"]);
+
+  addClasses(dialog.querySelector(".tg-dialog-progress-bar"), ["bg-zinc-100"]);
+  addClasses(dialog.querySelector("#tg-dialog-progbar"), ["bg-blue-500"]);
+
+  addClasses(dialog.querySelector(".tg-dialog-dots"), ["border-zinc-200"]);
+  dialog.querySelectorAll(".tg-dot").forEach((dot) => {
+    addClasses(dot, ["bg-zinc-400"]);
+    if (dot.classList.contains("tg-dot-active")) {
+      addClasses(dot, ["!bg-blue-500"]);
+    }
+  });
+
+  addClasses(dialog.querySelector(".tg-arrow"), ["bg-white"]);
+
+  addClasses(dialog.querySelector(".tg-dialog-footer"), [
+    "grid",
+    "grid-cols-[auto_1fr_auto]",
+    "items-center",
+    "gap-2",
+    "max-[480px]:grid-cols-2",
+  ]);
+  addClasses(dialog.querySelector(".tg-dialog-footer-sup"), [
+    "!m-0",
+    "!px-1.5",
+    "max-[480px]:col-span-2",
+    "max-[480px]:w-full",
+    "max-[480px]:!pt-1",
+  ]);
+  addClasses(dialog.querySelector(".tg-step-progress"), ["text-zinc-500"]);
+
+  const prevBtn = dialog.querySelector("#tg-dialog-prev-btn");
+  const nextBtn = dialog.querySelector("#tg-dialog-next-btn");
+  [prevBtn, nextBtn].forEach((btn) => {
+    addClasses(btn, [
+      "min-w-[72px]",
+      "cursor-pointer",
+      "rounded-md",
+      "border-zinc-300",
+      "bg-zinc-100",
+      "text-zinc-700",
+      "hover:bg-zinc-200",
+      "max-[480px]:w-full",
+    ]);
+  });
+  addClasses(nextBtn, ["!ml-0", "justify-self-end"]);
+
+  addClasses(dialog.querySelector("#tg-dialog-close-btn"), [
+    "ml-3",
+    "!h-[22px]",
+    "!w-[22px]",
+    "!opacity-100",
+    "text-red-500",
+    "hover:text-red-600",
+  ]);
+}
+
 async function startTourWhenReady({
   tg,
   navigate,
@@ -93,6 +174,7 @@ export default function OnboardingTour() {
         await tg.finishTour(false, TOUR_GROUP);
       });
       clientRef.current.onAfterStepChange(async () => {
+        applyTourUtilityClasses(clientRef.current);
         await waitForFrames();
         await clientRef.current?.updatePositions();
       });

@@ -96,7 +96,9 @@ function LanguageMultiSelect({
   return (
     <div className="relative" ref={dropdownRef}>
       <div className="flex justify-between items-end mb-2">
-        <label className="block text-zinc-400 text-sm font-medium">{label}</label>
+        <label className="block text-zinc-400 text-sm font-medium">
+          {label}
+        </label>
         <span
           className={`text-xs ${selectedLangs.length >= maxSelections ? "text-orange-400" : "text-zinc-600"}`}
         >
@@ -157,8 +159,11 @@ function LanguageMultiSelect({
         <div className="absolute z-50 w-full mt-2 bg-[#1e1e24] border border-zinc-700 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-none">
           {filteredLanguages.length > 0 ? (
             filteredLanguages.map((lang) => {
-              const isSelected = selectedLangs.some((l) => l.code === lang.code);
-              const isDisabled = !isSelected && selectedLangs.length >= maxSelections;
+              const isSelected = selectedLangs.some(
+                (l) => l.code === lang.code,
+              );
+              const isDisabled =
+                !isSelected && selectedLangs.length >= maxSelections;
 
               return (
                 <button
@@ -236,7 +241,10 @@ export default function TranslationModes({ onSubmit }) {
     <section className="w-full py-10 px-6 flex justify-center">
       <div className="max-w-7xl w-full grid md:grid-cols-2 gap-20">
         {/* === One-Way === */}
-        <div className="flex flex-col h-full p-6 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300">
+        <div
+          id="standalone-one-way-card-web"
+          className="flex flex-col h-full p-6 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300"
+        >
           <div className="flex-grow">
             <OneWay />
           </div>
@@ -251,10 +259,13 @@ export default function TranslationModes({ onSubmit }) {
               helperText={t("standalone_one_way_spoken_languages_helper")}
               placeholderText={t("standalone_language_picker_placeholder")}
               noLanguagesText={t("standalone_language_picker_no_results")}
-              selectedCountText={t("standalone_language_picker_selected_count", {
-                count: selectedLangs.length,
-                max: 5,
-              })}
+              selectedCountText={t(
+                "standalone_language_picker_selected_count",
+                {
+                  count: selectedLangs.length,
+                  max: 5,
+                },
+              )}
             />
 
             <button
@@ -274,7 +285,10 @@ export default function TranslationModes({ onSubmit }) {
         </div>
 
         {/* === Two-Way === */}
-        <div className="flex flex-col h-full p-6 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300">
+        <div
+          id="standalone-two-way-card-web"
+          className="flex flex-col h-full p-6 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300"
+        >
           <div className="flex-grow">
             <TwoWay />
           </div>
@@ -289,10 +303,13 @@ export default function TranslationModes({ onSubmit }) {
               helperText={t("standalone_two_way_language_pair_helper")}
               placeholderText={t("standalone_language_picker_placeholder")}
               noLanguagesText={t("standalone_language_picker_no_results")}
-              selectedCountText={t("standalone_language_picker_selected_count", {
-                count: twoWayLangs.length,
-                max: 2,
-              })}
+              selectedCountText={t(
+                "standalone_language_picker_selected_count",
+                {
+                  count: twoWayLangs.length,
+                  max: 2,
+                },
+              )}
             />
 
             <button
@@ -403,7 +420,7 @@ function TwoWay() {
           {t("standalone_two_way_title")}
         </h2>
         <p className="text-zinc-400 text-lg leading-relaxed">
-          {t("standalone_two_way_description_prefix")} {" "}
+          {t("standalone_two_way_description_prefix")}{" "}
           <span className="text-white font-semibold">
             {t("standalone_two_way_description_highlight")}
           </span>

@@ -7,12 +7,19 @@ import DisplayMode from "./display-mode";
 import UiLanguageToggle from "./ui-translation";
 import { FiX } from "react-icons/fi";
 
+function isTourGuideElement(target) {
+  return !!target?.closest?.(".tg-dialog, .tg-backdrop");
+}
+
 export default function SettingsModal({ isOpen, onClose }) {
   const { t } = useTranslation();
   const modalRef = useRef(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
+      if (isTourGuideElement(event.target)) {
+        return;
+      }
       if (modalRef.current && !modalRef.current.contains(event.target)) {
         onClose();
       }
@@ -27,6 +34,9 @@ export default function SettingsModal({ isOpen, onClose }) {
 
   useEffect(() => {
     function handleKeyDown(event) {
+      if (event.key === "Escape" && document.querySelector(".tg-dialog")) {
+        return;
+      }
       if (event.key === "Escape") {
         onClose();
       }
@@ -54,6 +64,7 @@ export default function SettingsModal({ isOpen, onClose }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity">
       <div
         ref={modalRef}
+        id="settings-modal-web"
         className="
           w-full max-w-md 
           bg-white dark:bg-zinc-900 
@@ -90,7 +101,10 @@ export default function SettingsModal({ isOpen, onClose }) {
               {t("appearance_title")}
             </h3>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div
+                id="settings-theme-row-web"
+                className="flex items-center justify-between"
+              >
                 <span className="text-zinc-700 dark:text-zinc-200">
                   {t("theme_label")}
                 </span>
@@ -104,19 +118,28 @@ export default function SettingsModal({ isOpen, onClose }) {
               {t("preferences_title")}
             </h3>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div
+                id="settings-language-row-web"
+                className="flex items-center justify-between"
+              >
                 <span className="text-zinc-700 dark:text-zinc-200">
                   {t("language_label")}
                 </span>
                 <Language />
               </div>
-              <div className="flex items-center justify-between">
+              <div
+                id="settings-ui-translation-row-web"
+                className="flex items-center justify-between"
+              >
                 <span className="text-zinc-700 dark:text-zinc-200">
                   {t("translate_ui")}
                 </span>
                 <UiLanguageToggle />
               </div>
-              <div className="flex items-center justify-between">
+              <div
+                id="settings-display-mode-row-web"
+                className="flex items-center justify-between"
+              >
                 <span className="text-zinc-700 dark:text-zinc-200">
                   {t("display_mode_label")}
                 </span>

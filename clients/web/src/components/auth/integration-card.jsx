@@ -140,6 +140,7 @@ export function StandaloneForm({ onSubmit }) {
           {t("host_mode_description")}
         </p>
         <Link
+          id="landing-to-standalone-btn-web"
           to="/standalone/host"
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600/90 text-white font-semibold rounded-lg hover:bg-green-700/90 transition-colors cursor-pointer"
         >

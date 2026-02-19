@@ -107,13 +107,17 @@ export default function LandingPage() {
 
   return (
     <div className="flex flex-col lg:flex-row items-start justify-center w-full gap-8">
-      <div className="w-full lg:w-[400px] flex-shrink-0 lg:sticky lg:top-6">
+      <div
+        id="landing-manual-join-web"
+        className="w-full lg:w-[400px] flex-shrink-0 lg:sticky lg:top-6"
+      >
         <h2 className="text-xl font-semibold mb-4 text-center lg:text-left">
           {t("manual_join")}
         </h2>
         <div className="bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm overflow-hidden">
           <div className="flex border-b border-zinc-200 dark:border-zinc-700">
             <button
+              id="landing-zoom-tab-web"
               onClick={() => setIntegration("zoom")}
               className={`cursor-pointer flex-1 flex items-center justify-center gap-2 py-4 text-lg font-bold transition-colors ${
                 integration === "zoom"
@@ -125,6 +129,7 @@ export default function LandingPage() {
               {t("integration_zoom")}
             </button>
             <button
+              id="landing-standalone-tab-web"
               onClick={() => setIntegration("standalone")}
               className={`cursor-pointer flex-1 flex items-center justify-center gap-2 py-4 text-lg font-bold transition-colors ${
                 integration === "standalone"
@@ -158,7 +163,10 @@ export default function LandingPage() {
         <div className="w-px flex-1 bg-zinc-200 dark:bg-zinc-700"></div>
       </div>
 
-      <div className="flex-1 w-full min-w-0">
+      <div
+        id="landing-calendar-panel-web"
+        className="flex-1 w-full min-w-0"
+      >
         <h2 className="text-xl font-semibold mb-4 text-center lg:text-left">
           {t("calendar_join")}
         </h2>

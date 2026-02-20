@@ -84,30 +84,30 @@ function LanguageMultiSelect({
 
   const isBlue = accent === "blue";
   const pillClass = isBlue
-    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+    ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
+    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20";
   const focusClass = isBlue
     ? "focus-within:ring-blue-500/50 focus-within:border-blue-500"
     : "focus-within:ring-emerald-500/50 focus-within:border-emerald-500";
   const selectedColorClass = isBlue
-    ? "bg-blue-500/10 text-blue-400 cursor-pointer"
-    : "bg-emerald-500/10 text-emerald-400 cursor-pointer";
+    ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 cursor-pointer"
+    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 cursor-pointer";
 
   return (
     <div className="relative" ref={dropdownRef}>
       <div className="flex justify-between items-end mb-2">
-        <label className="block text-zinc-400 text-sm font-medium">
+        <label className="block text-zinc-600 dark:text-zinc-400 text-sm font-medium">
           {label}
         </label>
         <span
-          className={`text-xs ${selectedLangs.length >= maxSelections ? "text-orange-400" : "text-zinc-600"}`}
+          className={`text-xs ${selectedLangs.length >= maxSelections ? "text-orange-500 dark:text-orange-400" : "text-zinc-600 dark:text-zinc-500"}`}
         >
           {selectedCountText}
         </span>
       </div>
 
       <div
-        className={`w-full min-h-[50px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-wrap gap-2 items-center cursor-pointer transition-all focus-within:ring-2 ${focusClass}`}
+        className={`w-full min-h-[50px] px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl flex flex-wrap gap-2 items-center cursor-pointer transition-all focus-within:ring-2 ${focusClass}`}
         onClick={() => {
           setIsOpen(true);
           inputRef.current?.focus();
@@ -151,12 +151,12 @@ function LanguageMultiSelect({
           onKeyDown={handleInputKeyDown}
           onFocus={() => setIsOpen(true)}
           placeholder={selectedLangs.length === 0 ? placeholderText : ""}
-          className="bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-500 flex-grow min-w-[20px] py-1 cursor-pointer"
+          className="bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 flex-grow min-w-[20px] py-1 cursor-pointer"
         />
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-[#1e1e24] border border-zinc-700 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-none">
+        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-none">
           {filteredLanguages.length > 0 ? (
             filteredLanguages.map((lang) => {
               const isSelected = selectedLangs.some(
@@ -175,7 +175,7 @@ function LanguageMultiSelect({
                       ? selectedColorClass
                       : isDisabled
                         ? "opacity-50 cursor-not-allowed text-zinc-500"
-                        : "text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                        : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -202,7 +202,11 @@ function LanguageMultiSelect({
         </div>
       )}
 
-      {helperText && <p className="text-xs text-zinc-500 mt-2">{helperText}</p>}
+      {helperText && (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+          {helperText}
+        </p>
+      )}
     </div>
   );
 }
@@ -243,7 +247,7 @@ export default function TranslationModes({ onSubmit }) {
         {/* === One-Way === */}
         <div
           id="standalone-one-way-card-web"
-          className="flex flex-col h-full p-6 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300"
+          className="flex flex-col h-full p-6 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all duration-300 shadow-sm"
         >
           <div className="flex-grow">
             <OneWay />
@@ -278,7 +282,7 @@ export default function TranslationModes({ onSubmit }) {
               </div>
               {t("standalone_one_way_start")}
             </button>
-            <p className="text-center text-zinc-500 text-sm mt-3">
+            <p className="text-center text-zinc-500 dark:text-zinc-400 text-sm mt-3">
               {t("standalone_one_way_footer")}
             </p>
           </div>
@@ -287,7 +291,7 @@ export default function TranslationModes({ onSubmit }) {
         {/* === Two-Way === */}
         <div
           id="standalone-two-way-card-web"
-          className="flex flex-col h-full p-6 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300"
+          className="flex flex-col h-full p-6 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all duration-300 shadow-sm"
         >
           <div className="flex-grow">
             <TwoWay />
@@ -330,7 +334,7 @@ export default function TranslationModes({ onSubmit }) {
               </p>
             )}
 
-            <p className="text-center text-zinc-600 text-sm mt-3">
+            <p className="text-center text-zinc-500 dark:text-zinc-400 text-sm mt-3">
               {t("standalone_two_way_footer")}
             </p>
           </div>
@@ -349,15 +353,17 @@ function FeatureItem({ icon, title, desc, color = "blue" }) {
   return (
     <div className="flex items-start space-x-4 group">
       <div
-        className={`shrink-0 p-3 bg-zinc-900 rounded-lg text-zinc-400 transition-colors duration-300 mt-1 ${colors[color]}`}
+        className={`shrink-0 p-3 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-600 dark:text-zinc-400 transition-colors duration-300 mt-1 ${colors[color]}`}
       >
         {icon}
       </div>
       <div>
-        <h4 className="text-zinc-200 group-hover:text-white font-medium text-lg transition-colors">
+        <h4 className="text-zinc-900 dark:text-zinc-200 group-hover:text-zinc-700 dark:group-hover:text-white font-medium text-lg transition-colors">
           {title}
         </h4>
-        <p className="text-zinc-400 text-sm mt-1 leading-relaxed">{desc}</p>
+        <p className="text-zinc-600 dark:text-zinc-400 text-sm mt-1 leading-relaxed">
+          {desc}
+        </p>
       </div>
     </div>
   );
@@ -368,12 +374,12 @@ function OneWay() {
   return (
     <div className="space-y-10 h-full flex flex-col">
       <div>
-        <h2 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-6">
+        <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white leading-tight mb-6">
           {t("standalone_one_way_title")}
         </h2>
-        <p className="text-zinc-400 text-lg leading-relaxed">
+        <p className="text-zinc-600 dark:text-zinc-400 text-lg leading-relaxed">
           {t("standalone_one_way_description_prefix")}
-          <span className="text-white font-semibold">
+          <span className="text-zinc-900 dark:text-white font-semibold">
             {" "}
             {t("standalone_one_way_description_highlight")}
           </span>
@@ -416,12 +422,12 @@ function TwoWay() {
   return (
     <div className="space-y-10 h-full flex flex-col">
       <div>
-        <h2 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-6">
+        <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white leading-tight mb-6">
           {t("standalone_two_way_title")}
         </h2>
-        <p className="text-zinc-400 text-lg leading-relaxed">
+        <p className="text-zinc-600 dark:text-zinc-400 text-lg leading-relaxed">
           {t("standalone_two_way_description_prefix")}{" "}
-          <span className="text-white font-semibold">
+          <span className="text-zinc-900 dark:text-white font-semibold">
             {t("standalone_two_way_description_highlight")}
           </span>
           , {t("standalone_two_way_description_suffix")}

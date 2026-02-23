@@ -60,21 +60,22 @@ async def handle_viewer_session(
                                 Meeting.readable_id == readable_id,
                                 Meeting.platform == platform,
                                 Meeting.id != session_id,
-                                Meeting.started_at.is_not(None),
                             )
                             .order_by(Meeting.started_at.desc())
-                            .limit(1)
                         )
-                        sibling = sibling_result.first()
+                        siblings = sibling_result.all()
 
-                        if sibling:
+                        for sibling in siblings:
                             candidate_session_id = sibling.id
-                            if await viewer_manager.is_session_active_global(candidate_session_id):
+                            if await viewer_manager.is_session_active_global(
+                                candidate_session_id
+                            ):
                                 logger.info(
                                     f"Found active sibling session. Redirecting {session_id} -> {candidate_session_id}"
                                 )
                                 resolved_session_id = candidate_session_id
                                 session_id_var.set(resolved_session_id)
+                                break
                         # TODO: END OF JANK SOLUTION
 
                 if not meeting_exists:

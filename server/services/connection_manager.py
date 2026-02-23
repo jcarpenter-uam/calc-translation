@@ -280,6 +280,18 @@ class ConnectionManager:
                             and payload.get("status") == "active"
                             and session_id in self.sessions
                         ):
+                            # Persist attendees for local waiting viewers when another
+                            # instance activates this session.
+                            local_users = {
+                                self.socket_users.get(ws)
+                                for ws in self.sessions[session_id]
+                                if self.socket_users.get(ws)
+                            }
+                            for user_id in local_users:
+                                asyncio.create_task(
+                                    self._record_attendee(session_id, user_id)
+                                )
+
                             requested = set()
                             for ws in self.sessions[session_id]:
                                 lang = self.socket_languages.get(ws)
@@ -631,6 +643,16 @@ class ConnectionManager:
                 },
             )
             await self._redis.sadd(self._active_sessions_key, session_id)
+
+            # Viewers can connect while the meeting is still in waiting state.
+            # Once this session flips to active, persist those users as attendees.
+            waiting_users = {
+                self.socket_users.get(ws)
+                for ws in self.sessions.get(session_id, [])
+                if self.socket_users.get(ws)
+            }
+            for user_id in waiting_users:
+                asyncio.create_task(self._record_attendee(session_id, user_id))
 
             with log_step("CONN-MANAGER"):
                 logger.info(

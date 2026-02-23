@@ -8,6 +8,7 @@ import Support from "./pages/support";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
 import ScrollToTop from "./components/misc/scroll-to-top";
+import OnboardingTour from "./components/misc/onboarding-tour";
 import AdminPage from "./pages/admin";
 import NotFound from "./pages/not-found";
 import StandalonePage from "./pages/standalone";
@@ -17,6 +18,7 @@ export default function App() {
     <div className="min-h-screen bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors">
       <BrowserRouter>
         <ScrollToTop />
+        <OnboardingTour />
         <Routes>
           <Route element={<Layout />}>
             <Route path="/login" element={<Login />} />

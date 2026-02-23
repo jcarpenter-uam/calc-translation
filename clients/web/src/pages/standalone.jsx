@@ -42,7 +42,11 @@ export default function StandalonePage() {
 
   return (
     <>
-      <SupportedLangs />
+      <div
+        id="standalone-supported-langs-web"
+      >
+        <SupportedLangs />
+      </div>
       <TranslationModes onSubmit={handleJoin} />
 
       {error && (

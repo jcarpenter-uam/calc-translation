@@ -111,22 +111,22 @@ export default function SupportedLangs() {
       </style>
 
       <div className="container mx-auto px-4 flex flex-col items-center">
-        <h2 className="text-3xl font-semibold text-center mb-8 tracking-tight">
+        <h2 className="text-3xl font-semibold text-center mb-8 tracking-tight text-zinc-900 dark:text-white">
           {t("standalone_supported_langs_title", { count: languages.length })}
         </h2>
 
         <div className="relative w-full max-w-lg mb-12 group">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
-            <BiSearch className="text-gray-400 text-xl" />
+            <BiSearch className="text-zinc-400 dark:text-zinc-500 text-xl" />
           </div>
           <input
             type="text"
             placeholder={t("standalone_supported_langs_search_placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-[#1e1e24] border border-gray-800 text-white text-base rounded-full pl-12 pr-6 py-4 
-                     focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 
-                     transition-all duration-300 placeholder-gray-500 shadow-lg hover:border-gray-700"
+            className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-base rounded-full pl-12 pr-6 py-4
+                     focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10
+                     transition-all duration-300 placeholder-zinc-400 dark:placeholder-zinc-500 shadow-sm hover:border-zinc-400 dark:hover:border-zinc-600"
           />
         </div>
       </div>
@@ -139,7 +139,7 @@ export default function SupportedLangs() {
                 <LanguagePill key={lang.name} lang={lang} />
               ))
             ) : (
-              <div className="col-span-full text-center text-gray-500 py-12">
+              <div className="col-span-full text-center text-zinc-500 dark:text-zinc-400 py-12">
                 <p className="text-lg">
                   {t("standalone_supported_langs_no_match", { query })}
                 </p>
@@ -161,7 +161,7 @@ export default function SupportedLangs() {
 }
 
 const LanguagePill = ({ lang }) => (
-  <div className="flex-shrink-0 flex items-center bg-[#1e1e24] hover:bg-[#2a2a35] border border-gray-800 hover:border-gray-600 rounded-full px-5 py-3 transition-all duration-300 cursor-default group hover:shadow-lg hover:-translate-y-0.5">
+  <div className="flex-shrink-0 flex items-center bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 rounded-full px-5 py-3 transition-all duration-300 cursor-default group hover:shadow-md hover:-translate-y-0.5">
     <img
       src={
         lang.flag.startsWith("http")
@@ -171,7 +171,7 @@ const LanguagePill = ({ lang }) => (
       alt={lang.name}
       className="w-6 h-6 rounded-full object-cover mr-3 pointer-events-none group-hover:scale-110 transition-transform duration-300 shadow-sm"
     />
-    <span className="text-gray-300 group-hover:text-white text-sm font-medium whitespace-nowrap">
+    <span className="text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white text-sm font-medium whitespace-nowrap">
       {lang.name}
     </span>
   </div>

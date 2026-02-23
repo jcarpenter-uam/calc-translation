@@ -50,7 +50,10 @@ function applyTourUtilityClasses(tg) {
   ]);
 
   addClasses(dialog.querySelector(".tg-dialog-title"), ["text-zinc-900"]);
-  addClasses(dialog.querySelector(".tg-dialog-body"), ["break-words", "text-zinc-700"]);
+  addClasses(dialog.querySelector(".tg-dialog-body"), [
+    "break-words",
+    "text-zinc-700",
+  ]);
 
   addClasses(dialog.querySelector(".tg-dialog-progress-bar"), ["bg-zinc-100"]);
   addClasses(dialog.querySelector("#tg-dialog-progbar"), ["bg-blue-500"]);
@@ -118,12 +121,7 @@ function getTourOptions(navigate, t) {
   };
 }
 
-async function refreshTourLanguage({
-  tg,
-  navigate,
-  t,
-  retry = 0,
-}) {
+async function refreshTourLanguage({ tg, navigate, t, retry = 0 }) {
   if (!tg || !tg.isVisible || tg.group !== TOUR_GROUP) {
     return;
   }
@@ -326,7 +324,9 @@ export default function OnboardingTour() {
           navigate("/");
         }
         await waitForFrames(3);
-        const tourT = i18n.getFixedT(uiLanguage || i18n.resolvedLanguage || "en");
+        const tourT = i18n.getFixedT(
+          uiLanguage || i18n.resolvedLanguage || "en",
+        );
         startTourWhenReady({
           tg,
           navigate,

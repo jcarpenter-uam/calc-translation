@@ -353,8 +353,8 @@ class SonioxService:
         except ConnectionClosedError as e:
             error_msg = str(e)
             with log_step("SONIOX"):
-                logger.error(
-                    f"Receive loop error (ConnectionClosedError): {e}", exc_info=True
+                logger.warning(
+                    "Soniox receive loop disconnected unexpectedly. Initiating reconnect."
                 )
             await self.on_error_callback(SonioxConnectionError(error_msg))
 

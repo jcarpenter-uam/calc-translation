@@ -25,6 +25,11 @@ export const API_ROUTES = {
     base: "/api/calender/",
     sync: "/api/calender/sync",
   },
+  reviews: {
+    base: "/api/reviews/",
+    submit: "/api/reviews/submit",
+    mine: "/api/reviews/me",
+  },
 };
 
 export function buildSessionPath(type, sessionId, token, isHost = false) {

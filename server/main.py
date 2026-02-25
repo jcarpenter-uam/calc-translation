@@ -15,6 +15,7 @@ from api.auth import create_auth_router
 from api.calender import create_calender_router
 from api.logs import create_logs_router
 from api.metrics import create_metrics_router
+from api.reviews import create_review_router
 from api.sessions import create_sessions_router
 from api.tenants import create_tenant_router
 from api.transcribe import create_transcribe_router
@@ -84,6 +85,9 @@ app.include_router(logs_router)
 
 metrics_router = create_metrics_router(viewer_manager=viewer_manager)
 app.include_router(metrics_router)
+
+reviews_router = create_review_router()
+app.include_router(reviews_router)
 
 calender_router = create_calender_router()
 app.include_router(calender_router)

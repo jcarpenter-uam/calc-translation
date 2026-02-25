@@ -1,6 +1,7 @@
 import { useLogs } from "./use-logs.js";
 import { useUsers } from "./use-users.js";
 import { useTenants } from "./use-tenants";
+import { useAdminReviews } from "./use-admin-reviews.js";
 
 export function useAdminPageData() {
   const {
@@ -28,6 +29,13 @@ export function useAdminPageData() {
     refetch: fetchLogs,
   } = useLogs(3000);
 
+  const {
+    reviews,
+    loading: reviewsLoading,
+    error: reviewsError,
+    refetch: refetchReviews,
+  } = useAdminReviews();
+
   const isPageLoading = usersLoading || tenantsLoading;
   const pageError = usersError || tenantsError;
 
@@ -51,6 +59,12 @@ export function useAdminPageData() {
       loading: logsLoading,
       error: logsError,
       fetchLogs,
+    },
+    reviews: {
+      data: reviews,
+      loading: reviewsLoading,
+      error: reviewsError,
+      refetchReviews,
     },
   };
 }

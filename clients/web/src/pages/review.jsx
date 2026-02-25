@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { API_ROUTES } from "../constants/routes.js";
 import { JSON_HEADERS, requestJson } from "../lib/api-client.js";
 
 const STARS = [1, 2, 3, 4, 5];
 
 export default function ReviewPage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const token = useMemo(() => searchParams.get("token") || "", [searchParams]);
   const [rating, setRating] = useState(null);
@@ -19,15 +21,15 @@ export default function ReviewPage() {
     setError("");
 
     if (!token) {
-      setError("Missing review token in the link.");
+      setError(t("review_error_missing_token"));
       return;
     }
     if (!rating) {
-      setError("A rating is required.");
+      setError(t("review_error_rating_required"));
       return;
     }
     if (!note.trim()) {
-      setError("A note is required.");
+      setError(t("review_error_note_required"));
       return;
     }
 
@@ -44,11 +46,11 @@ export default function ReviewPage() {
             note,
           }),
         },
-        "Failed to submit review.",
+        t("review_error_submit_failed"),
       );
       setIsSubmitted(true);
     } catch (submitError) {
-      setError(submitError.message || "Failed to submit review.");
+      setError(submitError.message || t("review_error_submit_failed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -58,33 +60,33 @@ export default function ReviewPage() {
     <div className="max-w-xl mx-auto w-full">
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 sm:p-8">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Leave a Review
+          {t("review_title")}
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Rate your experience from 1 to 5 stars and share feedback.
+          {t("review_description")}
         </p>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          This goes directly to the developer. Use it to report issues, suggest features, or share what you liked or disliked.
+          {t("review_developer_note")}
         </p>
 
         {!token && (
           <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-            This link is missing a review token.
+            {t("review_missing_token_banner")}
           </div>
         )}
 
         {isSubmitted ? (
           <div className="mt-6 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-            Thanks for your feedback.
+            {t("review_thank_you")}
           </div>
         ) : (
           <form className="mt-6 space-y-6" onSubmit={onSubmit}>
             <div>
-              <label className="block text-sm font-medium mb-2">Rating *</label>
+              <label className="block text-sm font-medium mb-2">{t("review_rating_label")}</label>
               <div
                 className="flex items-center gap-2"
                 role="radiogroup"
-                aria-label="Star rating"
+                aria-label={t("review_star_rating_aria")}
               >
                 {STARS.map((value) => {
                   const selected = rating !== null && value <= rating;
@@ -110,13 +112,13 @@ export default function ReviewPage() {
 
             <div>
               <label htmlFor="note" className="block text-sm font-medium mb-2">
-                Note *
+                {t("review_note_label")}
               </label>
               <textarea
                 id="note"
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
-                placeholder="Report an issue, suggest a feature, or share what you liked or disliked."
+                placeholder={t("review_note_placeholder")}
                 rows={5}
                 required
                 maxLength={2000}
@@ -135,7 +137,7 @@ export default function ReviewPage() {
               disabled={isSubmitting || !token || !rating || !note.trim()}
               className="cursor-pointer inline-flex items-center justify-center rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2"
             >
-              {isSubmitting ? "Submitting..." : "Submit Review"}
+              {isSubmitting ? t("review_submitting_btn") : t("review_submit_btn")}
             </button>
           </form>
         )}
@@ -144,7 +146,7 @@ export default function ReviewPage() {
           to="/"
           className="mt-6 inline-block text-sm text-blue-600 hover:underline dark:text-blue-400"
         >
-          Back to home
+          {t("back_to_home")}
         </Link>
       </div>
     </div>

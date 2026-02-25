@@ -693,7 +693,7 @@ class MeetingSession:
                 attendees = []
                 if meeting_details and meeting_details.attendees:
                     attendee_result = await session.execute(
-                        select(User.email, User.language_code).where(
+                        select(User.id, User.email, User.language_code).where(
                             User.id.in_(meeting_details.attendees)
                         )
                     )

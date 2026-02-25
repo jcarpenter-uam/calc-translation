@@ -6,6 +6,7 @@ import urllib.parse
 from datetime import datetime
 
 import msal
+from core.authentication import generate_review_token
 from core.config import settings
 from core.http_client import get_http_client
 from core.logging_setup import log_step
@@ -164,6 +165,7 @@ class EmailService:
             tasks = []
 
             for row in attendees:
+                user_id = row.get("id")
                 email = row.get("email")
                 pref_lang = row.get("language_code") or "en"
 
@@ -234,6 +236,22 @@ class EmailService:
                     else:
                         subject = f"Summary & Transcript: {platform_name} - {meeting_full_string}"
 
+                    review_html = ""
+                    if user_id:
+                        review_token = generate_review_token(
+                            user_id=user_id,
+                            session_id=session_id,
+                        )
+                        review_link = f"{self.website_url}/review?token={urllib.parse.quote(review_token, safe='')}"
+                        review_html = f"""
+                                <div style="margin: 22px 0; padding: 16px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+                                    <p style="margin: 0 0 12px 0;"><strong>How did I do?</strong> Please rate this meeting experience and leave feedback directly to the developer.</p>
+                                    <a href="{review_link}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 14px; border-radius: 6px; font-weight: 600;">
+                                        Leave a review
+                                    </a>
+                                </div>
+                        """
+
                     body = f"""
                     <html>
                     <body style="font-family: Arial, sans-serif; color: #333;">
@@ -258,6 +276,8 @@ class EmailService:
                                 <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #007bff; margin: 15px 0;">
                                     {summary_content}
                                 </div>
+
+                                {review_html}
                                 
                                 <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
 

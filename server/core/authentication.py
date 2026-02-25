@@ -54,6 +54,29 @@ def generate_jwt_token(
     return token
 
 
+def generate_review_token(
+    user_id: str, session_id: str | None = None, expires_delta: timedelta | None = None
+) -> str:
+    """
+    Generates a long-lived token that allows review submission from an emailed link.
+    """
+    now = datetime.now(timezone.utc)
+
+    if expires_delta is None:
+        expires_delta = timedelta(days=30)
+
+    payload = {
+        "iss": "calc-translation-service",
+        "iat": now,
+        "exp": now + expires_delta,
+        "sub": user_id,
+        "resource": session_id,
+        "aud": "review-feedback",
+    }
+
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
+
+
 async def get_token_from_cookie(request: HTTPConnection) -> str:
     """Extracts the auth token from the 'app_auth_token' cookie."""
     token = request.cookies.get("app_auth_token")
@@ -165,6 +188,42 @@ def validate_client_token(token: str = Query()) -> dict:
             logger.warning(f"Client Auth failed: Invalid token. {e}")
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
+        )
+
+
+def validate_review_token(token: str) -> dict:
+    """
+    Validates a review-link token from email links.
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing review token"
+        )
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=["HS256"],
+            issuer="calc-translation-service",
+            audience="review-feedback",
+        )
+        TokenPayload(**payload)
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Review link has expired",
+        )
+    except (
+        jwt.InvalidIssuerError,
+        jwt.InvalidAudienceError,
+        jwt.InvalidTokenError,
+        ValidationError,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid review token",
         )
 
 

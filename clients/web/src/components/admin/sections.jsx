@@ -1,6 +1,7 @@
 import UserManagement from "./user-management.jsx";
 import TenantManagement from "./tenant-management.jsx";
 import LogViewing from "./log-viewing.jsx";
+import ReviewsManagement from "./reviews.jsx";
 import { useAdmin } from "../../context/admin.jsx";
 
 export function UserManagementSection() {
@@ -38,6 +39,19 @@ export function LogViewingSection() {
       loading={logs.loading}
       error={logs.error}
       onRefresh={logs.fetchLogs}
+    />
+  );
+}
+
+export function ReviewsSection() {
+  const { reviews } = useAdmin();
+
+  return (
+    <ReviewsManagement
+      reviews={reviews.data}
+      loading={reviews.loading}
+      error={reviews.error}
+      onRefresh={reviews.refetchReviews}
     />
   );
 }

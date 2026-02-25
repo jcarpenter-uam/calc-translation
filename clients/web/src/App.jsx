@@ -7,6 +7,7 @@ import SessionPage from "./pages/session";
 import Support from "./pages/support";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
+import ReviewPage from "./pages/review";
 import ScrollToTop from "./components/misc/scroll-to-top";
 import OnboardingTour from "./components/misc/onboarding-tour";
 import AdminPage from "./pages/admin";
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/support" element={<Support />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/review" element={<ReviewPage />} />
 
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<LandingPage />} />

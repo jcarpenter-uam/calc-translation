@@ -279,7 +279,7 @@ class TranscriptCache:
 
             # {prefix}:transcript:{session_id}:{language_code}:meta
             parts = key.split(":")
-            if len(parts) < 5:
+            if len(parts) < 5:  # pragma: no cover
                 continue
             session_id = parts[-3]
             language_code = parts[-2]

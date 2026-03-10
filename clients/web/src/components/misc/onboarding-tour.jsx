@@ -5,6 +5,7 @@ import "@sjmc11/tourguidejs/dist/css/tour.min.css";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../context/auth";
 import { useLanguage } from "../../context/language";
+import { JSON_HEADERS, requestJson } from "../../lib/api-client.js";
 import { TOUR_GROUP, getOnboardingTourSteps } from "../../tours/tour-steps";
 
 const MAX_START_ATTEMPTS = 12;
@@ -121,6 +122,29 @@ function getTourOptions(navigate, t) {
   };
 }
 
+function isTourFinishedSafe(tg, group) {
+  if (!tg) {
+    return false;
+  }
+  try {
+    return Boolean(tg.isFinished(group));
+  } catch (error) {
+    console.warn("Unable to read finished tour state; continuing tour startup.", error);
+    return false;
+  }
+}
+
+function clearFinishedTourSafe(tg, group) {
+  if (!tg) {
+    return;
+  }
+  try {
+    tg.deleteFinishedTour(group);
+  } catch (error) {
+    console.warn("Unable to clear finished tour state; continuing restart.", error);
+  }
+}
+
 async function refreshTourLanguage({ tg, navigate, t, retry = 0 }) {
   if (!tg || !tg.isVisible || tg.group !== TOUR_GROUP) {
     return;
@@ -222,11 +246,28 @@ async function startTourWhenReady({
 export default function OnboardingTour() {
   const { t, i18n } = useTranslation();
   const { uiLanguage } = useLanguage();
-  const { user, isLoading } = useAuth();
+  const { user, setUser, isLoading } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const clientRef = useRef(null);
   const hasAttemptedStartRef = useRef(false);
+
+  const updateOnboardingTourCompletion = async (completed) => {
+    try {
+      const updatedUser = await requestJson(
+        "/api/users/me/onboarding-tour",
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ onboarding_tour_completed: completed }),
+        },
+        "Failed to update onboarding tour status",
+      );
+      setUser(updatedUser);
+    } catch (error) {
+      console.error("Failed to persist onboarding tour state", error);
+    }
+  };
 
   useEffect(() => {
     if (!clientRef.current) {
@@ -236,10 +277,11 @@ export default function OnboardingTour() {
       });
       clientRef.current.onBeforeExit(async () => {
         const tg = clientRef.current;
-        if (!tg || tg.isFinished(TOUR_GROUP)) {
+        if (!tg || isTourFinishedSafe(tg, TOUR_GROUP)) {
           return;
         }
         await tg.finishTour(false, TOUR_GROUP);
+        await updateOnboardingTourCompletion(true);
       });
       clientRef.current.onAfterStepChange(async () => {
         applyTourUtilityClasses(clientRef.current);
@@ -253,15 +295,19 @@ export default function OnboardingTour() {
     if (isLoading || !user || pathname !== "/") {
       return;
     }
+    if (user.onboarding_tour_completed) {
+      return;
+    }
 
     if (uiLanguage && i18n.resolvedLanguage !== uiLanguage) {
       return;
     }
 
     const tg = clientRef.current;
-    if (!tg || tg.isFinished(TOUR_GROUP) || hasAttemptedStartRef.current) {
+    if (!tg || hasAttemptedStartRef.current) {
       return;
     }
+    clearFinishedTourSafe(tg, TOUR_GROUP);
 
     hasAttemptedStartRef.current = true;
     let isCancelled = false;
@@ -317,7 +363,8 @@ export default function OnboardingTour() {
       }
 
       try {
-        tg.deleteFinishedTour(TOUR_GROUP);
+        await updateOnboardingTourCompletion(false);
+        clearFinishedTourSafe(tg, TOUR_GROUP);
         await tg.exit().catch(() => {});
         hasAttemptedStartRef.current = true;
         if (window.location.pathname !== "/") {

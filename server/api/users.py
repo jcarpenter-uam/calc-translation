@@ -19,6 +19,7 @@ class UserResponse(BaseModel):
     email: str | None
     is_admin: bool
     language_code: str | None
+    onboarding_tour_completed: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -34,6 +35,10 @@ class UserLanguageUpdate(BaseModel):
     language_code: str
 
 
+class UserOnboardingTourUpdate(BaseModel):
+    onboarding_tour_completed: bool
+
+
 def _to_user_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
@@ -41,6 +46,9 @@ def _to_user_response(user: User) -> UserResponse:
         email=user.email,
         is_admin=user.is_admin,
         language_code=user.language_code,
+        onboarding_tour_completed=bool(
+            getattr(user, "onboarding_tour_completed", False)
+        ),
     )
 
 
@@ -84,6 +92,45 @@ def create_user_router() -> APIRouter:
             if not user:
                 raise HTTPException(status_code=404, detail="User not found.")
             return _to_user_response(user)
+
+    async def _update_my_onboarding_tour_impl(
+        tour_update: UserOnboardingTourUpdate,
+        payload: dict = Depends(get_current_user_payload),
+    ):
+        with log_step(LOG_STEP):
+            user_id = payload.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid auth token payload")
+
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    update(User)
+                    .where(User.id == user_id)
+                    .values(
+                        onboarding_tour_completed=tour_update.onboarding_tour_completed
+                    )
+                )
+                await session.commit()
+                result = await session.execute(select(User).where(User.id == user_id))
+                user = result.scalar_one_or_none()
+
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found.")
+            return _to_user_response(user)
+
+    @router.put("/me/onboarding-tour", response_model=UserResponse)
+    async def update_my_onboarding_tour_put(
+        tour_update: UserOnboardingTourUpdate,
+        payload: dict = Depends(get_current_user_payload),
+    ):
+        return await _update_my_onboarding_tour_impl(tour_update, payload)
+
+    @router.post("/me/onboarding-tour", response_model=UserResponse)
+    async def update_my_onboarding_tour_post(
+        tour_update: UserOnboardingTourUpdate,
+        payload: dict = Depends(get_current_user_payload),
+    ):
+        return await _update_my_onboarding_tour_impl(tour_update, payload)
 
     @router.get("/", response_model=List[UserResponse], dependencies=[Depends(get_admin_user_payload)])
     async def get_all_users():

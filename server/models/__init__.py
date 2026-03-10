@@ -9,6 +9,7 @@ from .users import User
 
 # Compatibility patch for databases created before translation columns were added.
 POST_CREATE_STATEMENTS = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_tour_completed BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE meetings ADD COLUMN IF NOT EXISTS translation_type TEXT DEFAULT 'one_way'",
     "ALTER TABLE meetings ADD COLUMN IF NOT EXISTS translation_language_a TEXT",
     "ALTER TABLE meetings ADD COLUMN IF NOT EXISTS translation_language_b TEXT",

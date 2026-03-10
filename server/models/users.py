@@ -11,3 +11,6 @@ class User(Base):
     email = Column(Text)
     language_code = Column(Text)
     is_admin = Column(Boolean, nullable=False, server_default="false")
+    onboarding_tour_completed = Column(
+        Boolean, nullable=False, server_default="false"
+    )

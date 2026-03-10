@@ -74,6 +74,77 @@ async def test_update_my_language_requires_sub_and_user_exists(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_update_my_onboarding_tour_success(monkeypatch):
+    user = SimpleNamespace(
+        id="u1",
+        name="Alice",
+        email="a@example.com",
+        is_admin=False,
+        language_code="en",
+        onboarding_tour_completed=True,
+    )
+    monkeypatch.setattr(
+        users,
+        "AsyncSessionLocal",
+        fake_session_local(FakeResult(), FakeResult(scalar=user)),
+    )
+
+    endpoint = _endpoint("/api/users/me/onboarding-tour", "PUT")
+    result = await endpoint(
+        users.UserOnboardingTourUpdate(onboarding_tour_completed=True),
+        payload={"sub": "u1"},
+    )
+
+    assert result.onboarding_tour_completed is True
+
+
+@pytest.mark.asyncio
+async def test_update_my_onboarding_tour_requires_sub_and_user_exists(monkeypatch):
+    endpoint = _endpoint("/api/users/me/onboarding-tour", "PUT")
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(
+            users.UserOnboardingTourUpdate(onboarding_tour_completed=True),
+            payload={},
+        )
+    assert exc_info.value.status_code == 401
+
+    monkeypatch.setattr(
+        users, "AsyncSessionLocal", fake_session_local(FakeResult(), FakeResult(scalar=None))
+    )
+    with pytest.raises(HTTPException) as exc_info2:
+        await endpoint(
+            users.UserOnboardingTourUpdate(onboarding_tour_completed=True),
+            payload={"sub": "u1"},
+        )
+    assert exc_info2.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_my_onboarding_tour_post_success(monkeypatch):
+    user = SimpleNamespace(
+        id="u1",
+        name="Alice",
+        email="a@example.com",
+        is_admin=False,
+        language_code="en",
+        onboarding_tour_completed=False,
+    )
+    monkeypatch.setattr(
+        users,
+        "AsyncSessionLocal",
+        fake_session_local(FakeResult(), FakeResult(scalar=user)),
+    )
+
+    endpoint = _endpoint("/api/users/me/onboarding-tour", "POST")
+    result = await endpoint(
+        users.UserOnboardingTourUpdate(onboarding_tour_completed=False),
+        payload={"sub": "u1"},
+    )
+
+    assert result.onboarding_tour_completed is False
+
+
+@pytest.mark.asyncio
 async def test_get_all_users_returns_rows(monkeypatch):
     rows = [
         SimpleNamespace(id="u1", name="A", email="a@x.com", is_admin=False, language_code="en"),

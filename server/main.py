@@ -98,10 +98,16 @@ app.mount(
     name="icon",
 )
 
-app.mount("/assets", StaticFiles(directory="web/dist/assets"), name="assets")
+app.mount(
+    "/assets",
+    StaticFiles(directory="web/dist/assets", check_dir=False),
+    name="assets",
+)
 
 app.mount(
-    "/translations", StaticFiles(directory="web/dist/translations"), name="translations"
+    "/translations",
+    StaticFiles(directory="web/dist/translations", check_dir=False),
+    name="translations",
 )
 
 

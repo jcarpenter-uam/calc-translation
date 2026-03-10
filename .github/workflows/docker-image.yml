@@ -12,6 +12,17 @@ jobs:
       contents: read
     env:
       PYTHONPATH: ${{ github.workspace }}/server
+      SONIOX_API_KEY: ci-soniox-key
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/calc_translation
+      ENCRYPTION_KEY: DyQ9UONijJtaxy5YgYe9WY3ZrFWrUv7b40J25sPe_84=
+      JWT_SECRET_KEY: ci-jwt-secret
+      ZM_PUBLIC_KEY: ci-public-key
+      ZM_RTMS_CLIENT: ci-rtms-client
+      ZM_RTMS_SECRET: ci-rtms-secret
+      MAILER_TENANT_ID: ci-tenant
+      MAILER_CLIENT_ID: ci-mailer-client
+      MAILER_CLIENT_SECRET: ci-mailer-secret
+      MAILER_SENDER_EMAIL: ci@example.com
     defaults:
       run:
         working-directory: server

@@ -1,4 +1,5 @@
 # server
+.pytest_cache/
 __pycache__/
 venv/
 *.db

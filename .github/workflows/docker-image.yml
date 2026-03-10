@@ -10,6 +10,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    env:
+      PYTHONPATH: ${{ github.workspace }}/server
     defaults:
       run:
         working-directory: server
@@ -29,22 +31,28 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov
 
+      - name: Python import path preflight
+        run: |
+          pwd
+          python -c "import os, sys; print('python=', sys.executable); print('cwd=', os.getcwd()); print('PYTHONPATH=', os.getenv('PYTHONPATH')); print('sys.path=', sys.path)"
+          python -c "import api, core, services, integrations; print('imports=ok')"
+
       - name: API coverage gate
         run: |
-          pytest -q -c pytest.ini
+          python -m pytest -q -c pytest.ini
 
       - name: Services coverage gate
         run: |
-          pytest -q -c pytest-services.ini
+          python -m pytest -q -c pytest-services.ini
 
       - name: TTFT gate (deterministic)
         run: |
-          pytest -q -s -o addopts='' \
+          python -m pytest -q -s -o addopts='' \
             tests/test_api_transcribe.py::test_transcribe_ttft_from_audio_to_first_soniox_token
 
       - name: Production modules 100% coverage gate
         run: |
-          pytest -q -o addopts='' \
+          python -m pytest -q -o addopts='' \
             --cov=api \
             --cov=core \
             --cov=integrations \

@@ -10,6 +10,9 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: server
 
     steps:
       - name: Checkout repository
@@ -23,28 +26,24 @@ jobs:
       - name: Install server dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r server/requirements.txt
+          pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov
 
       - name: API coverage gate
         run: |
-          cd server
           pytest -q -c pytest.ini
 
       - name: Services coverage gate
         run: |
-          cd server
           pytest -q -c pytest-services.ini
 
       - name: TTFT gate (deterministic)
         run: |
-          cd server
           pytest -q -s -o addopts='' \
             tests/test_api_transcribe.py::test_transcribe_ttft_from_audio_to_first_soniox_token
 
       - name: Production modules 100% coverage gate
         run: |
-          cd server
           pytest -q -o addopts='' \
             --cov=api \
             --cov=core \

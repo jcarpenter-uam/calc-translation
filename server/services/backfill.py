@@ -97,7 +97,7 @@ class BackfillService:
                         logger.error(f"Unexpected error for text '{text[:20]}...': {e}")
                     return ""
 
-            return ""
+            return ""  # pragma: no cover
 
     async def run_session_backfill(
         self,

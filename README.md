@@ -18,3 +18,12 @@ This project is a comprehensive real-time transcription and translation platform
 ## How It Works
 
 <img width="2552" height="1594" alt="mermaid-diagram-2026-01-21-164458" src="https://github.com/user-attachments/assets/3e9d4e38-d6a1-4087-a465-5b2bf1c5a63b" />
+
+## Server Test Gates
+
+Run the same high-signal gates used in CI:
+
+```bash
+make server-test-gates
+make server-prod-coverage-100
+```

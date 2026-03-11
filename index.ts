@@ -1,10 +1,12 @@
+import { env } from "./core/config";
+
 // Define the custom data you want to attach to each WebSocket connection
 type WebSocketData = {
   clientId: string;
 };
 
 const server = Bun.serve<WebSocketData>({
-  port: 3000,
+  port: env.PORT,
 
   // 1. Handle incoming HTTP requests and WebSocket upgrades
   fetch(req, server) {
@@ -58,4 +60,3 @@ const server = Bun.serve<WebSocketData>({
 
 console.log(`Server running at http://localhost:${server.port}`);
 console.log(`WebSocket endpoint at ws://localhost:${server.port}/ws`);
-

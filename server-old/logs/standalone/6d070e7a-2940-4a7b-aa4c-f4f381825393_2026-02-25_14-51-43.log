@@ -1,0 +1,33 @@
+[2026-02-25T14:51:43.865][INFO][WEBSOCKET] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Session '6d070e7a-2940-4a7b-aa4c-f4f381825393' not currently active. Checking DB for meeting record...
+[2026-02-25T14:51:43.870][INFO][CONN-MANAGER] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Transcription session registered as active for integration 'standalone'.
+[2026-02-25T14:51:43.871][INFO][SESSION] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Initializing session with languages: {'en'}
+[2026-02-25T14:51:43.871][DEBUG][TIMESTAMP] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] TimestampService initialized. Session zero point set to 2026-02-25 14:51:43.842993.
+[2026-02-25T14:51:43.877][DEBUG][TIMESTAMP] TimestampService initialized. Session zero point set to 2026-02-25 14:51:43.842993.
+[2026-02-25T14:51:43.878][DEBUG][CONN-MANAGER] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] New viewer connecting (Language: en). Replaying 0 cached messages.
+[2026-02-25T14:51:43.878][INFO][CONN-MANAGER] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Viewer connected (Lang: en). Active Viewers: Total=1 [en=1]
+[2026-02-25T14:51:43.878][DEBUG][WEBSOCKET] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Viewer connected to session '6d070e7a-2940-4a7b-aa4c-f4f381825393' (Status: active) with language 'en'.
+[2026-02-25T14:51:43.881][DEBUG][WEBSOCKET] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Recorded attendee 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3 for session 6d070e7a-2940-4a7b-aa4c-f4f381825393
+[2026-02-25T14:51:44.029][DEBUG][SONIOX] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Soniox service connected (Translation: {'type': 'one_way', 'target_language': 'en'}) | Hints: ['en']
+[2026-02-25T14:51:44.042][DEBUG][SONIOX] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Soniox service connected (Translation: {'type': 'one_way', 'target_language': 'en'}) | Hints: ['en']
+[2026-02-25T14:51:44.042][DEBUG][SONIOX] Soniox stream finalized (session end).
+[2026-02-25T14:51:44.084][INFO][WS-TRANSCRIBE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Using fallback zero point (start message missing): 2026-02-25 14:51:43.842993
+[2026-02-25T14:51:46.044][INFO][WS-TRANSCRIBE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] Received session_start. Resetting session zero point to 2026-02-25 14:51:46.044571.
+[2026-02-25T14:51:47.384][DEBUG][UTTERANCE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=1_en] Starting pipeline for utterance (en).
+[2026-02-25T14:51:47.384][DEBUG][TIMESTAMP] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=1_en] Marked start for utterance: 1_en
+[2026-02-25T14:51:47.990][DEBUG][SONIOX] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=1_en] Received <end> token, sending final utterance result.
+[2026-02-25T14:51:47.990][DEBUG][TIMESTAMP] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=1_en] Completed utterance '1_en'. Timestamp: 00:00:02.700 --> 00:00:03.600
+[2026-02-25T14:51:47.995][DEBUG][UTTERANCE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=1_en] Finished pipeline for utterance (en).
+[2026-02-25T14:51:50.202][DEBUG][UTTERANCE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=2_en] Starting pipeline for utterance (en).
+[2026-02-25T14:51:50.202][DEBUG][TIMESTAMP] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=2_en] Marked start for utterance: 2_en
+[2026-02-25T14:51:50.539][DEBUG][SONIOX] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=2_en] Received <end> token, sending final utterance result.
+[2026-02-25T14:51:50.539][DEBUG][TIMESTAMP] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=2_en] Completed utterance '2_en'. Timestamp: 00:00:05.640 --> 00:00:06.120
+[2026-02-25T14:51:50.543][DEBUG][UTTERANCE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] [message_id=2_en] Finished pipeline for utterance (en).
+[2026-02-25T14:51:51.192][INFO][WS-TRANSCRIBE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] Received session_end. Closing connection gracefully.
+[2026-02-25T14:51:51.192][INFO][WS-TRANSCRIBE] Closing session 6d070e7a-2940-4a7b-aa4c-f4f381825393 permanently.
+[2026-02-25T14:51:51.198][DEBUG][SONIOX] Soniox stream finalized (session end).
+[2026-02-25T14:51:51.270][DEBUG][SONIOX] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] [speaker=Unknown] Soniox signaled session finished.
+[2026-02-25T14:51:52.337][INFO][VTT] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Transcript VTT saved to output/standalone/6d070e7a-2940-4a7b-aa4c-f4f381825393/transcript_en.vtt. 2 entries.
+[2026-02-25T14:51:52.351][DEBUG][VTT] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Saved transcript record to DB for meeting 6d070e7a-2940-4a7b-aa4c-f4f381825393 (Lang: en).
+[2026-02-25T14:51:52.353][INFO][CACHE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Cleared Redis cache for language: en
+[2026-02-25T14:51:52.354][INFO][CACHE] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Cleared all Redis language caches for session
+[2026-02-25T14:51:52.358][INFO][CONN-MANAGER] [session=6d070e7a-2940-4a7b-aa4c-f4f381825393] Transcription session deregistered for integration 'standalone'.

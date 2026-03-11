@@ -1,0 +1,358 @@
+[2026-03-10T08:16:39.931][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2026-03-10T08:16:40.576][DEBUG][CACHE] Redis TranscriptCache initialized. Per-session-language limit: 50MB.
+[2026-03-10T08:16:40.576][DEBUG][CONN-MANAGER] ConnectionManager initialized. Instance ID: a7b45636-3d56-4c81-8938-28030e66d62f
+[2026-03-10T08:16:40.598][DEBUG][APP] Using selector: EpollSelector
+[2026-03-10T08:16:40.600][DEBUG][APP] Using selector: EpollSelector
+[2026-03-10T08:16:50.004][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2026-03-10T08:16:50.407][DEBUG][CACHE] Redis TranscriptCache initialized. Per-session-language limit: 50MB.
+[2026-03-10T08:16:50.407][DEBUG][CONN-MANAGER] ConnectionManager initialized. Instance ID: 1ca94e19-5705-4ee7-956e-979f57869680
+[2026-03-10T11:07:09.799][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2026-03-10T11:07:10.264][DEBUG][CACHE] Redis TranscriptCache initialized. Per-session-language limit: 50MB.
+[2026-03-10T11:07:10.264][DEBUG][CONN-MANAGER] ConnectionManager initialized. Instance ID: 5fa9818e-8d9f-4b14-bff0-f05347887775
+[2026-03-10T11:07:10.307][DEBUG][BACKFILL] Initialized BackfillService with Qwen client.
+[2026-03-10T11:07:13.363][ERROR][DATABASE] Failed to initialize ORM: [Errno 113] Connect call failed ('192.168.11.108', 5432)
+Traceback (most recent call last):
+  File "/home/jonah/projects/calc-translation/server/core/db.py", line 14, in init_db
+    await init_orm()
+  File "/home/jonah/projects/calc-translation/server/core/orm.py", line 45, in init_orm
+    async with engine.begin() as conn:
+               ~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py", line 1068, in begin
+    async with conn:
+               ^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py", line 121, in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py", line 275, in start
+    await greenlet_spawn(self.sync_engine.connect)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 3277, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 3301, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 447, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 1264, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 711, in checkout
+    rec = pool._do_get()
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 388, in _create_connection
+    return _ConnectionRecord(self)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 673, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 899, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 895, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/create.py", line 661, in connect
+    return dialect.connect(*cargs, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py", line 629, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connection.py", line 2421, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<20 lines>...
+    )
+    ^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 1075, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+    ...<2 lines>...
+    )
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 1049, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 886, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 931, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 802, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        host, port)
+        ^^^^^^^^^^^
+  File "/usr/lib/python3.14/asyncio/base_events.py", line 1168, in create_connection
+    raise exceptions[0]
+  File "/usr/lib/python3.14/asyncio/base_events.py", line 1143, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/asyncio/base_events.py", line 1042, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "/usr/lib/python3.14/asyncio/selector_events.py", line 645, in sock_connect
+    return await fut
+           ^^^^^^^^^
+  File "/usr/lib/python3.14/asyncio/selector_events.py", line 685, in _sock_connect_cb
+    raise OSError(err, f'Connect call failed {address}')
+OSError: [Errno 113] Connect call failed ('192.168.11.108', 5432)
+[2026-03-10T11:08:31.518][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2026-03-10T11:08:31.959][DEBUG][CACHE] Redis TranscriptCache initialized. Per-session-language limit: 50MB.
+[2026-03-10T11:08:31.959][DEBUG][CONN-MANAGER] ConnectionManager initialized. Instance ID: f4602709-81f2-4017-b271-520ca38c5c96
+[2026-03-10T11:08:32.001][DEBUG][BACKFILL] Initialized BackfillService with Qwen client.
+[2026-03-10T11:08:32.253][INFO][DATABASE] ORM initialized successfully and schema verified.
+[2026-03-10T11:08:32.264][INFO][CONN-MANAGER] Redis pubsub loop started for instance f4602709-81f2-4017-b271-520ca38c5c96.
+[2026-03-10T11:08:58.907][DEBUG][API-CALENDER] Skipping event 'UAM Company Meeting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.907][DEBUG][API-CALENDER] Skipping event 'SUBMIT WEEKLY REPORT': No Zoom link. (Loc: )
+[2026-03-10T11:08:58.907][DEBUG][API-CALENDER] Skipping event 'VEIT/UAM - Bi-Weekly IT Call': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.907][DEBUG][API-CALENDER] Skipping event 'Weekly Reporting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.907][DEBUG][API-CALENDER] Skipping event 'SUBMIT WEEKLY REPORT': No Zoom link. (Loc: )
+[2026-03-10T11:08:58.907][DEBUG][API-CALENDER] Skipping event 'Weekly Reporting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.907][DEBUG][API-CALENDER] Skipping event 'UAM Company Meeting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.908][DEBUG][API-CALENDER] Skipping event 'SUBMIT WEEKLY REPORT': No Zoom link. (Loc: )
+[2026-03-10T11:08:58.908][DEBUG][API-CALENDER] Skipping event 'Weekly Reporting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.908][DEBUG][API-CALENDER] Skipping event 'VEIT/UAM - Bi-Weekly IT Call': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.908][DEBUG][API-CALENDER] Skipping event 'USE VACATION': No Zoom link. (Loc: )
+[2026-03-10T11:08:58.908][DEBUG][API-CALENDER] Skipping event 'Good Friday': No Zoom link. (Loc: )
+[2026-03-10T11:08:58.908][DEBUG][API-CALENDER] Skipping event 'SUBMIT WEEKLY REPORT': No Zoom link. (Loc: )
+[2026-03-10T11:08:58.908][DEBUG][API-CALENDER] Skipping event 'Weekly Reporting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.908][DEBUG][API-CALENDER] Skipping event 'UAM Company Meeting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:08:58.908][INFO][API-CALENDER] Synced 0 events via microsoft for 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3.
+[2026-03-10T11:12:14.652][INFO][API-AUTH] User 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3 requesting Standalone auth (Host: True).
+[2026-03-10T11:12:14.715][INFO][API-AUTH] Created new standalone session 0f383b26-5afd-4bf5-bfdd-671f9da1b76a (JoinURL: /sessions/standalone/0f383b26-5afd-4bf5-bfdd-671f9da1b76a)
+[2026-03-10T11:12:14.730][INFO][WS-TRANSCRIBE] New WebSocket connection for session: 0f383b26-5afd-4bf5-bfdd-671f9da1b76a (Integration: standalone)
+[2026-03-10T11:12:14.730][INFO][WS-TRANSCRIBE] Standalone Host authenticated: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3 for session 0f383b26-5afd-4bf5-bfdd-671f9da1b76a
+[2026-03-10T11:12:14.730][INFO][WS-TRANSCRIBE] Handing off session 0f383b26-5afd-4bf5-bfdd-671f9da1b76a to receiver.
+[2026-03-10T11:12:14.736][INFO][WS-TRANSCRIBE] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Initializing new session: 0f383b26-5afd-4bf5-bfdd-671f9da1b76a
+[2026-03-10T11:12:14.745][INFO][WEBSOCKET] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Session '0f383b26-5afd-4bf5-bfdd-671f9da1b76a' not currently active. Checking DB for meeting record...
+[2026-03-10T11:12:14.754][INFO][CONN-MANAGER] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Transcription session registered as active for integration 'standalone'.
+[2026-03-10T11:12:14.756][INFO][SESSION] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Initializing session with languages: {'en'}
+[2026-03-10T11:12:14.756][DEBUG][TIMESTAMP] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] TimestampService initialized. Session zero point set to 2026-03-10 11:12:14.737154.
+[2026-03-10T11:12:14.768][DEBUG][TIMESTAMP] TimestampService initialized. Session zero point set to 2026-03-10 11:12:14.737154.
+[2026-03-10T11:12:14.769][DEBUG][CONN-MANAGER] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] New viewer connecting (Language: en). Replaying 0 cached messages.
+[2026-03-10T11:12:14.769][INFO][CONN-MANAGER] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Viewer connected (Lang: en). Active Viewers: Total=1 [en=1]
+[2026-03-10T11:12:14.769][DEBUG][WEBSOCKET] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Viewer connected to session '0f383b26-5afd-4bf5-bfdd-671f9da1b76a' (Status: active) with language 'en'.
+[2026-03-10T11:12:14.781][DEBUG][WEBSOCKET] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Recorded attendee 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3 for session 0f383b26-5afd-4bf5-bfdd-671f9da1b76a
+[2026-03-10T11:12:14.951][DEBUG][SONIOX] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Soniox service connected (Translation: {'type': 'one_way', 'target_language': 'en'}) | Hints: ['en']
+[2026-03-10T11:12:14.974][DEBUG][SONIOX] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Soniox service connected (Translation: {'type': 'one_way', 'target_language': 'en'}) | Hints: ['en']
+[2026-03-10T11:12:14.974][DEBUG][SONIOX] Soniox stream finalized (session end).
+[2026-03-10T11:12:14.978][INFO][WS-TRANSCRIBE] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Using fallback zero point (start message missing): 2026-03-10 11:12:14.737154
+[2026-03-10T11:12:16.976][INFO][WS-TRANSCRIBE] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] [speaker=Unknown] Received session_start. Resetting session zero point to 2026-03-10 11:12:16.976090.
+[2026-03-10T11:12:19.371][DEBUG][UTTERANCE] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] [speaker=Unknown] [message_id=1_en] Starting pipeline for utterance (en).
+[2026-03-10T11:12:19.372][DEBUG][TIMESTAMP] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] [speaker=Unknown] [message_id=1_en] Marked start for utterance: 1_en
+[2026-03-10T11:12:19.374][DEBUG][SONIOX] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] [speaker=Unknown] [message_id=1_en] Received <end> token, sending final utterance result.
+[2026-03-10T11:12:19.375][DEBUG][TIMESTAMP] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] [speaker=Unknown] [message_id=1_en] Completed utterance '1_en'. Timestamp: 00:00:03.900 --> 00:00:03.960
+[2026-03-10T11:12:19.380][DEBUG][UTTERANCE] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] [speaker=Unknown] [message_id=1_en] Finished pipeline for utterance (en).
+[2026-03-10T11:12:20.544][INFO][WS-TRANSCRIBE] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] [speaker=Unknown] Received session_end. Closing connection gracefully.
+[2026-03-10T11:12:20.544][INFO][WS-TRANSCRIBE] Closing session 0f383b26-5afd-4bf5-bfdd-671f9da1b76a permanently.
+[2026-03-10T11:12:20.556][DEBUG][SONIOX] Soniox stream finalized (session end).
+[2026-03-10T11:12:20.624][DEBUG][SONIOX] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] [speaker=Unknown] Soniox signaled session finished.
+[2026-03-10T11:12:21.663][INFO][VTT] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Transcript VTT saved to output/standalone/0f383b26-5afd-4bf5-bfdd-671f9da1b76a/transcript_en.vtt. 1 entries.
+[2026-03-10T11:12:21.727][DEBUG][VTT] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Saved transcript record to DB for meeting 0f383b26-5afd-4bf5-bfdd-671f9da1b76a (Lang: en).
+[2026-03-10T11:12:21.729][INFO][CACHE] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Cleared Redis cache for language: en
+[2026-03-10T11:12:21.731][INFO][CACHE] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Cleared all Redis language caches for session
+[2026-03-10T11:12:21.734][INFO][CONN-MANAGER] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Transcription session deregistered for integration 'standalone'.
+[2026-03-10T11:12:21.735][INFO][WS-TRANSCRIBE] WebSocket session 0f383b26-5afd-4bf5-bfdd-671f9da1b76a closed.
+[2026-03-10T11:12:21.743][INFO][SUMMARY] Generating summaries for languages: {'en'}
+[2026-03-10T11:12:21.743][INFO][SUMMARY] Generating en summary for session 0f383b26-5afd-4bf5-bfdd-671f9da1b76a using llama3.1:8b...
+[2026-03-10T11:12:21.750][ERROR][SUMMARY] Failed to generate en summary: Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. /download
+[2026-03-10T11:12:22.361][INFO][EMAIL] Distributing transcripts and summaries to 1 attendees for session 0f383b26-5afd-4bf5-bfdd-671f9da1b76a...
+[2026-03-10T11:12:23.285][INFO][EMAIL] Finished sending 1 emails.
+[2026-03-10T11:12:24.607][DEBUG][WEBSOCKET] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Viewer disconnected from session '0f383b26-5afd-4bf5-bfdd-671f9da1b76a'.
+[2026-03-10T11:12:24.609][DEBUG][CONN-MANAGER] [session=0f383b26-5afd-4bf5-bfdd-671f9da1b76a] Viewer disconnected from inactive/waiting session (Lang: en).
+[2026-03-10T11:16:37.007][INFO][CONN-MANAGER] Redis pubsub loop cancelled.
+[2026-03-10T11:16:37.180][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2026-03-10T11:16:37.655][DEBUG][CACHE] Redis TranscriptCache initialized. Per-session-language limit: 50MB.
+[2026-03-10T11:16:37.655][DEBUG][CONN-MANAGER] ConnectionManager initialized. Instance ID: 073f71f6-1516-4c16-8181-5361820db6df
+[2026-03-10T11:16:37.697][DEBUG][BACKFILL] Initialized BackfillService with Qwen client.
+[2026-03-10T11:16:37.839][INFO][DATABASE] ORM initialized successfully and schema verified.
+[2026-03-10T11:16:37.846][INFO][CONN-MANAGER] Redis pubsub loop started for instance 073f71f6-1516-4c16-8181-5361820db6df.
+[2026-03-10T11:16:55.405][INFO][CONN-MANAGER] Redis pubsub loop cancelled.
+[2026-03-10T11:16:55.573][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2026-03-10T11:16:56.037][DEBUG][CACHE] Redis TranscriptCache initialized. Per-session-language limit: 50MB.
+[2026-03-10T11:16:56.038][DEBUG][CONN-MANAGER] ConnectionManager initialized. Instance ID: c6954ff2-47fc-4f51-b4cf-0cbf4f71aea1
+[2026-03-10T11:16:56.080][DEBUG][BACKFILL] Initialized BackfillService with Qwen client.
+[2026-03-10T11:16:56.187][INFO][DATABASE] ORM initialized successfully and schema verified.
+[2026-03-10T11:16:56.191][INFO][CONN-MANAGER] Redis pubsub loop started for instance c6954ff2-47fc-4f51-b4cf-0cbf4f71aea1.
+[2026-03-10T11:21:02.849][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2026-03-10T11:21:03.302][DEBUG][CACHE] Redis TranscriptCache initialized. Per-session-language limit: 50MB.
+[2026-03-10T11:21:03.302][DEBUG][CONN-MANAGER] ConnectionManager initialized. Instance ID: a5c274d5-c3c9-48ea-9f9b-4a4bee9d9c60
+[2026-03-10T11:21:03.344][DEBUG][BACKFILL] Initialized BackfillService with Qwen client.
+[2026-03-10T11:22:03.413][ERROR][DATABASE] Failed to initialize ORM: 
+Traceback (most recent call last):
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connection.py", line 2421, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<20 lines>...
+    )
+    ^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 1049, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 886, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 931, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connect_utils.py", line 802, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        host, port)
+        ^^^^^^^^^^^
+  File "/usr/lib/python3.14/asyncio/base_events.py", line 1143, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/asyncio/base_events.py", line 1042, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "/usr/lib/python3.14/asyncio/selector_events.py", line 645, in sock_connect
+    return await fut
+           ^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/jonah/projects/calc-translation/server/core/db.py", line 14, in init_db
+    await init_orm()
+  File "/home/jonah/projects/calc-translation/server/core/orm.py", line 45, in init_orm
+    async with engine.begin() as conn:
+               ~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py", line 1068, in begin
+    async with conn:
+               ^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py", line 121, in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py", line 275, in start
+    await greenlet_spawn(self.sync_engine.connect)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 3277, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py", line 3301, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 447, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 1264, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 711, in checkout
+    rec = pool._do_get()
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 388, in _create_connection
+    return _ConnectionRecord(self)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 673, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 899, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 895, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/create.py", line 661, in connect
+    return dialect.connect(*cargs, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py", line 629, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/home/jonah/projects/calc-translation/server/venv/lib/python3.14/site-packages/asyncpg/connection.py", line 2420, in connect
+    async with compat.timeout(timeout):
+               ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/asyncio/timeouts.py", line 114, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+[2026-03-10T11:29:43.734][INFO][APP] Configuration loaded. Log level set to: DEBUG
+[2026-03-10T11:29:44.191][DEBUG][CACHE] Redis TranscriptCache initialized. Per-session-language limit: 50MB.
+[2026-03-10T11:29:44.191][DEBUG][CONN-MANAGER] ConnectionManager initialized. Instance ID: 060159c3-6913-44aa-9fc3-926c99de5b93
+[2026-03-10T11:29:44.237][DEBUG][BACKFILL] Initialized BackfillService with Qwen client.
+[2026-03-10T11:29:44.365][INFO][DATABASE] ORM initialized successfully and schema verified.
+[2026-03-10T11:29:44.373][INFO][CONN-MANAGER] Redis pubsub loop started for instance 060159c3-6913-44aa-9fc3-926c99de5b93.
+[2026-03-10T11:33:32.664][INFO][API-AUTH] Domain uaminc.com is pinned to provider: microsoft
+[2026-03-10T11:33:33.287][DEBUG][API-AUTH] Handling Entra OAuth callback.
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'UAM Company Meeting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'SUBMIT WEEKLY REPORT': No Zoom link. (Loc: )
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'VEIT/UAM - Bi-Weekly IT Call': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'Weekly Reporting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'SUBMIT WEEKLY REPORT': No Zoom link. (Loc: )
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'Weekly Reporting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'UAM Company Meeting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'SUBMIT WEEKLY REPORT': No Zoom link. (Loc: )
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'Weekly Reporting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'VEIT/UAM - Bi-Weekly IT Call': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'USE VACATION': No Zoom link. (Loc: )
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'Good Friday': No Zoom link. (Loc: )
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'SUBMIT WEEKLY REPORT': No Zoom link. (Loc: )
+[2026-03-10T11:34:02.640][DEBUG][API-CALENDER] Skipping event 'Weekly Reporting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.641][DEBUG][API-CALENDER] Skipping event 'UAM Company Meeting': No Zoom link. (Loc: Microsoft Teams Meeting)
+[2026-03-10T11:34:02.641][INFO][API-CALENDER] Synced 0 events via microsoft for 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3.
+[2026-03-10T11:34:05.943][INFO][API-AUTH] Handling logout for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2026-03-10T11:34:09.763][INFO][API-AUTH] Domain uaminc.com is pinned to provider: microsoft
+[2026-03-10T11:34:10.240][DEBUG][API-AUTH] Handling Entra OAuth callback.
+[2026-03-10T11:34:36.993][INFO][API-AUTH] Handling logout for user: 21afa11a-1bbe-4b1a-88ab-fa12ee34cff3
+[2026-03-10T11:34:37.431][DEBUG][AUTHENTICATION] Client Auth failed: No 'app_auth_token' cookie found in request.
+[2026-03-10T11:35:01.310][INFO][API-AUTH] Domain uaminc.com is pinned to provider: microsoft
+[2026-03-10T11:35:02.861][DEBUG][API-AUTH] Handling Entra OAuth callback.
+[2026-03-10T11:37:58.795][INFO][CONN-MANAGER] Redis pubsub loop cancelled.

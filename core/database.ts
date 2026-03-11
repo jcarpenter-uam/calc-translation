@@ -1,9 +1,24 @@
 import { drizzle } from "drizzle-orm/bun-sql";
-import { migrate } from "drizzle-orm/bun-sql/migrator";
+// import { migrate } from "drizzle-orm/bun-sql/migrator";
 import { env } from "./config";
+import { sql } from "drizzle-orm";
+import { logger } from "./logger";
 
 // Initialize the database connection using Bun's native SQL driver
 export const db = drizzle(env.DATABASE_URL);
+
+// Test Database Connection
+export async function testDbConnection() {
+  try {
+    // A simple query to check if the database is responding
+    await db.execute(sql`SELECT 1`);
+    logger.info("Database connection successful");
+  } catch (error) {
+    logger.error("Database connection failed:");
+    console.error(error); // Ensures the error prints instantly before the process dies
+    process.exit(1);
+  }
+}
 
 // TODO:
 // Automatically handle migrations on startup

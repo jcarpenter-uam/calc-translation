@@ -1,6 +1,7 @@
 import { SonioxNodeClient } from "@soniox/node";
 import type { ElysiaWS } from "elysia/ws";
 import { env } from "../core/config";
+import { logger } from "../core/logger";
 
 interface Participant {
   id: string;
@@ -10,24 +11,37 @@ interface Participant {
 interface Meeting {
   id: string;
   participants: Map<string, Participant>;
-  sonioxSession: any; // Type from @soniox/node
+  sonioxSession: any;
 }
 
 export class WebsocketController {
   private meetings = new Map<string, Meeting>();
-  private globalSubscribers = new Set<ElysiaWS<any, any, any>>();
+
+  // Track by string IDs instead of ElysiaWS Proxy objects!
+  private globalSubscribers = new Map<string, ElysiaWS<any, any, any>>();
+  private socketToMeeting = new Map<string, string>();
+
   private sonioxClient = new SonioxNodeClient({ apiKey: env.SONIOX_API_KEY });
 
   // --- State Management ---
   createMeeting(meetingId: string) {
-    const session = this.sonioxClient.realtime.stt({ model: "stt-rt-v4" });
+    const session = this.sonioxClient.realtime.stt({
+      model: "stt-rt-v4",
+      audio_format: "pcm_s16le",
+      sample_rate: 16000,
+      num_channels: 1,
+      enable_endpoint_detection: true,
+    });
 
-    // Broadcast transcription to meeting-scoped listeners
     session.on("result", (result: any) => {
       const text = result.tokens.map((t: any) => t.text).join("");
       if (!text) return;
 
-      const payload = { type: "transcription", meetingId, text };
+      const payload = JSON.stringify({
+        type: "transcription",
+        meetingId,
+        text,
+      });
       this.broadcastToMeeting(meetingId, payload);
     });
 
@@ -40,9 +54,9 @@ export class WebsocketController {
     return session;
   }
 
-  // --- Subscription Logic ---
+  // --- Subscription & Audio Logic ---
   addGlobalSubscriber(ws: ElysiaWS<any, any, any>) {
-    this.globalSubscribers.add(ws);
+    this.globalSubscribers.set(ws.id, ws);
   }
 
   getMeeting(id: string) {
@@ -60,14 +74,38 @@ export class WebsocketController {
         id: participantId,
         socket: ws,
       });
+      // Map the stable string ID to the meeting
+      this.socketToMeeting.set(ws.id, meetingId);
+    }
+  }
+
+  handleAudio(wsId: string, audioChunk: Buffer) {
+    const meetingId = this.socketToMeeting.get(wsId);
+
+    if (!meetingId) {
+      logger.error(
+        `Audio dropped: Socket ${wsId} is not mapped to an active meeting.`,
+      );
+      return;
+    }
+
+    const meeting = this.meetings.get(meetingId);
+    if (meeting && meeting.sonioxSession) {
+      try {
+        meeting.sonioxSession.sendAudio(audioChunk);
+      } catch (err) {
+        logger.error("Error sending audio to Soniox:", err);
+      }
     }
   }
 
   removeSubscriber(ws: ElysiaWS<any, any, any>) {
-    this.globalSubscribers.delete(ws);
+    this.globalSubscribers.delete(ws.id);
+    this.socketToMeeting.delete(ws.id);
+
     this.meetings.forEach((m) => {
       m.participants.forEach((p, id) => {
-        if (p.socket === ws) m.participants.delete(id);
+        if (p.socket.id === ws.id) m.participants.delete(id);
       });
     });
   }
@@ -76,7 +114,6 @@ export class WebsocketController {
     const meeting = this.meetings.get(id);
 
     if (meeting) {
-      // Notify all participants before removing the meeting from memory
       const disconnectMsg = JSON.stringify({
         type: "status",
         message: `Meeting ${id} has been ended by the host.`,
@@ -85,12 +122,9 @@ export class WebsocketController {
       meeting.participants.forEach((p) => {
         try {
           p.socket.send(disconnectMsg);
-        } catch (e) {
-          // Socket may already be closed
-        }
+        } catch (e) {}
       });
 
-      // Remove the meeting object entirely from the in-memory Map
       this.meetings.delete(id);
     }
   }

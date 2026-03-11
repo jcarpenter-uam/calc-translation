@@ -13,9 +13,6 @@ export const startMeeting = async ({ set }: { set: any }) => {
   const session = websocketController.createMeeting(generatedId);
   await session.connect();
 
-  const stream = await createFakeAudioStream(); //NOTE: Fake stream
-  session.sendStream(stream, { pace_ms: 60, finish: false });
-
   return {
     message: "Meeting started successfully",
     id: generatedId,
@@ -72,9 +69,3 @@ export const endMeeting = async ({
 
   return { message: `Meeting ${params.id} ended` };
 };
-
-async function createFakeAudioStream() {
-  const res = await fetch("https://soniox.com/media/examples/coffee_shop.mp3");
-  if (!res.ok || !res.body) throw new Error("Failed to fetch audio");
-  return res.body;
-}

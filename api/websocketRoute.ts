@@ -2,30 +2,40 @@ import { Elysia, t } from "elysia";
 import { websocketController } from "../controllers/websocketControllers";
 
 export const websocketRoute = new Elysia().ws("/ws", {
+  // We use t.Any() instead of a strict schema so Elysia's validator doesn't
+  // intercept and silently drop raw binary audio frames from the client.
   body: t.Any(),
+
   open(ws) {
     websocketController.addGlobalSubscriber(ws);
     ws.send(
       JSON.stringify({ status: "Connected and subscribed to global events" }),
     );
   },
+
   message(ws, message) {
-    // Handle incoming raw audio data (Binary Frames)
+    // Raw Audio
+    // If the incoming message is raw bytes, we assume it's microphone audio.
     if (
       Buffer.isBuffer(message) ||
       message instanceof Uint8Array ||
       message instanceof ArrayBuffer
     ) {
+      // The Soniox SDK specifically requires a standard Node.js Buffer.
+      // We convert ArrayBuffers/Uint8Arrays if necessary.
       const bufferChunk = Buffer.isBuffer(message)
         ? message
         : Buffer.from(message as ArrayBuffer | Uint8Array);
 
-      // Note: Passing ws.id instead of ws
+      // Pass the stable ws.id and the audio buffer to the controller for routing
       websocketController.handleAudio(ws.id, bufferChunk);
-      return;
+      return; // Exit early so we don't try to parse audio as JSON
     }
 
-    // Fallback: If Elysia parses the binary frame into an empty object, force it to Buffer
+    // Fallback binary check
+    // Sometimes (especially from non-browser clients), Elysia misparses binary
+    // frames as an empty object `{}`. This fallback catches that edge case
+    // and forces it into a Buffer so the audio isn't lost.
     if (
       typeof message === "object" &&
       message !== null &&
@@ -35,22 +45,27 @@ export const websocketRoute = new Elysia().ws("/ws", {
       return;
     }
 
-    // Handle incoming JSON commands
+    // JSON commands
     let parsed = message;
+
+    // If the client sent a stringified JSON payload, parse it first
     if (typeof message === "string") {
       try {
         parsed = JSON.parse(message);
       } catch (e) {
-        return;
+        return; // Silently ignore invalid JSON strings
       }
     }
 
+    // Check if the payload is a valid command object containing an "action"
     if (
       typeof parsed === "object" &&
       parsed !== null &&
       "action" in (parsed as any)
     ) {
       const payload = parsed as any;
+
+      // Route the specific actions to the controller
       if (payload.action === "subscribe_meeting" && payload.meetingId) {
         websocketController.joinMeeting(
           payload.meetingId,
@@ -63,7 +78,9 @@ export const websocketRoute = new Elysia().ws("/ws", {
       }
     }
   },
+
   close(ws) {
+    // Trigger cleanup in the controller when a client drops the connection
     websocketController.removeSubscriber(ws);
   },
 });

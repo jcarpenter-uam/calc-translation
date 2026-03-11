@@ -15,28 +15,41 @@ interface Meeting {
 }
 
 export class WebsocketController {
+  // Master record of all active meetings and their Soniox sessions
   private meetings = new Map<string, Meeting>();
 
-  // Track by string IDs instead of ElysiaWS Proxy objects!
+  // Track global connections by their stable string ID (`ws.id`).
+  // We use the string ID instead of the `ws` object directly because Elysia
+  // wraps WebSockets in a Proxy, and the object reference can sometimes change
+  // between the `open`, `message`, and `close` events, causing memory leaks or missed lookups.
   private globalSubscribers = new Map<string, ElysiaWS<any, any, any>>();
+
+  // A lookup table to quickly find which meeting a specific socket ID belongs to.
+  // This is critical for routing incoming raw audio bytes to the correct Soniox session.
   private socketToMeeting = new Map<string, string>();
 
   private sonioxClient = new SonioxNodeClient({ apiKey: env.SONIOX_API_KEY });
 
   // --- State Management ---
   createMeeting(meetingId: string) {
+    // Initialize a new real-time connection to Soniox.
+    // We explicitly define the PCM audio formats here so Soniox knows
+    // exactly how to decode the raw bytes we send it later.
     const session = this.sonioxClient.realtime.stt({
       model: "stt-rt-v4",
-      audio_format: "pcm_s16le",
-      sample_rate: 16000,
-      num_channels: 1,
-      enable_endpoint_detection: true,
+      audio_format: "pcm_s16le", // 16-bit little-endian PCM
+      sample_rate: 16000, // 16kHz
+      num_channels: 1, // Mono audio
+      enable_endpoint_detection: true, // Let Soniox tell us when a sentence ends
     });
 
+    // Listen for transcription tokens streaming back from Soniox
     session.on("result", (result: any) => {
+      // Combine the individual word tokens into a single string
       const text = result.tokens.map((t: any) => t.text).join("");
       if (!text) return;
 
+      // Package it into a JSON string and broadcast it to everyone in this meeting
       const payload = JSON.stringify({
         type: "transcription",
         meetingId,
@@ -45,6 +58,7 @@ export class WebsocketController {
       this.broadcastToMeeting(meetingId, payload);
     });
 
+    // Store the meeting in memory so participants can join it
     this.meetings.set(meetingId, {
       id: meetingId,
       participants: new Map(),
@@ -55,6 +69,7 @@ export class WebsocketController {
   }
 
   // --- Subscription & Audio Logic ---
+
   addGlobalSubscriber(ws: ElysiaWS<any, any, any>) {
     this.globalSubscribers.set(ws.id, ws);
   }
@@ -70,16 +85,18 @@ export class WebsocketController {
   ) {
     const meeting = this.meetings.get(meetingId);
     if (meeting) {
+      // Add the user to the meeting's participant list
       meeting.participants.set(participantId, {
         id: participantId,
         socket: ws,
       });
-      // Map the stable string ID to the meeting
+      // Map their specific WebSocket ID to this meeting so we know where to route their audio
       this.socketToMeeting.set(ws.id, meetingId);
     }
   }
 
   handleAudio(wsId: string, audioChunk: Buffer) {
+    // Look up which meeting this socket belongs to
     const meetingId = this.socketToMeeting.get(wsId);
 
     if (!meetingId) {
@@ -92,6 +109,7 @@ export class WebsocketController {
     const meeting = this.meetings.get(meetingId);
     if (meeting && meeting.sonioxSession) {
       try {
+        // Relay the raw audio bytes directly to this meeting's active Soniox session
         meeting.sonioxSession.sendAudio(audioChunk);
       } catch (err) {
         logger.error("Error sending audio to Soniox:", err);
@@ -100,9 +118,11 @@ export class WebsocketController {
   }
 
   removeSubscriber(ws: ElysiaWS<any, any, any>) {
+    // Clean up memory when a user disconnects or closes their browser
     this.globalSubscribers.delete(ws.id);
     this.socketToMeeting.delete(ws.id);
 
+    // Remove them from any meetings they were a part of
     this.meetings.forEach((m) => {
       m.participants.forEach((p, id) => {
         if (p.socket.id === ws.id) m.participants.delete(id);
@@ -119,17 +139,20 @@ export class WebsocketController {
         message: `Meeting ${id} has been ended by the host.`,
       });
 
+      // Notify all participants that the meeting is over
       meeting.participants.forEach((p) => {
         try {
           p.socket.send(disconnectMsg);
-        } catch (e) {}
+        } catch (e) {} // Ignore errors if the socket is already dead
       });
 
+      // Completely remove the meeting from memory
       this.meetings.delete(id);
     }
   }
 
   private broadcastToMeeting(meetingId: string, data: any) {
+    // Send data (like transcriptions) only to users in a specific meeting
     this.meetings
       .get(meetingId)
       ?.participants.forEach((p) => p.socket.send(data));

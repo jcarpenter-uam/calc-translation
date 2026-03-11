@@ -5,8 +5,7 @@ import {
   endMeeting,
 } from "../controllers/meetingControllers";
 
-export const meetingRoutes = new Elysia()
-  // HTTP Endpoints
+export const meetingRoutes = new Elysia({ prefix: "/meeting" })
   .post("/start", startMeeting)
   .post("/join/:id", joinMeeting)
   .post("/end/:id", endMeeting);

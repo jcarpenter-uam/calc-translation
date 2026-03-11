@@ -9,8 +9,8 @@ import { websocketRoute } from "./api/websocketRoute";
 await testDbConnection();
 
 const app = new Elysia()
-  .use(meetingRoutes)
   .use(websocketRoute)
+  .group("/api", (app) => app.use(meetingRoutes))
   .listen(env.PORT);
 
 logger.info(`Server is running at ${app.server?.hostname}:${app.server?.port}`);

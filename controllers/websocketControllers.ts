@@ -22,7 +22,7 @@ export class WebsocketController {
   createMeeting(meetingId: string) {
     const session = this.sonioxClient.realtime.stt({ model: "stt-rt-v4" });
 
-    // Broadcast transcription to global and meeting-scoped listeners
+    // Broadcast transcription to meeting-scoped listeners
     session.on("result", (result: any) => {
       const text = result.tokens.map((t: any) => t.text).join("");
       if (!text) return;

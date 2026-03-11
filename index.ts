@@ -1,4 +1,18 @@
 import { env } from "./core/config";
+import { db } from "./core/database";
+import { sql } from "drizzle-orm"; // NOTE: Only for test query
+
+// Test Database Connection ---
+console.log("Testing database connection...");
+try {
+  // A simple query to check if the database is responding
+  const result = await db.execute(sql`SELECT 1 AS connected`);
+  console.log("Database connection successful!");
+} catch (error) {
+  console.error("Database connection failed:");
+  console.error(error);
+  process.exit(1); // Kill the server if we can't connect to the DB
+}
 
 // Define the custom data you want to attach to each WebSocket connection
 type WebSocketData = {

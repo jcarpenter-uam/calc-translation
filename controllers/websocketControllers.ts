@@ -29,7 +29,6 @@ export class WebsocketController {
 
       const payload = { type: "transcription", meetingId, text };
       this.broadcastToMeeting(meetingId, payload);
-      this.broadcastGlobal(payload);
     });
 
     this.meetings.set(meetingId, {

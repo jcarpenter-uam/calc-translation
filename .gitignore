@@ -1,4 +1,4 @@
-# server
+# server-old
 .pytest_cache/
 __pycache__/
 venv/
@@ -8,6 +8,9 @@ server/logs/*
 server/output/*
 !server/output/README.md
 server/server.log
+
+# logs
+logs/
 
 # clients
 node_modules/

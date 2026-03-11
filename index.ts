@@ -1,16 +1,17 @@
 import { env } from "./core/config";
 import { db } from "./core/database";
 import { sql } from "drizzle-orm"; // NOTE: Only for test query
+import { logger } from "./core/logger";
 
 // Test Database Connection ---
-console.log("Testing database connection...");
+logger.info("Testing database connection...");
 try {
   // A simple query to check if the database is responding
   const result = await db.execute(sql`SELECT 1 AS connected`);
-  console.log("Database connection successful!");
+  logger.info("Database connection successful!");
 } catch (error) {
-  console.error("Database connection failed:");
-  console.error(error);
+  logger.error("Database connection failed:");
+  logger.error(error);
   process.exit(1); // Kill the server if we can't connect to the DB
 }
 
@@ -57,20 +58,20 @@ const server = Bun.serve<WebSocketData>({
   // 2. Handle WebSocket events
   websocket: {
     open(ws) {
-      console.log(`Client connected: ${ws.data.clientId}`);
+      logger.info(`Client connected: ${ws.data.clientId}`);
       ws.send("Welcome to the server!");
     },
     message(ws, message) {
-      console.log(`Received from ${ws.data.clientId}: ${message}`);
+      logger.info(`Received from ${ws.data.clientId}: ${message}`);
 
       // Echo the message back to the client
       ws.send(`Server received: ${message}`);
     },
     close(ws, code, message) {
-      console.log(`Client disconnected: ${ws.data.clientId}`);
+      logger.info(`Client disconnected: ${ws.data.clientId}`);
     },
   },
 });
 
-console.log(`Server running at http://localhost:${server.port}`);
-console.log(`WebSocket endpoint at ws://localhost:${server.port}/ws`);
+logger.info(`Server running at http://localhost:${server.port}`);
+logger.info(`WebSocket endpoint at ws://localhost:${server.port}/ws`);

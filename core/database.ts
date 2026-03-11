@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/bun-sql";
 import { migrate } from "drizzle-orm/bun-sql/migrator";
-import { env } from "../core/config";
+import { env } from "./config";
 
 // Initialize the database connection using Bun's native SQL driver
 export const db = drizzle(env.DATABASE_URL);

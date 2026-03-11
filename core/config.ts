@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logger } from "./logger";
 
 const envSchema = z.object({
   // Automatically converts string "3000" to number 3000
@@ -15,7 +16,14 @@ const envSchema = z.object({
 const _env = envSchema.safeParse(Bun.env);
 
 if (!_env.success) {
-  console.error("Invalid environment variables:", _env.error.format());
+  // Map over the Zod errors and format them neatly
+  const errorMessages = _env.error.issues
+    .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+    .join("\n");
+
+  // Pass it to the logger as a single, nicely formatted string
+  logger.error(`Invalid environment variables:\n${errorMessages}`);
+
   process.exit(1);
 }
 

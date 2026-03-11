@@ -1,10 +1,17 @@
 import { Elysia } from "elysia";
+import {
+  startMeeting,
+  joinMeeting,
+  endMeeting,
+} from "../controller/meetingControllers";
 
 export const meetingRoutes = new Elysia()
 
   // Start endpoint
-  .post("/start", () => ({ message: `Started meeting` }))
+  .post("/start", startMeeting)
+
   // Join endpoint
-  .post("/join", () => ({ message: `Joined meeting` }))
+  .post("/join", joinMeeting)
+
   // End endpoint
-  .post("/end", () => ({ message: `Ended meeting` }));
+  .post("/end", endMeeting);

@@ -7,6 +7,8 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }),
 
+  SONIOX_API_KEY: z.string({ message: "SONIOX_API_KEY must be a string" }),
+
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),

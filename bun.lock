@@ -5,6 +5,7 @@
     "": {
       "name": "calc-translation",
       "dependencies": {
+        "@soniox/node": "^1.1.2",
         "drizzle-orm": "^0.45.1",
         "elysia": "^1.4.27",
         "winston": "^3.19.0",
@@ -88,6 +89,8 @@
     "@sinclair/typebox": ["@sinclair/typebox@0.34.48", "", {}, "sha512-kKJTNuK3AQOrgjjotVxMrCn1sUJwM76wMszfq1kdU4uYVJjvEWuFQ6HgvLt4Xz3fSmZlTOxJ/Ie13KnIcWQXFA=="],
 
     "@so-ric/colorspace": ["@so-ric/colorspace@1.1.6", "", { "dependencies": { "color": "^5.0.2", "text-hex": "1.0.x" } }, "sha512-/KiKkpHNOBgkFJwu9sh48LkHSMYGyuTcSFK/qMBdnOAlrRJzRSXAOFB5qwzaVQuDl8wAvHVMkaASQDReTahxuw=="],
+
+    "@soniox/node": ["@soniox/node@1.1.2", "", {}, "sha512-VVxwOW5KntJPHve2PxjdMYh+NpyaaqHr2eLqbp+zy/ajhtgOITy+zUSg6jnoIu4YylSK4+yl8yDgC3qy5XKkRw=="],
 
     "@tokenizer/inflate": ["@tokenizer/inflate@0.4.1", "", { "dependencies": { "debug": "^4.4.3", "token-types": "^6.1.1" } }, "sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA=="],
 

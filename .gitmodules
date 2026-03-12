@@ -1,3 +1,0 @@
-[submodule "clients/desktop"]
-	path = clients/desktop
-	url = git@github.com:jcarpenter-uam/calc-translation-desktop.git

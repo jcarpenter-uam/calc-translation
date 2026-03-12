@@ -1,26 +1,8 @@
-# server-old
-.pytest_cache/
-__pycache__/
-venv/
-*.db
-server/logs/*
-!server/logs/README.md
-server/output/*
-!server/output/README.md
-server/server.log
-
 # logs
 logs/
 
-# clients
+# bun
 node_modules/
-dist/
-out/
-
-# zoom-rtms
-integrations/zoom-rtms/logs/*
-!integrations/zoom-rtms/logs/README.md
-logs/node*
 
 # Secrets
 .env

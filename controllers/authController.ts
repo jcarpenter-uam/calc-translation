@@ -6,6 +6,7 @@ import {
 import { logger } from "../core/logger";
 import { db } from "../core/database";
 import { tenantAuthConfigs, tenantDomains } from "../models/tenantModel";
+import { users } from "../models/userModel";
 import { and, eq } from "drizzle-orm";
 import { decrypt } from "../utils/fernet";
 
@@ -196,14 +197,41 @@ export const providerCallback = async ({
 
     logger.debug(`Successful ${normalizedProvider} login for: ${userEmail}`);
 
-    // TODO: create user and session token here
+    // Normalize remaining user fields across providers
+    // Google uses 'sub' for ID and 'locale' for language.
+    // Entra uses 'id' for ID, 'displayName' for name, and 'preferredLanguage' for language.
+    const userId = userProfile.id || userProfile.sub;
+    const userName =
+      userProfile.name || userProfile.displayName || userEmail.split("@")[0];
+    const userLanguage = userProfile.locale || userProfile.preferredLanguage;
+
+    // Upsert user into the database
+    const [user] = await db
+      .insert(users)
+      .values({
+        id: userId,
+        name: userName,
+        email: userEmail,
+        languageCode: userLanguage,
+      })
+      .onConflictDoUpdate({
+        target: users.id, // If the ID already exists...
+        set: {
+          // ...update these fields to keep them fresh
+          name: userName,
+          email: userEmail,
+          languageCode: userLanguage,
+        },
+      })
+      .returning();
+
+    logger.debug(`User upserted successfully: ${user.email}`);
 
     return {
       message: "Authentication successful",
       tenantId,
       provider: normalizedProvider,
-      email: userEmail,
-      profile: userProfile,
+      user,
     };
   } catch (err) {
     logger.error(

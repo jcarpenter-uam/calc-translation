@@ -32,7 +32,7 @@ async function startMeeting() {
   try {
     const res = await fetch(`${apiUrl}/start`, { method: 'POST' });
     const data = await res.json();
-    return data.id;
+    return { id: data.meetingId, token: data.token };
   } catch (err) {
     console.error("Error starting meeting:", err);
     return null;
@@ -52,8 +52,8 @@ async function runTest(concurrency) {
   
   const meetings = [];
   for (let i = 0; i < concurrency; i++) {
-    const id = await startMeeting();
-    if (id) meetings.push(id);
+    const meetingData = await startMeeting();
+    if (meetingData) meetings.push(meetingData);
   }
   
   if (meetings.length !== concurrency) {
@@ -98,7 +98,7 @@ async function runTest(concurrency) {
       setTimeout(resolve, 1500); // Take a short breather before the next exponential scale
     };
 
-    meetings.forEach((meetingId, index) => {
+    meetings.forEach((meeting, index) => {
       const ws = new WebSocket(wsUrl);
       sockets.push(ws);
       
@@ -108,8 +108,9 @@ async function runTest(concurrency) {
       ws.on('open', () => {
         ws.send(JSON.stringify({ 
           action: 'subscribe_meeting', 
-          meetingId: meetingId,
-          participantId: `tester-${index}`
+          meetingId: meeting.id,
+          participantId: `tester-${index}`,
+          token: meeting.token
         }));
 
         setTimeout(() => {

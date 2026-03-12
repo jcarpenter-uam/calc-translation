@@ -1,6 +1,10 @@
 import { websocketController } from "./websocketControllers";
 import { logger } from "../core/logger";
 
+// TODO:
+// An auth middleware will protect these endpoints.
+// So we can sign a short-lived token to send to the WS endpoint
+
 export const startMeeting = async ({ set }: { set: any }) => {
   // Generate a unique ID (e.g., 'meeting-7d2a-4b91')
   const generatedId = `meeting-${crypto.randomUUID().split("-")[0]}`;
@@ -14,11 +18,15 @@ export const startMeeting = async ({ set }: { set: any }) => {
   const session = websocketController.createMeeting(generatedId);
   await session.connect();
 
+  // NOTE: Generate a dummy token
+  const mockToken = `token_${Math.random().toString(36).substring(7)}`;
+
   logger.debug(`Meeting '${generatedId}' started`);
 
   return {
-    message: "Meeting started successfully",
-    id: generatedId,
+    message: "Meeting started",
+    meetingId: generatedId,
+    token: mockToken,
   };
 };
 
@@ -42,7 +50,7 @@ export const joinMeeting = async ({
   logger.debug(`User <id> joined meeting '${params.id}'`);
 
   return {
-    message: "Joined successfully",
+    message: "Joined meeting",
     meetingId: params.id,
     token: mockToken,
   };
@@ -74,5 +82,8 @@ export const endMeeting = async ({
 
   logger.debug(`User <id> ended meeting '${params.id}'`);
 
-  return { message: `Meeting ${params.id} ended` };
+  return {
+    message: "Meeting ended",
+    meetingId: params.id,
+  };
 };

@@ -67,6 +67,24 @@ export const websocketRoute = new Elysia().ws("/ws", {
 
       // Route the specific actions to the controller
       if (payload.action === "subscribe_meeting" && payload.meetingId) {
+        // TODO: Replace this with real JWT/session validation later
+        if (
+          !payload.token ||
+          typeof payload.token !== "string" ||
+          !payload.token.startsWith("token_")
+        ) {
+          // Send an error message back to the client
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              message: "Unauthorized: Missing or invalid token",
+            }),
+          );
+          // Close the WebSocket connection with a policy violation code (1008)
+          ws.close(1008, "Unauthorized");
+          return; // Exit early so they don't join the meeting
+        }
+
         websocketController.joinMeeting(
           payload.meetingId,
           payload.participantId || "anon",

@@ -43,6 +43,16 @@ export class WebsocketController {
       enable_endpoint_detection: true, // Let Soniox tell us when a sentence ends
     });
 
+    // Catch asynchronous API/Connection errors from Soniox
+    session.on("error", (error: any) => {
+      logger.error(`Soniox session error [${meetingId}]:`, error);
+    });
+
+    // Log when the session closes so you know exactly when a stream dies
+    session.on("close", () => {
+      logger.warn(`Soniox session closed [${meetingId}]`);
+    });
+
     // Listen for transcription tokens streaming back from Soniox
     session.on("result", (result: any) => {
       // Combine the individual word tokens into a single string

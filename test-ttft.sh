@@ -25,6 +25,7 @@ const audioFile = process.argv[4];
 const audioData = fs.readFileSync(audioFile);
 
 // The exponential stages of the stress test
+// 100 concurrent is our limit from soniox
 const concurrencyLevels = [1, 5, 10, 25, 50, 100]; 
 
 async function startMeeting() {

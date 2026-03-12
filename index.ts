@@ -5,6 +5,7 @@ import { Elysia } from "elysia";
 import { meetingRoutes } from "./api/meetingRoutes";
 import { websocketRoute } from "./api/websocketRoute";
 import { authRoutes } from "./api/authRoutes";
+import { requireWsAuth, requireAuth } from "./middlewares/authMiddleware";
 
 // Test DB Connection
 await testDbConnection();
@@ -13,8 +14,14 @@ await testDbConnection();
 await runMigrations();
 
 const app = new Elysia()
-  .use(websocketRoute)
-  .group("/api", (app) => app.use(meetingRoutes).use(authRoutes))
+  .guard({}, (wsApp) => wsApp.use(requireWsAuth).use(websocketRoute))
+  .group("/api", (api) =>
+    api
+      .use(authRoutes)
+      .group("/", (protectedApi) =>
+        protectedApi.use(requireAuth).use(meetingRoutes),
+      ),
+  )
   .listen(env.PORT);
 
 logger.info(`Server is running at ${app.server?.hostname}:${app.server?.port}`);

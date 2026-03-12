@@ -4,6 +4,7 @@ import {
   providerCallback,
   logout,
 } from "../controllers/authController";
+import { requireAuth } from "../middlewares/authMiddleware";
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
   .post("/login", unifiedLogin, {
@@ -24,4 +25,5 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       error: t.Optional(t.String()),
     }),
   })
+  .use(requireAuth)
   .post("/logout", logout);

@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { websocketController } from "../controllers/websocketController";
+import { logger } from "../core/logger";
 
 export const websocketRoute = new Elysia().ws("/ws", {
   // We use t.Any() instead of a strict schema so Elysia's validator doesn't
@@ -7,13 +8,18 @@ export const websocketRoute = new Elysia().ws("/ws", {
   body: t.Any(),
 
   open(ws) {
+    // Extract the securely validated user from the middleware context
+    const user = (ws.data as any).wsUser;
+
+    logger.info(`WebSocket connected: User ${user?.id}`);
+
     websocketController.addGlobalSubscriber(ws);
-    ws.send(
-      JSON.stringify({ status: "Connected and subscribed to global events" }),
-    );
+    ws.send(JSON.stringify({ status: "Connected and authenticated" }));
   },
 
   message(ws, message) {
+    const user = (ws.data as any).wsUser;
+
     // Raw Audio
     // If the incoming message is raw bytes, we assume it's microphone audio.
     if (
@@ -67,29 +73,18 @@ export const websocketRoute = new Elysia().ws("/ws", {
 
       // Route the specific actions to the controller
       if (payload.action === "subscribe_meeting" && payload.meetingId) {
-        // TODO: Replace this with real JWT/session validation later
-        if (
-          !payload.token ||
-          typeof payload.token !== "string" ||
-          !payload.token.startsWith("token_")
-        ) {
-          // Send an error message back to the client
-          ws.send(
-            JSON.stringify({
-              type: "error",
-              message: "Unauthorized: Missing or invalid token",
-            }),
-          );
-          // Close the WebSocket connection with a policy violation code (1008)
-          ws.close(1008, "Unauthorized");
-          return; // Exit early so they don't join the meeting
-        }
+        const secureParticipantId = user?.id || "unknown_user";
 
         websocketController.joinMeeting(
           payload.meetingId,
-          payload.participantId || "anon",
+          secureParticipantId,
           ws,
         );
+
+        logger.debug(
+          `User ${secureParticipantId} subscribed to meeting ${payload.meetingId}`,
+        );
+
         ws.send(
           JSON.stringify({ status: `Subscribed to ${payload.meetingId}` }),
         );
@@ -98,6 +93,9 @@ export const websocketRoute = new Elysia().ws("/ws", {
   },
 
   close(ws) {
+    const user = (ws.data as any).wsUser;
+    logger.info(`WebSocket disconnected: User ${user?.id}`);
+
     // Trigger cleanup in the controller when a client drops the connection
     websocketController.removeSubscriber(ws);
   },

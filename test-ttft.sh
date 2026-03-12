@@ -13,24 +13,39 @@ ffmpeg -y -i $MP3_FILE -f s16le -acodec pcm_s16le -ar 16000 -ac 1 $RAW_FILE > /d
 
 echo "Generating stress test script..."
 
-cat << 'EOF' > ws_test.mjs
+cat << 'EOF' > ws_test.ts
 import WebSocket from 'ws';
 import fs from 'fs';
 import { performance } from 'perf_hooks';
+import { generateApiSessionToken } from './utils/security'; 
 
 const apiUrl = process.argv[2];
 const wsUrl = process.argv[3];
 const audioFile = process.argv[4];
 
 const audioData = fs.readFileSync(audioFile);
-
-// The exponential stages of the stress test
-// 100 concurrent is our limit from soniox
 const concurrencyLevels = [1, 5, 10, 25, 50, 100]; 
+
+let validCookie = "";
 
 async function startMeeting() {
   try {
-    const res = await fetch(`${apiUrl}/start`, { method: 'POST' });
+    const res = await fetch(`${apiUrl}/start`, { 
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': validCookie
+      },
+      body: JSON.stringify({ topic: "Stress Test Meeting" })
+    });
+    
+    // Check if the response failed before trying to parse JSON
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`\x1b[31mAPI Error (${res.status}):\x1b[0m ${text}`);
+      return null;
+    }
+
     const data = await res.json();
     return { id: data.meetingId, token: data.token };
   } catch (err) {
@@ -41,7 +56,10 @@ async function startMeeting() {
 
 async function endMeeting(id) {
   try {
-    await fetch(`${apiUrl}/end/${id}`, { method: 'POST' });
+    await fetch(`${apiUrl}/end/${id}`, { 
+      method: 'POST',
+      headers: { 'Cookie': validCookie }
+    });
   } catch (err) {}
 }
 
@@ -72,16 +90,13 @@ async function runTest(concurrency) {
       if (isFinished) return;
       isFinished = true;
 
-      // Stop audio streaming and close all sockets
       intervals.forEach(clearInterval);
       sockets.forEach(ws => ws.close());
       
-      // Clean up meetings on the backend
-      for (const id of meetings) {
-        await endMeeting(id);
+      for (const meeting of meetings) {
+        await endMeeting(meeting.id); 
       }
       
-      // Calculate and print metrics
       if (ttfts.length > 0) {
         const avg = (ttfts.reduce((a, b) => a + b, 0) / ttfts.length).toFixed(2);
         const min = Math.min(...ttfts).toFixed(2);
@@ -95,11 +110,11 @@ async function runTest(concurrency) {
          console.log(`\n\x1b[31m[Results for ${concurrency} stream(s)] No tokens received.\x1b[0m\n`);
       }
       
-      setTimeout(resolve, 1500); // Take a short breather before the next exponential scale
+      setTimeout(resolve, 1500); 
     };
 
     meetings.forEach((meeting, index) => {
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(`${wsUrl}?ticket=${meeting.token}`);
       sockets.push(ws);
       
       let firstChunkTime = null;
@@ -108,9 +123,7 @@ async function runTest(concurrency) {
       ws.on('open', () => {
         ws.send(JSON.stringify({ 
           action: 'subscribe_meeting', 
-          meetingId: meeting.id,
-          participantId: `tester-${index}`,
-          token: meeting.token
+          meetingId: meeting.id
         }));
 
         setTimeout(() => {
@@ -120,10 +133,7 @@ async function runTest(concurrency) {
           
           const streamInterval = setInterval(() => {
             if (offset < audioData.length) {
-              if (offset === 0) {
-                firstChunkTime = performance.now();
-              }
-              
+              if (offset === 0) firstChunkTime = performance.now();
               const end = Math.min(offset + chunkSize, audioData.length);
               ws.send(audioData.subarray(offset, end));
               offset += chunkSize;
@@ -149,21 +159,17 @@ async function runTest(concurrency) {
             console.log(`  Stream ${index + 1}/${concurrency} received token: \x1b[32m"${parsed.text}"\x1b[0m in ${ttft.toFixed(2)}ms`);
             
             completed++;
-            // If all streams in this tier have received their first token, finish up
-            if (completed === concurrency) {
-              finish();
-            }
+            if (completed === concurrency) finish();
           }
         } catch (e) { }
       });
       
-      ws.on('error', () => {}); // Handle connection drops silently
+      ws.on('error', () => {}); 
     });
     
-    // Safety timeout: End the test phase if Soniox stops responding after 10 seconds
     setTimeout(() => {
       if (!isFinished) {
-        console.log(`\n\x1b[31m[Timeout]\x1b[0m Only ${completed}/${concurrency} streams responded within 10 seconds.`);
+        console.log(`\n\x1b[31m[Timeout]\x1b[0m Only ${completed}/${concurrency} streams responded.`);
         finish();
       }
     }, 10000);
@@ -171,6 +177,11 @@ async function runTest(concurrency) {
 }
 
 async function main() {
+  const REAL_USER_ID = "<USER_ID>";
+  
+  const token = await generateApiSessionToken(REAL_USER_ID, "stress-test-tenant");
+  validCookie = `auth_session=${token}`;
+
   for (const level of concurrencyLevels) {
     await runTest(level);
   }
@@ -185,6 +196,6 @@ if [ ! -d "node_modules/ws" ]; then
   bun install ws --no-save > /dev/null 2>&1
 fi
 
-bun ws_test.mjs "$API_URL" "$WS_URL" "$RAW_FILE"
+bun ws_test.ts "$API_URL" "$WS_URL" "$RAW_FILE"
 
-rm ws_test.mjs $MP3_FILE $RAW_FILE
+rm ws_test.ts $MP3_FILE $RAW_FILE

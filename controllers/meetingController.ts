@@ -1,89 +1,128 @@
+// controllers/meetingController.ts
 import { websocketController } from "./websocketController";
 import { logger } from "../core/logger";
+import { generateWsTicket } from "../utils/security";
+import { db } from "../core/database";
+import { meetings } from "../models/meetingModel";
+import { eq, and, sql } from "drizzle-orm";
 
-// TODO:
-// An auth middleware will protect these endpoints.
-// So we can sign a short-lived token to send to the WS endpoint
-
-export const startMeeting = async ({ set }: { set: any }) => {
-  // Generate a unique ID (e.g., 'meeting-7d2a-4b91')
+export const startMeeting = async ({ body, user, tenantId, set }: any) => {
   const generatedId = `meeting-${crypto.randomUUID().split("-")[0]}`;
 
-  // Check for collisions
+  // Check for memory collisions
   if (websocketController.getMeeting(generatedId)) {
     set.status = 409;
     return { error: "Collision detected, please try again" };
   }
 
+  // Start the Soniox transcription session
   const session = websocketController.createMeeting(generatedId);
   await session.connect();
 
-  // NOTE: Generate a dummy token
-  const mockToken = `token_${Math.random().toString(36).substring(7)}`;
+  // Save the new meeting to the database
+  await db.insert(meetings).values({
+    id: generatedId,
+    topic: body?.topic || "Untitled Meeting",
+    host: user.id,
+    started_at: new Date(),
+    attendees: [{ name: user.name || "Host", email: user.email }],
+    languages: body?.languages || [],
+    integration: body?.integration,
+    scheduled_time: body?.scheduled_time ? new Date(body.scheduled_time) : null,
+  });
 
-  logger.debug(`Meeting '${generatedId}' started`);
+  // Generate the short-lived WebSocket ticket using your security utility
+  // We pass both the userId and the tenantId derived from the API session
+  const wsTicket = await generateWsTicket(user.id, tenantId || "");
+
+  logger.info(`Meeting '${generatedId}' started by user ${user.id}`);
 
   return {
     message: "Meeting started",
     meetingId: generatedId,
-    token: mockToken,
+    token: wsTicket,
   };
 };
 
 export const joinMeeting = async ({
-  params,
+  params: { id },
+  user,
+  tenantId,
   set,
-}: {
-  params: { id: string };
-  set: any;
-}) => {
-  const meeting = websocketController.getMeeting(params.id);
-
+}: any) => {
+  // Verify the meeting is currently active in memory
+  const meeting = websocketController.getMeeting(id);
   if (!meeting) {
     set.status = 404;
-    return { error: "Meeting not found" };
+    return { error: "Meeting not found or inactive" };
   }
 
-  // NOTE: Generate a dummy token
-  const mockToken = `token_${Math.random().toString(36).substring(7)}`;
+  const newAttendee = { name: user.name || "Guest", email: user.email };
 
-  logger.debug(`User <id> joined meeting '${params.id}'`);
+  // Safely append the user to the database attendees list
+  const updatedMeeting = await db
+    .update(meetings)
+    .set({
+      attendees: sql`coalesce(${meetings.attendees}, '[]'::jsonb) || ${JSON.stringify([newAttendee])}::jsonb`,
+    })
+    .where(eq(meetings.id, id))
+    .returning();
+
+  if (!updatedMeeting.length) {
+    set.status = 404;
+    return { error: "Meeting record not found in database" };
+  }
+
+  // Generate the WebSocket ticket for the joining user
+  const wsTicket = await generateWsTicket(user.id, tenantId || "");
+
+  logger.info(`User ${user.id} joined meeting '${id}'`);
 
   return {
     message: "Joined meeting",
-    meetingId: params.id,
-    token: mockToken,
+    meetingId: id,
+    token: wsTicket,
   };
 };
 
-export const endMeeting = async ({
-  params,
-  set,
-}: {
-  params: { id: string };
-  set: any;
-}) => {
-  const meeting = websocketController.getMeeting(params.id);
-
+export const endMeeting = async ({ params: { id }, user, set }: any) => {
+  const meeting = websocketController.getMeeting(id);
   if (!meeting) {
     set.status = 404;
     return { error: "Meeting not found" };
   }
 
-  try {
-    // Signal the end of the transcription session to Soniox
-    await meeting.sonioxSession.finish();
-  } catch (err) {
-    logger.error("Error finishing Soniox session:", err);
+  // Update the database to mark the meeting as ended
+  const updatedMeeting = await db
+    .update(meetings)
+    .set({ ended_at: new Date() })
+    .where(
+      and(
+        eq(meetings.id, id),
+        eq(meetings.host_id, user.id), // Strict check: only host can end
+      ),
+    )
+    .returning();
+
+  if (!updatedMeeting.length) {
+    set.status = 403;
+    return { error: "Not authorized to end this meeting" };
   }
 
-  // Clear from memory and notify participants
-  websocketController.deleteMeeting(params.id);
+  // Signal the end of the transcription session to Soniox
+  try {
+    await meeting.sonioxSession.finish();
+  } catch (err) {
+    logger.error(`Error finishing Soniox session for ${id}:`, err);
+  }
 
-  logger.debug(`User <id> ended meeting '${params.id}'`);
+  // Clear from memory
+  websocketController.deleteMeeting(id);
+
+  logger.info(`User ${user.id} ended meeting '${id}'`);
 
   return {
     message: "Meeting ended",
-    meetingId: params.id,
+    meetingId: id,
   };
 };

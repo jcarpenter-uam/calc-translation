@@ -2,16 +2,27 @@ import { z } from "zod";
 import { logger } from "./logger";
 
 const envSchema = z.object({
-  // Automatically converts string "3000" to number 3000
   PORT: z.string().transform(Number).default("8000"),
-
-  DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }),
-
-  SONIOX_API_KEY: z.string({ message: "SONIOX_API_KEY must be a string" }),
 
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+
+  BASE_URL: z
+    .string()
+    .url({ message: "BASE_URL must be a valid URL" })
+    .default("http://localhost:8000"),
+
+  DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }),
+
+  ENCRYPTION_KEY: z
+    .string()
+    .length(44, {
+      message:
+        "ENCRYPTION_KEY must be exactly 44 characters (a valid Fernet key)",
+    }),
+
+  SONIOX_API_KEY: z.string({ message: "SONIOX_API_KEY must be a string" }),
 });
 
 // Validate Bun.env against the schema

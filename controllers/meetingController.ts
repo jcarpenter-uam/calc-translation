@@ -1,4 +1,4 @@
-import { websocketController } from "./websocketControllers";
+import { websocketController } from "./websocketController";
 import { logger } from "../core/logger";
 
 // TODO:

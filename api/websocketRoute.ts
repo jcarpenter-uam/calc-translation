@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { websocketController } from "../controllers/websocketControllers";
+import { websocketController } from "../controllers/websocketController";
 
 export const websocketRoute = new Elysia().ws("/ws", {
   // We use t.Any() instead of a strict schema so Elysia's validator doesn't

@@ -3,7 +3,7 @@ import {
   startMeeting,
   joinMeeting,
   endMeeting,
-} from "../controllers/meetingControllers";
+} from "../controllers/meetingController";
 
 export const meetingRoutes = new Elysia({ prefix: "/meeting" })
   .post("/start", startMeeting)

@@ -1,0 +1,231 @@
+import { generateState, generateCodeVerifier } from "arctic";
+import {
+  createGoogleProvider,
+  createEntraProvider,
+} from "../utils/authProviders";
+import { logger } from "../core/logger";
+import { db } from "../core/database";
+import { tenantAuthConfigs, tenantDomains } from "../models/tenantModel";
+import { and, eq, inArray } from "drizzle-orm";
+import { decrypt } from "../utils/fernet";
+
+async function getTenantAuthProvider(tenantId: string, providerType: string) {
+  // normalize provider name
+  const normalizedProvider = providerType.toLowerCase();
+  const isMicrosoft =
+    normalizedProvider === "entra" || normalizedProvider === "microsoft";
+
+  // fetch auth config from db matching legacy or current names
+  const [config] = await db
+    .select()
+    .from(tenantAuthConfigs)
+    .where(
+      and(
+        eq(tenantAuthConfigs.tenantId, tenantId),
+        isMicrosoft
+          ? inArray(tenantAuthConfigs.providerType, ["entra", "microsoft"])
+          : eq(tenantAuthConfigs.providerType, providerType),
+      ),
+    );
+
+  if (!config) {
+    throw new Error(
+      `Auth config not found for tenant ${tenantId} and provider ${providerType}`,
+    );
+  }
+
+  // decrypt secret
+  const decryptedSecret = decrypt(config.clientSecretEncrypted);
+
+  // return requested provider instance
+  if (normalizedProvider === "google") {
+    return createGoogleProvider(config.clientId, decryptedSecret);
+  } else if (isMicrosoft) {
+    // fallback to common if tenant hint is missing
+    const entraTenantId = config.tenantHint || "common";
+    return createEntraProvider(entraTenantId, config.clientId, decryptedSecret);
+  }
+
+  throw new Error(`Unsupported provider: "${providerType}"`);
+}
+
+export const unifiedLogin = async ({
+  body: { email },
+  cookie: { oauth_state, oauth_code_verifier, oauth_tenant_id },
+  set,
+}: any) => {
+  try {
+    // extract domain from email
+    const domain = email.split("@")[1].toLowerCase();
+
+    // lookup tenant domain
+    const [domainRecord] = await db
+      .select()
+      .from(tenantDomains)
+      .where(eq(tenantDomains.domain, domain));
+
+    if (!domainRecord) {
+      set.status = 400;
+      return { error: "SSO is not configured for this domain." };
+    }
+
+    logger.debug(`Found domain record for ${domain}:`, domainRecord);
+
+    const { tenantId, providerType: provider } = domainRecord;
+    const normalizedProvider = provider.toLowerCase();
+
+    // retrieve matching auth provider
+    const authProvider = await getTenantAuthProvider(tenantId, provider);
+
+    // generate oauth values
+    const state = generateState();
+    const codeVerifier = generateCodeVerifier();
+    let url: URL;
+
+    // build auth url with required scopes
+    if (normalizedProvider === "google") {
+      url = authProvider.createAuthorizationURL(state, codeVerifier, [
+        "openid",
+        "profile",
+        "email",
+        "https://www.googleapis.com/auth/calendar.readonly",
+      ]);
+    } else if (
+      normalizedProvider === "entra" ||
+      normalizedProvider === "microsoft"
+    ) {
+      url = authProvider.createAuthorizationURL(state, codeVerifier, [
+        "openid",
+        "profile",
+        "email",
+        "Calendars.Read",
+        "User.Read",
+      ]);
+    } else {
+      logger.debug(
+        `Failed matching provider. normalizedProvider was: "${normalizedProvider}"`,
+      );
+      set.status = 400;
+      return { error: "Unsupported provider configured for this domain" };
+    }
+
+    // prepopulate email for user
+    url.searchParams.set("login_hint", email);
+
+    // configure cookies
+    const cookieOpts = {
+      path: "/",
+      secure: Bun.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 60 * 10,
+    };
+
+    // set auth cookies
+    oauth_state.set({ value: state, ...cookieOpts });
+    oauth_code_verifier.set({ value: codeVerifier, ...cookieOpts });
+    oauth_tenant_id.set({ value: tenantId, ...cookieOpts });
+
+    // redirect to identity provider
+    return Response.redirect(url.href, 302);
+  } catch (err) {
+    logger.error(`Unified login failed for email ${email}:`, err);
+    set.status = 500;
+    return { error: "Internal Server Error" };
+  }
+};
+
+export const providerCallback = async ({
+  params: { provider },
+  query,
+  cookie: { oauth_state, oauth_code_verifier, oauth_tenant_id },
+  set,
+}: any) => {
+  const code = query.code;
+  const state = query.state;
+  const storedState = oauth_state.value;
+  const storedCodeVerifier = oauth_code_verifier.value;
+  const tenantId = oauth_tenant_id.value;
+
+  // validate state match
+  if (!code || !state || !storedState || state !== storedState) {
+    set.status = 400;
+    return { error: "Invalid state or missing code" };
+  }
+
+  // ensure tenant id exists
+  if (!tenantId) {
+    set.status = 400;
+    return {
+      error:
+        "Session expired or missing tenant context. Please try logging in again.",
+    };
+  }
+
+  try {
+    const normalizedProvider = provider.toLowerCase();
+
+    // retrieve matching auth provider
+    const authProvider = await getTenantAuthProvider(
+      tenantId,
+      normalizedProvider,
+    );
+
+    let tokens;
+    let userProfile;
+
+    // exchange code for tokens and fetch profile
+    if (normalizedProvider === "google") {
+      tokens = await authProvider.validateAuthorizationCode(
+        code,
+        storedCodeVerifier as string,
+      );
+
+      const response = await fetch(
+        "https://openidconnect.googleapis.com/v1/userinfo",
+        { headers: { Authorization: `Bearer ${tokens.accessToken()}` } },
+      );
+      userProfile = await response.json();
+    } else if (
+      normalizedProvider === "entra" ||
+      normalizedProvider === "microsoft"
+    ) {
+      tokens = await authProvider.validateAuthorizationCode(
+        code,
+        storedCodeVerifier as string,
+      );
+
+      const response = await fetch("https://graph.microsoft.com/v1.0/me", {
+        headers: { Authorization: `Bearer ${tokens.accessToken()}` },
+      });
+      userProfile = await response.json();
+    }
+
+    // normalize email field
+    const userEmail =
+      userProfile.email || userProfile.mail || userProfile.userPrincipalName;
+
+    logger.debug(`Successful ${normalizedProvider} login for: ${userEmail}`);
+
+    // TODO: create user and session token here
+
+    return {
+      message: "Authentication successful",
+      tenantId,
+      provider: normalizedProvider,
+      email: userEmail,
+      profile: userProfile,
+    };
+  } catch (err) {
+    logger.error(
+      `OAuth callback failed for ${provider} (Tenant: ${tenantId}):`,
+      err,
+    );
+    set.status = 400;
+    return { error: "Failed to validate authorization code" };
+  }
+};
+
+export const logout = async ({ set, cookie }: any) => {
+  // TODO: implement session clearing logic
+  return { message: "Logged out successfully" };
+};

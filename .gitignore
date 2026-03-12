@@ -4,5 +4,8 @@ logs/
 # bun
 node_modules/
 
+# sql migrations
+drizzle/
+
 # Secrets
 .env

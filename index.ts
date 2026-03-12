@@ -1,5 +1,5 @@
 import { env } from "./core/config";
-import { testDbConnection } from "./core/database";
+import { testDbConnection, runMigrations } from "./core/database";
 import { logger } from "./core/logger";
 import { Elysia } from "elysia";
 import { meetingRoutes } from "./api/meetingRoutes";
@@ -8,6 +8,9 @@ import { authRoutes } from "./api/authRoutes";
 
 // Test DB Connection
 await testDbConnection();
+
+// Execute migrations before starting the server
+await runMigrations();
 
 const app = new Elysia()
   .use(websocketRoute)

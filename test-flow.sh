@@ -9,7 +9,6 @@ echo "Downloading sample audio..."
 curl -s -o $MP3_FILE https://soniox.com/media/examples/coffee_shop.mp3
 
 echo "Converting MP3 to raw PCM (16kHz, 16-bit, mono)..."
-# This perfectly matches the audio_format: 'pcm_s16le' and sample_rate: 16000
 ffmpeg -y -i $MP3_FILE -f s16le -acodec pcm_s16le -ar 16000 -ac 1 $RAW_FILE > /dev/null 2>&1
 
 echo "Starting meeting..."
@@ -26,6 +25,7 @@ echo "Connecting to WS and streaming audio for 5 seconds..."
 cat << 'EOF' > ws_test.mjs
 import WebSocket from 'ws';
 import fs from 'fs';
+import { performance } from 'perf_hooks';
 
 const wsUrl = process.argv[2];
 const meetingId = process.argv[3];
@@ -33,6 +33,9 @@ const audioFile = process.argv[4];
 
 const ws = new WebSocket(wsUrl);
 const audioData = fs.readFileSync(audioFile);
+
+let firstChunkTime = null;
+let firstTokenTime = null;
 
 ws.on('open', () => {
   console.log(' - WebSocket connected');
@@ -47,14 +50,16 @@ ws.on('open', () => {
     console.log(' - Started streaming PCM audio chunks...');
     
     let offset = 0;
-    // 16000 samples/sec * 2 bytes/sample = 32000 bytes/sec
-    // 3200 bytes every 100ms is exactly real-time pace
     const chunkSize = 3200; 
     const intervalMs = 100; 
     const streamDuration = 5000; 
     
     const streamInterval = setInterval(() => {
       if (offset < audioData.length) {
+        if (offset === 0) {
+          firstChunkTime = performance.now();
+        }
+        
         const end = Math.min(offset + chunkSize, audioData.length);
         ws.send(audioData.subarray(offset, end));
         offset += chunkSize;
@@ -65,7 +70,7 @@ ws.on('open', () => {
 
     setTimeout(() => {
       clearInterval(streamInterval);
-      console.log('\n - 5 seconds reached. Finished streaming audio.');
+      console.log(' - 5 seconds reached. Finished streaming audio.');
       setTimeout(() => ws.close(), 1000);
     }, streamDuration);
 
@@ -74,18 +79,25 @@ ws.on('open', () => {
 
 ws.on('message', (data) => {
   const message = data.toString();
+  const now = performance.now();
+
   try {
     const parsed = JSON.parse(message);
     if (parsed.type === 'transcription') {
-      console.log(`\x1b[32m[Soniox Original]\x1b[0m ${parsed.text}`);
-    } else if (parsed.type === 'translation') {
-      const translated = parsed.translatedText || parsed.text || JSON.stringify(parsed);
-      console.log(`\x1b[36m[Translation]\x1b[0m ${translated}`);
-    } else {
-      console.log(`[Server] ${message}`);
+      
+      // Only trigger on the very first token received
+      if (!firstTokenTime) {
+        firstTokenTime = now;
+        const ttft = (firstTokenTime - firstChunkTime).toFixed(2);
+        
+        console.log(`\n\x1b[32m[First Token]\x1b[0m "${parsed.text}"`);
+        console.log(`\x1b[35m[TTFT]\x1b[0m        ${ttft} ms\n`);
+      }
+      
+      // All subsequent tokens are intentionally ignored to keep logs clean
     }
   } catch (e) {
-    console.log(`[Server] ${message}`);
+    // Ignore server status messages and parse errors
   }
 });
 
@@ -98,7 +110,6 @@ if [ ! -d "node_modules/ws" ]; then
   npm install ws --no-save > /dev/null 2>&1
 fi
 
-# Pass the RAW_FILE instead of the MP3
 node ws_test.mjs "$WS_URL" "$MEETING_ID" "$RAW_FILE"
 
 echo "Ending meeting..."

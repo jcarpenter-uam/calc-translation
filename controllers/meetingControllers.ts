@@ -1,4 +1,5 @@
 import { websocketController } from "./websocketControllers";
+import { logger } from "../core/logger";
 
 export const startMeeting = async ({ set }: { set: any }) => {
   // Generate a unique ID (e.g., 'meeting-7d2a-4b91')
@@ -12,6 +13,8 @@ export const startMeeting = async ({ set }: { set: any }) => {
 
   const session = websocketController.createMeeting(generatedId);
   await session.connect();
+
+  logger.debug(`Meeting '${generatedId}' started`);
 
   return {
     message: "Meeting started successfully",
@@ -35,6 +38,8 @@ export const joinMeeting = async ({
 
   // NOTE: Generate a dummy token
   const mockToken = `token_${Math.random().toString(36).substring(7)}`;
+
+  logger.debug(`User <id> joined meeting '${params.id}'`);
 
   return {
     message: "Joined successfully",
@@ -61,11 +66,13 @@ export const endMeeting = async ({
     // Signal the end of the transcription session to Soniox
     await meeting.sonioxSession.finish();
   } catch (err) {
-    console.error("Error finishing Soniox session:", err);
+    logger.error("Error finishing Soniox session:", err);
   }
 
   // Clear from memory and notify participants
   websocketController.deleteMeeting(params.id);
+
+  logger.debug(`User <id> ended meeting '${params.id}'`);
 
   return { message: `Meeting ${params.id} ended` };
 };

@@ -15,12 +15,12 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }),
 
-  ENCRYPTION_KEY: z
-    .string()
-    .length(44, {
-      message:
-        "ENCRYPTION_KEY must be exactly 44 characters (a valid Fernet key)",
-    }),
+  ENCRYPTION_KEY: z.string().length(44, {
+    message:
+      "ENCRYPTION_KEY must be exactly 44 characters (a valid Fernet key)",
+  }),
+
+  JWT_SECRET: z.string().min(1, "JWT_SECRET must be defined in your .env file"),
 
   SONIOX_API_KEY: z.string({ message: "SONIOX_API_KEY must be a string" }),
 });

@@ -9,6 +9,12 @@ import { tenantAuthConfigs, tenantDomains } from "../models/tenantModel";
 import { users } from "../models/userModel";
 import { and, eq } from "drizzle-orm";
 import { decrypt } from "../utils/fernet";
+import { env } from "../core/config";
+import {
+  generateApiSessionToken,
+  setSessionCookie,
+  clearSessionCookie,
+} from "../utils/security";
 
 async function getTenantAuthProvider(tenantId: string, providerType: string) {
   // normalize provider name
@@ -109,7 +115,7 @@ export const unifiedLogin = async ({
     // configure cookies
     const cookieOpts = {
       path: "/",
-      secure: Bun.env.NODE_ENV === "production",
+      secure: env.NODE_ENV === "production",
       httpOnly: true,
       maxAge: 60 * 10,
     };
@@ -131,7 +137,7 @@ export const unifiedLogin = async ({
 export const providerCallback = async ({
   params: { provider },
   query,
-  cookie: { oauth_state, oauth_code_verifier, oauth_tenant_id },
+  cookie: { oauth_state, oauth_code_verifier, oauth_tenant_id, auth_session },
   set,
 }: any) => {
   const code = query.code;
@@ -227,6 +233,14 @@ export const providerCallback = async ({
 
     logger.debug(`User upserted successfully: ${user.email}`);
 
+    const sessionToken = await generateApiSessionToken(user.id, tenantId);
+
+    setSessionCookie(auth_session, sessionToken);
+
+    oauth_state.remove();
+    oauth_code_verifier.remove();
+    oauth_tenant_id.remove();
+
     return {
       message: "Authentication successful",
       tenantId,
@@ -243,7 +257,10 @@ export const providerCallback = async ({
   }
 };
 
-export const logout = async ({ set, cookie }: any) => {
-  // TODO: implement session clearing logic
+export const logout = async ({ set, cookie: { auth_session } }: any) => {
+  clearSessionCookie(auth_session);
+
+  logger.debug("User logged out, session cookie cleared.");
+
   return { message: "Logged out successfully" };
 };

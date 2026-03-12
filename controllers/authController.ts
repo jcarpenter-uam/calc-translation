@@ -6,25 +6,21 @@ import {
 import { logger } from "../core/logger";
 import { db } from "../core/database";
 import { tenantAuthConfigs, tenantDomains } from "../models/tenantModel";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { decrypt } from "../utils/fernet";
 
 async function getTenantAuthProvider(tenantId: string, providerType: string) {
   // normalize provider name
   const normalizedProvider = providerType.toLowerCase();
-  const isMicrosoft =
-    normalizedProvider === "entra" || normalizedProvider === "microsoft";
 
-  // fetch auth config from db matching legacy or current names
+  // fetch auth config from db
   const [config] = await db
     .select()
     .from(tenantAuthConfigs)
     .where(
       and(
         eq(tenantAuthConfigs.tenantId, tenantId),
-        isMicrosoft
-          ? inArray(tenantAuthConfigs.providerType, ["entra", "microsoft"])
-          : eq(tenantAuthConfigs.providerType, providerType),
+        eq(tenantAuthConfigs.providerType, providerType),
       ),
     );
 
@@ -40,7 +36,7 @@ async function getTenantAuthProvider(tenantId: string, providerType: string) {
   // return requested provider instance
   if (normalizedProvider === "google") {
     return createGoogleProvider(config.clientId, decryptedSecret);
-  } else if (isMicrosoft) {
+  } else if (normalizedProvider === "entra") {
     // fallback to common if tenant hint is missing
     const entraTenantId = config.tenantHint || "common";
     return createEntraProvider(entraTenantId, config.clientId, decryptedSecret);
@@ -90,10 +86,7 @@ export const unifiedLogin = async ({
         "email",
         "https://www.googleapis.com/auth/calendar.readonly",
       ]);
-    } else if (
-      normalizedProvider === "entra" ||
-      normalizedProvider === "microsoft"
-    ) {
+    } else if (normalizedProvider === "entra") {
       url = authProvider.createAuthorizationURL(state, codeVerifier, [
         "openid",
         "profile",
@@ -185,10 +178,7 @@ export const providerCallback = async ({
         { headers: { Authorization: `Bearer ${tokens.accessToken()}` } },
       );
       userProfile = await response.json();
-    } else if (
-      normalizedProvider === "entra" ||
-      normalizedProvider === "microsoft"
-    ) {
+    } else if (normalizedProvider === "entra") {
       tokens = await authProvider.validateAuthorizationCode(
         code,
         storedCodeVerifier as string,

@@ -16,11 +16,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   })
   .get("/callback/:provider", providerCallback, {
     params: t.Object({
-      provider: t.Union([
-        t.Literal("google"),
-        t.Literal("entra"),
-        t.Literal("microsoft"),
-      ]),
+      provider: t.Union([t.Literal("google"), t.Literal("entra")]),
     }),
     query: t.Object({
       code: t.Optional(t.String()),

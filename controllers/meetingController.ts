@@ -42,6 +42,7 @@ export const createMeeting = async ({ body, user, set }: any) => {
       attendees: [],
       languages: body?.languages || [],
       integration: body?.integration,
+      method: body?.method || "one_way",
       scheduled_time: body?.scheduled_time
         ? new Date(body.scheduled_time)
         : null,
@@ -98,16 +99,84 @@ export const joinMeeting = async ({
 
   let activeMeeting = websocketController.getMeeting(internalId);
 
+  // Grab the existing array from the database record (fallback to empty)
+  const currentAttendees = dbMeeting.attendees || [];
+
+  // Add the user ONLY if they aren't already in the list
+  if (!currentAttendees.includes(user.id)) {
+    currentAttendees.push(user.id);
+  }
+
+  // Pass the clean TypeScript array directly to Drizzle
   const dbUpdatePayload: any = {
-    attendees: sql`coalesce(${meetings.attendees}, '[]'::jsonb) || ${JSON.stringify([user.id])}::jsonb`,
+    attendees: currentAttendees,
   };
 
-  if (!activeMeeting && isHost) {
-    activeMeeting = websocketController.createMeeting(internalId);
-    await activeMeeting.connect();
-    logger.info(`Host ${user.id} initiated audio session for '${internalId}'`);
+  const method = dbMeeting.method || "one_way";
+  let currentLanguages = dbMeeting.languages || [];
 
+  if (!activeMeeting && isHost) {
+    websocketController.initMeeting(internalId);
+    activeMeeting = websocketController.getMeeting(internalId);
+
+    if (method === "two_way" && currentLanguages.length >= 2) {
+      // Spin up the single bilingual session
+      const session = websocketController.addTranscriptionSession(
+        internalId,
+        "two_way",
+        {
+          enableSpeakerDiarization: true,
+          translation: {
+            type: "two_way",
+            language_a: currentLanguages[0],
+            language_b: currentLanguages[1],
+          },
+        },
+      );
+      await session?.connect();
+    } else {
+      // Spin up individual sessions for the pre-configured languages
+      for (const lang of currentLanguages) {
+        const session = websocketController.addTranscriptionSession(
+          internalId,
+          lang,
+          {
+            enableSpeakerDiarization: true,
+            translation: { type: "one_way", target_language: lang },
+          },
+        );
+        await session?.connect();
+      }
+    }
+
+    logger.info(`Host ${user.id} initiated audio sessions for '${internalId}'`);
     dbUpdatePayload.started_at = new Date();
+  }
+
+  const userLanguage = user.languageCode;
+
+  if (activeMeeting && method === "one_way" && userLanguage) {
+    // If the user needs a language we aren't currently transcribing
+    if (!currentLanguages.includes(userLanguage)) {
+      const newSession = websocketController.addTranscriptionSession(
+        internalId,
+        userLanguage,
+        {
+          enableSpeakerDiarization: true,
+          translation: { type: "one_way", target_language: userLanguage },
+        },
+      );
+
+      await newSession?.connect();
+
+      logger.info(
+        `Started new dynamic session for ${userLanguage} in meeting '${internalId}'`,
+      );
+
+      // Add the new language to the DB payload so future joins know it's already active
+      currentLanguages.push(userLanguage);
+      dbUpdatePayload.languages = currentLanguages;
+    }
   }
 
   await db

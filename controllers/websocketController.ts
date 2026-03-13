@@ -3,6 +3,7 @@ import { logger } from "../core/logger";
 import {
   transcriptionService,
   type TranscriptionSession,
+  type TranscriptionConfig,
 } from "../services/transcriptionService";
 
 /**
@@ -19,7 +20,7 @@ interface Participant {
 interface Meeting {
   id: string;
   participants: Map<string, Participant>;
-  audioSession: TranscriptionSession;
+  audioSessions: Map<string, TranscriptionSession>;
 }
 
 /**
@@ -37,28 +38,49 @@ export class WebsocketController {
   private socketToMeeting = new Map<string, string>();
 
   /**
-   * Initializes a new meeting and its associated transcription session.
-   * Provides a callback to broadcast transcription text when generated.
-   *
-   * @param meetingId - The internal database ID of the meeting.
-   * @returns The newly created transcription session.
+   * Sets up the meeting container in memory without starting any audio sessions.
    */
-  createMeeting(meetingId: string) {
-    const session = transcriptionService.createSession(meetingId, (text) => {
-      const payload = JSON.stringify({
-        type: "transcription",
-        meetingId,
-        text,
+  initMeeting(meetingId: string) {
+    if (!this.meetings.has(meetingId)) {
+      this.meetings.set(meetingId, {
+        id: meetingId,
+        participants: new Map(),
+        audioSessions: new Map(),
       });
-      this.broadcastToMeeting(meetingId, payload);
-    });
+    }
+  }
 
-    this.meetings.set(meetingId, {
-      id: meetingId,
-      participants: new Map(),
-      audioSession: session,
-    });
+  /**
+   * Adds a new dedicated Soniox session to an active meeting.
+   */
+  addTranscriptionSession(
+    meetingId: string,
+    languageKey: string,
+    config: TranscriptionConfig,
+  ) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting) return null;
 
+    // Prevent duplicate sessions for the same language
+    if (meeting.audioSessions.has(languageKey)) {
+      return meeting.audioSessions.get(languageKey);
+    }
+
+    const session = transcriptionService.createSession(
+      meetingId,
+      config,
+      (text, language) => {
+        const payload = JSON.stringify({
+          type: "transcription",
+          meetingId,
+          language, // Tag the payload so the frontend knows who to show this to
+          text,
+        });
+        this.broadcastToMeeting(meetingId, payload);
+      },
+    );
+
+    meeting.audioSessions.set(languageKey, session);
     return session;
   }
 
@@ -120,12 +142,15 @@ export class WebsocketController {
     }
 
     const meeting = this.meetings.get(meetingId);
-    if (meeting && meeting.audioSession) {
-      try {
-        meeting.audioSession.sendAudio(audioChunk);
-      } catch (err) {
-        logger.error("Error sending audio to transcription service:", err);
-      }
+    if (meeting) {
+      // Fan-out the raw microphone audio to ALL active language sessions
+      meeting.audioSessions.forEach((session) => {
+        try {
+          session.sendAudio(audioChunk);
+        } catch (err) {
+          logger.error("Error sending audio to transcription service:", err);
+        }
+      });
     }
   }
 
@@ -158,7 +183,7 @@ export class WebsocketController {
     if (meeting) {
       const disconnectMsg = JSON.stringify({
         type: "status",
-        message: `Meeting ${id} has been ended by the host.`,
+        message: `Meeting ${id} ended.`,
       });
 
       meeting.participants.forEach((p) => {
@@ -167,13 +192,14 @@ export class WebsocketController {
         } catch (e) {}
       });
 
-      if (meeting.audioSession) {
-        meeting.audioSession
+      // Finish ALL active audio sessions
+      meeting.audioSessions.forEach((session) => {
+        session
           .finish()
           .catch((err) =>
             logger.error(`Error finishing audio session for ${id}:`, err),
           );
-      }
+      });
 
       this.meetings.delete(id);
     }

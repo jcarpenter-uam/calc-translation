@@ -13,6 +13,7 @@ export const meetings = pgTable("meetings", {
   readable_id: varchar("readable_id", { length: 255 }).unique(),
   passcode: varchar("passcode", { length: 50 }),
   join_url: text("join_url"),
+  method: varchar("method", { length: 20 }).default("one_way"),
   languages: jsonb("languages").$type<string[]>(),
   integration: varchar("integration", { length: 50 }),
   scheduled_time: timestamp("scheduled_time", { withTimezone: true }),

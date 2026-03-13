@@ -6,6 +6,7 @@ import { meetingRoutes } from "./api/meetingRoutes";
 import { websocketRoute } from "./api/websocketRoute";
 import { authRoutes } from "./api/authRoutes";
 import { requireWsAuth, requireAuth } from "./middlewares/authMiddleware";
+import { metricRoutes } from "./api/metricRoutes";
 
 // Test DB Connection
 await testDbConnection();
@@ -14,25 +15,6 @@ await testDbConnection();
 await runMigrations();
 
 const app = new Elysia()
-  // Log every incoming request
-  .onRequest(({ request }) => {
-    const url = new URL(request.url);
-    logger.debug(`Incoming Request: ${request.method} ${url.pathname}`);
-  })
-
-  // Catch and log routing errors (like 404s or wrong methods)
-  .onError(({ code, error, request }) => {
-    const url = new URL(request.url);
-
-    if (code === "NOT_FOUND") {
-      logger.warn(`404 Not Found: ${request.method} ${url.pathname}`);
-    } else {
-      logger.error(
-        `Error [${code}]: ${error.message} on ${request.method} ${url.pathname}`,
-      );
-    }
-  })
-
   // Mount the isolated WebSocket routes
   .guard({}, (wsApp) => wsApp.use(requireWsAuth).use(websocketRoute))
 
@@ -40,6 +22,7 @@ const app = new Elysia()
   .group("/api", (api) =>
     api
       .use(authRoutes)
+      .use(metricRoutes)
       .guard({}, (protectedApi) =>
         protectedApi.use(requireAuth).use(meetingRoutes),
       ),

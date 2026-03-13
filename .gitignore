@@ -7,5 +7,6 @@ node_modules/
 # sql migrations
 drizzle/
 
-# Secrets
+# secrets
 .env
+tests/

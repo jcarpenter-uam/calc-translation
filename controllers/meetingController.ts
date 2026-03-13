@@ -3,7 +3,91 @@ import { logger } from "../core/logger";
 import { generateWsTicket } from "../utils/security";
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
+
+/**
+ * Retrieves a lightweight list of all meetings associated with the requesting user.
+ * * @param {Object} context.user - The authenticated user.
+ * @param {Object} context.set - The Elysia response state object.
+ */
+export const getMeetingsList = async ({ user, set }: any) => {
+  const userEmail = user?.email || user?.id || "unknown_user";
+  logger.debug(`User ${userEmail} requesting their meeting list.`);
+
+  try {
+    const meetingList = await db
+      .select({
+        id: meetings.id,
+        readable_id: meetings.readable_id,
+        topic: meetings.topic,
+        scheduled_time: meetings.scheduled_time,
+        started_at: meetings.started_at,
+        ended_at: meetings.ended_at,
+      })
+      .from(meetings)
+      .where(eq(meetings.host_id, user.id))
+      .orderBy(desc(meetings.scheduled_time));
+
+    logger.info(
+      `User ${userEmail} successfully retrieved ${meetingList.length} meetings.`,
+    );
+
+    return { meetings: meetingList };
+  } catch (err) {
+    logger.error(`Error fetching meeting list for ${userEmail}:`, err);
+    set.status = 500;
+    return { error: "Failed to fetch meetings" };
+  }
+};
+
+/**
+ * Retrieves the full details of a specific meeting.
+ * * @param {Object} context.params.id - The internal UUID (`meetingId`) to fetch.
+ * @param {Object} context.user - The authenticated user.
+ * @param {Object} context.set - The Elysia response state object.
+ */
+export const getMeetingDetails = async ({ params: { id }, user, set }: any) => {
+  const userEmail = user?.email || user?.id || "unknown_user";
+  logger.debug(`User ${userEmail} requesting details for meeting: ${id}`);
+
+  try {
+    const [meeting] = await db
+      .select()
+      .from(meetings)
+      .where(eq(meetings.id, id));
+
+    if (!meeting) {
+      logger.warn(
+        `User ${userEmail} requested details for non-existent meeting: ${id}`,
+      );
+      set.status = 404;
+      return { error: "Meeting not found" };
+    }
+
+    // Security check: Only allow the host or a recorded attendee to view full details
+    const currentAttendees = meeting.attendees || [];
+    if (meeting.host_id !== user.id && !currentAttendees.includes(user.id)) {
+      logger.warn(
+        `User ${userEmail} denied access to view meeting details: ${id}`,
+      );
+      set.status = 403;
+      return { error: "Not authorized to view this meeting" };
+    }
+
+    logger.info(
+      `User ${userEmail} successfully retrieved details for meeting: ${id}`,
+    );
+
+    return { meeting };
+  } catch (err) {
+    logger.error(
+      `Error fetching details for meeting ${id} by ${userEmail}:`,
+      err,
+    );
+    set.status = 500;
+    return { error: "Failed to fetch meeting details" };
+  }
+};
 
 /**
  * Generates a random 10-digit number as a string (e.g., "8234567890")

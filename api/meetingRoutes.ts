@@ -1,11 +1,15 @@
 import { Elysia, t } from "elysia";
 import {
+  getMeetingsList,
+  getMeetingDetails,
   createMeeting,
   joinMeeting,
   endMeeting,
 } from "../controllers/meetingController";
 
 export const meetingRoutes = new Elysia({ prefix: "/meeting" })
+  .get("/list", getMeetingsList)
+  .get("/:id", getMeetingDetails)
   .post("/create", createMeeting, {
     // Enforce the shape of the incoming JSON body
     body: t.Object({

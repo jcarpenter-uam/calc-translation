@@ -1,69 +1,50 @@
-import { SonioxNodeClient } from "@soniox/node";
 import type { ElysiaWS } from "elysia/ws";
-import { env } from "../core/config";
 import { logger } from "../core/logger";
+import {
+  transcriptionService,
+  type TranscriptionSession,
+} from "../services/transcriptionService";
 
+/**
+ * Represents a single user connected via WebSocket.
+ */
 interface Participant {
   id: string;
   socket: ElysiaWS<any, any, any>;
 }
 
+/**
+ * Represents an active meeting, including its participants and the active audio session.
+ */
 interface Meeting {
   id: string;
   participants: Map<string, Participant>;
-  sonioxSession: any;
+  audioSession: TranscriptionSession;
 }
 
+/**
+ * Manages WebSocket connections, routes raw audio to transcription services,
+ * and broadcasts text results back to connected clients.
+ */
 export class WebsocketController {
-  // Master record of all active meetings and their Soniox sessions
+  // Master record of all active meetings and their audio sessions.
   private meetings = new Map<string, Meeting>();
 
-  // Track global connections by their stable string ID (`ws.id`).
-  // We use the string ID instead of the `ws` object directly because Elysia
-  // wraps WebSockets in a Proxy, and the object reference can sometimes change
-  // between the `open`, `message`, and `close` events, causing memory leaks or missed lookups.
+  // Tracks global connections by their stable string ID (`ws.id`).
   private globalSubscribers = new Map<string, ElysiaWS<any, any, any>>();
 
-  // A lookup table to quickly find which meeting a specific socket ID belongs to.
-  // This is critical for routing incoming raw audio bytes to the correct Soniox session.
+  // Maps a specific socket ID to a meeting ID for O(1) audio routing lookups.
   private socketToMeeting = new Map<string, string>();
 
-  private sonioxClient = new SonioxNodeClient({ apiKey: env.SONIOX_API_KEY });
-
-  // --- State Management ---
+  /**
+   * Initializes a new meeting and its associated transcription session.
+   * Provides a callback to broadcast transcription text when generated.
+   *
+   * @param meetingId - The internal database ID of the meeting.
+   * @returns The newly created transcription session.
+   */
   createMeeting(meetingId: string) {
-    if (this.meetings.size >= 100) {
-      throw new Error("Maximum concurrent Soniox connections reached.");
-    }
-
-    // Initialize a new real-time connection to Soniox.
-    // We explicitly define the PCM audio formats here so Soniox knows
-    // exactly how to decode the raw bytes we send it later.
-    const session = this.sonioxClient.realtime.stt({
-      model: "stt-rt-v4",
-      audio_format: "pcm_s16le", // 16-bit little-endian PCM
-      sample_rate: 16000, // 16kHz
-      num_channels: 1, // Mono audio
-      enable_endpoint_detection: true, // Let Soniox tell us when a sentence ends
-    });
-
-    // Catch asynchronous API/Connection errors from Soniox
-    session.on("error", (error: any) => {
-      logger.error(`Soniox session error [${meetingId}]:`, error);
-    });
-
-    // Log when the session closes so you know exactly when a stream dies
-    session.on("close", () => {
-      logger.warn(`Soniox session closed [${meetingId}]`);
-    });
-
-    // Listen for transcription tokens streaming back from Soniox
-    session.on("result", (result: any) => {
-      // Combine the individual word tokens into a single string
-      const text = result.tokens.map((t: any) => t.text).join("");
-      if (!text) return;
-
-      // Package it into a JSON string and broadcast it to everyone in this meeting
+    const session = transcriptionService.createSession(meetingId, (text) => {
       const payload = JSON.stringify({
         type: "transcription",
         meetingId,
@@ -72,26 +53,41 @@ export class WebsocketController {
       this.broadcastToMeeting(meetingId, payload);
     });
 
-    // Store the meeting in memory so participants can join it
     this.meetings.set(meetingId, {
       id: meetingId,
       participants: new Map(),
-      sonioxSession: session,
+      audioSession: session,
     });
 
     return session;
   }
 
-  // --- Subscription & Audio Logic ---
-
+  /**
+   * Registers a WebSocket connection globally.
+   *
+   * @param ws - The active Elysia WebSocket instance.
+   */
   addGlobalSubscriber(ws: ElysiaWS<any, any, any>) {
     this.globalSubscribers.set(ws.id, ws);
   }
 
+  /**
+   * Retrieves an active meeting by its ID.
+   *
+   * @param id - The internal database ID of the meeting.
+   * @returns The meeting object, or undefined if not found.
+   */
   getMeeting(id: string) {
     return this.meetings.get(id);
   }
 
+  /**
+   * Subscribes a user's WebSocket connection to a specific meeting.
+   *
+   * @param meetingId - The internal database ID of the meeting to join.
+   * @param participantId - The unique ID of the joining user.
+   * @param ws - The active Elysia WebSocket instance.
+   */
   joinMeeting(
     meetingId: string,
     participantId: string,
@@ -99,18 +95,21 @@ export class WebsocketController {
   ) {
     const meeting = this.meetings.get(meetingId);
     if (meeting) {
-      // Add the user to the meeting's participant list
       meeting.participants.set(participantId, {
         id: participantId,
         socket: ws,
       });
-      // Map their specific WebSocket ID to this meeting so we know where to route their audio
       this.socketToMeeting.set(ws.id, meetingId);
     }
   }
 
+  /**
+   * Routes a chunk of raw audio from a WebSocket client to the correct transcription session.
+   *
+   * @param wsId - The stable string ID of the originating WebSocket.
+   * @param audioChunk - The raw PCM audio bytes.
+   */
   handleAudio(wsId: string, audioChunk: Buffer) {
-    // Look up which meeting this socket belongs to
     const meetingId = this.socketToMeeting.get(wsId);
 
     if (!meetingId) {
@@ -121,22 +120,25 @@ export class WebsocketController {
     }
 
     const meeting = this.meetings.get(meetingId);
-    if (meeting && meeting.sonioxSession) {
+    if (meeting && meeting.audioSession) {
       try {
-        // Relay the raw audio bytes directly to this meeting's active Soniox session
-        meeting.sonioxSession.sendAudio(audioChunk);
+        meeting.audioSession.sendAudio(audioChunk);
       } catch (err) {
-        logger.error("Error sending audio to Soniox:", err);
+        logger.error("Error sending audio to transcription service:", err);
       }
     }
   }
 
+  /**
+   * Cleans up memory when a user disconnects, removing them from global tracking
+   * and any active meetings.
+   *
+   * @param ws - The disconnecting Elysia WebSocket instance.
+   */
   removeSubscriber(ws: ElysiaWS<any, any, any>) {
-    // Clean up memory when a user disconnects or closes their browser
     this.globalSubscribers.delete(ws.id);
     this.socketToMeeting.delete(ws.id);
 
-    // Remove them from any meetings they were a part of
     this.meetings.forEach((m) => {
       m.participants.forEach((p, id) => {
         if (p.socket.id === ws.id) m.participants.delete(id);
@@ -144,6 +146,12 @@ export class WebsocketController {
     });
   }
 
+  /**
+   * Ends a meeting, notifies all participants, closes the audio session,
+   * and completely removes the meeting from memory.
+   *
+   * @param id - The internal database ID of the meeting to end.
+   */
   deleteMeeting(id: string) {
     const meeting = this.meetings.get(id);
 
@@ -153,25 +161,41 @@ export class WebsocketController {
         message: `Meeting ${id} has been ended by the host.`,
       });
 
-      // Notify all participants that the meeting is over
       meeting.participants.forEach((p) => {
         try {
           p.socket.send(disconnectMsg);
-        } catch (e) {} // Ignore errors if the socket is already dead
+        } catch (e) {}
       });
 
-      // Completely remove the meeting from memory
+      if (meeting.audioSession) {
+        meeting.audioSession
+          .finish()
+          .catch((err) =>
+            logger.error(`Error finishing audio session for ${id}:`, err),
+          );
+      }
+
       this.meetings.delete(id);
     }
   }
 
+  /**
+   * Broadcasts a JSON string payload to all participants within a specific meeting.
+   *
+   * @param meetingId - The internal database ID of the target meeting.
+   * @param data - The JSON string payload to send.
+   */
   private broadcastToMeeting(meetingId: string, data: any) {
-    // Send data (like transcriptions) only to users in a specific meeting
     this.meetings
       .get(meetingId)
       ?.participants.forEach((p) => p.socket.send(data));
   }
 
+  /**
+   * Broadcasts a JSON string payload to all connected WebSockets globally.
+   *
+   * @param data - The JSON string payload to send.
+   */
   private broadcastGlobal(data: any) {
     this.globalSubscribers.forEach((ws) => ws.send(data));
   }

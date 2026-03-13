@@ -63,7 +63,7 @@ export const createMeeting = async ({ body, user, set }: any) => {
 /**
  * Joins a user to a meeting using the public readable ID.
  * If the joining user is the host and the meeting hasn't started, it dynamically
- * initializes the Soniox transcription session in memory.
+ * initializes the transcription session in memory.
  *
  * @param {Object} context - The Elysia request context.
  * @param {Object} context.params - URL parameters.
@@ -134,7 +134,7 @@ export const joinMeeting = async ({
 /**
  * Ends an active meeting.
  * Strictly verifies that the requesting user is the host before updating the
- * database timestamp, stopping the Soniox stream, and clearing the memory session.
+ * database timestamp, stopping the audio stream, and clearing the memory session.
  *
  * @param {Object} context - The Elysia request context.
  * @param {Object} context.params - URL parameters.
@@ -160,12 +160,6 @@ export const endMeeting = async ({ params: { id }, user, set }: any) => {
   if (!updatedMeeting.length) {
     set.status = 403;
     return { error: "Not authorized to end this meeting" };
-  }
-
-  try {
-    await meeting.sonioxSession.finish();
-  } catch (err) {
-    logger.error(`Error finishing Soniox session for ${id}:`, err);
   }
 
   websocketController.deleteMeeting(id);

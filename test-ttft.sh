@@ -28,9 +28,10 @@ const concurrencyLevels = [1, 5, 10, 25, 50, 100];
 
 let validCookie = "";
 
-async function startMeeting() {
+async function createAndJoinMeeting() {
   try {
-    const res = await fetch(`${apiUrl}/start`, { 
+    // 1. Create the meeting (Database only)
+    const createRes = await fetch(`${apiUrl}/create`, { 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -39,23 +40,40 @@ async function startMeeting() {
       body: JSON.stringify({ topic: "Stress Test Meeting" })
     });
     
-    // Check if the response failed before trying to parse JSON
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`\x1b[31mAPI Error (${res.status}):\x1b[0m ${text}`);
+    if (!createRes.ok) {
+      const text = await createRes.text();
+      console.error(`\x1b[31mCreate API Error (${createRes.status}):\x1b[0m ${text}`);
       return null;
     }
 
-    const data = await res.json();
-    return { id: data.meetingId, token: data.token };
+    const createData = await createRes.json();
+    const readableId = createData.readableId;
+
+    // 2. Host joins the meeting to trigger the session and get the token
+    const joinRes = await fetch(`${apiUrl}/join/${readableId}`, { 
+      method: 'POST',
+      headers: { 'Cookie': validCookie }
+    });
+
+    if (!joinRes.ok) {
+      const text = await joinRes.text();
+      console.error(`\x1b[31mJoin API Error (${joinRes.status}):\x1b[0m ${text}`);
+      return null;
+    }
+
+    const joinData = await joinRes.json();
+    
+    // We return the internal UUID and the ticket for the WebSocket payload
+    return { id: joinData.meetingId, token: joinData.token };
   } catch (err) {
-    console.error("Error starting meeting:", err);
+    console.error("Error in create/join flow:", err);
     return null;
   }
 }
 
 async function endMeeting(id) {
   try {
+    // End meeting uses the internal UUID
     await fetch(`${apiUrl}/end/${id}`, { 
       method: 'POST',
       headers: { 'Cookie': validCookie }
@@ -70,12 +88,12 @@ async function runTest(concurrency) {
   
   const meetings = [];
   for (let i = 0; i < concurrency; i++) {
-    const meetingData = await startMeeting();
+    const meetingData = await createAndJoinMeeting();
     if (meetingData) meetings.push(meetingData);
   }
   
   if (meetings.length !== concurrency) {
-    console.error("Failed to create all required meetings. Aborting this step.");
+    console.error("Failed to setup all required meetings. Aborting this step.");
     return;
   }
 

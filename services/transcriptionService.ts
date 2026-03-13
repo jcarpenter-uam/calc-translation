@@ -2,18 +2,29 @@ import { SonioxNodeClient } from "@soniox/node";
 import { env } from "../core/config";
 import { logger } from "../core/logger";
 
-// Define an interface so the controller doesn't depend on Soniox types
+/**
+ * An abstracted interface for a real-time transcription session.
+ * This ensures consuming controllers do not depend on provider-specific types.
+ */
 export interface TranscriptionSession {
   connect: () => Promise<void>;
   sendAudio: (chunk: Buffer) => void;
   finish: () => Promise<void>;
 }
 
+/**
+ * Service responsible for managing connections and interactions with the Soniox API.
+ */
 class SonioxTranscriptionService {
   private client = new SonioxNodeClient({ apiKey: env.SONIOX_API_KEY });
 
   /**
-   * Starts a new STT session and accepts a callback for when text is ready.
+   * Starts a new STT (Speech-to-Text) session, configures audio parameters,
+   * and sets up event listeners for incoming transcriptions.
+   *
+   * @param meetingId - The internal database ID of the associated meeting.
+   * @param onTranscriptionReady - Callback triggered when transcribed text is received.
+   * @returns An abstracted TranscriptionSession object to control the stream.
    */
   createSession(
     meetingId: string,

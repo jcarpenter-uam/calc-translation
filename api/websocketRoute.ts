@@ -11,7 +11,7 @@ export const websocketRoute = new Elysia().ws("/ws", {
     // Extract the securely validated user from the middleware context
     const user = (ws.data as any).wsUser;
 
-    logger.info(`WebSocket connected: User ${user?.id}`);
+    logger.debug(`WebSocket connected: User ${user?.id}`);
 
     websocketController.addGlobalSubscriber(ws);
     ws.send(JSON.stringify({ status: "Connected and authenticated" }));
@@ -94,7 +94,7 @@ export const websocketRoute = new Elysia().ws("/ws", {
 
   close(ws) {
     const user = (ws.data as any).wsUser;
-    logger.info(`WebSocket disconnected: User ${user?.id}`);
+    logger.debug(`WebSocket disconnected: User ${user?.id}`);
 
     // Trigger cleanup in the controller when a client drops the connection
     websocketController.removeSubscriber(ws);

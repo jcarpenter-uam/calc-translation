@@ -24,13 +24,15 @@ function generateReadableId() {
  * @param {string} [context.body.integration] - The third-party integration used (e.g., 'zoom', 'teams').
  * @param {string|Date} [context.body.scheduled_time] - The future date/time the meeting is scheduled for.
  * @param {Object} context.user - The authenticated user object provided by the auth middleware.
- * @param {string} context.user.id - The unique ID of the user creating the meeting (becomes the host_id).
  * @param {Object} context.set - The Elysia response state object (used for setting HTTP status codes).
  * @returns {Promise<{ message: string, meetingId: string, readableId: string }>}
  * A JSON response containing the success message, the internal database UUID (`meetingId`),
  * and the public 10-digit ID (`readableId`) that users will use to join.
  */
 export const createMeeting = async ({ body, user, set }: any) => {
+  const userEmail = user?.email || user?.id || "unknown_user";
+  logger.debug(`Attempting to create a meeting for user: ${userEmail}`);
+
   const readableId = generateReadableId();
 
   const [newMeeting] = await db
@@ -52,7 +54,9 @@ export const createMeeting = async ({ body, user, set }: any) => {
       readable_id: meetings.readable_id,
     });
 
-  logger.info(`Meeting '${newMeeting.id}' scheduled by ${user.id}`);
+  logger.info(
+    `Meeting '${newMeeting.id}' created successfully by ${userEmail}`,
+  );
 
   return {
     message: "Meeting created successfully",
@@ -82,7 +86,12 @@ export const joinMeeting = async ({
   tenantId,
   set,
 }: any) => {
+  const userEmail = user?.email || user?.id || "unknown_user";
   const cleanReadableId = id.replace(/[\s-]/g, "");
+
+  logger.debug(
+    `User ${userEmail} attempting to join meeting with readable ID: ${cleanReadableId}`,
+  );
 
   const [dbMeeting] = await db
     .select()
@@ -90,6 +99,9 @@ export const joinMeeting = async ({
     .where(eq(meetings.readable_id, cleanReadableId));
 
   if (!dbMeeting) {
+    logger.warn(
+      `User ${userEmail} attempted to join non-existent meeting: ${cleanReadableId}`,
+    );
     set.status = 404;
     return { error: "Meeting not found" };
   }
@@ -164,7 +176,7 @@ export const joinMeeting = async ({
       }
     }
 
-    logger.info(`Host ${user.id} initiated audio sessions for '${internalId}'`);
+    logger.info(`Host ${userEmail} started meeting: '${internalId}'`);
     dbUpdatePayload.started_at = new Date();
 
     // Notify any attendees who are already subscribed in the waiting room
@@ -193,7 +205,7 @@ export const joinMeeting = async ({
 
     await newSession?.connect();
     logger.info(
-      `Started new dynamic session for ${userLanguage} in meeting '${internalId}'`,
+      `Started new dynamic session for ${userLanguage} in meeting '${internalId}' triggered by ${userEmail}`,
     );
   }
 
@@ -206,7 +218,7 @@ export const joinMeeting = async ({
   const isActiveNow = isAudioRunning || isHost;
 
   logger.info(
-    `User ${user.id} joined meeting '${internalId}' (Active: ${isActiveNow})`,
+    `User ${userEmail} successfully joined meeting '${internalId}' (Active: ${isActiveNow})`,
   );
 
   return {
@@ -233,8 +245,14 @@ export const joinMeeting = async ({
  * Returns a success message or an error if the user is not authorized/meeting not found.
  */
 export const endMeeting = async ({ params: { id }, user, set }: any) => {
+  const userEmail = user?.email || user?.id || "unknown_user";
+  logger.debug(`User ${userEmail} attempting to end meeting: ${id}`);
+
   const meeting = websocketController.getMeeting(id);
   if (!meeting) {
+    logger.warn(
+      `User ${userEmail} attempted to end non-existent or inactive meeting: ${id}`,
+    );
     set.status = 404;
     return { error: "Meeting not found" };
   }
@@ -246,13 +264,16 @@ export const endMeeting = async ({ params: { id }, user, set }: any) => {
     .returning();
 
   if (!updatedMeeting.length) {
+    logger.warn(
+      `User ${userEmail} failed authorization check to end meeting: ${id}`,
+    );
     set.status = 403;
     return { error: "Not authorized to end this meeting" };
   }
 
   websocketController.deleteMeeting(id);
 
-  logger.info(`User ${user.id} ended meeting '${id}'`);
+  logger.info(`User ${userEmail} successfully ended meeting '${id}'`);
 
   return {
     message: "Meeting ended",

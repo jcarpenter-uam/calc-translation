@@ -46,6 +46,10 @@ class SonioxTranscriptionService {
           ? "two_way"
           : "original";
 
+    logger.debug(
+      `Configuring Soniox session for meeting ${meetingId} (Target Language: ${targetLanguage})`,
+    );
+
     const sttConfig: any = {
       model: "stt-rt-v4",
       audio_format: "pcm_s16le",
@@ -72,11 +76,16 @@ class SonioxTranscriptionService {
     const utteranceBuffer = new RealtimeUtteranceBuffer();
 
     session.on("error", (error: any) => {
-      logger.error(`Soniox session error [${meetingId}]:`, error);
+      logger.error(
+        `Soniox session error for meeting ${meetingId} (${targetLanguage}):`,
+        error,
+      );
     });
 
     session.on("close", () => {
-      logger.warn(`Soniox session closed [${meetingId}]`);
+      logger.warn(
+        `Soniox WebSocket connection closed unexpectedly for meeting ${meetingId} (${targetLanguage})`,
+      );
     });
 
     let activeSentenceFinalTokens = "";
@@ -116,6 +125,9 @@ class SonioxTranscriptionService {
 
     // Flush any remaining tokens when the host ends the stream
     session.on("finished", () => {
+      logger.debug(
+        `Soniox session stream finished flushing for meeting ${meetingId} (${targetLanguage})`,
+      );
       const utterance = utteranceBuffer.markEndpoint();
       if (utterance) {
         onTranscriptionReady(utterance.text, targetLanguage, true);
@@ -123,11 +135,32 @@ class SonioxTranscriptionService {
     });
 
     return {
-      connect: async () => await session.connect(),
+      connect: async () => {
+        logger.info(
+          `Connecting Soniox session for meeting ${meetingId} (${targetLanguage})`,
+        );
+        await session.connect();
+      },
+      // Intentionally omitting logs here to prevent console spam
       sendAudio: (chunk: Buffer) => session.sendAudio(chunk),
-      pause: () => session.pause(),
-      resume: () => session.resume(),
-      finish: async () => await session.finish(),
+      pause: () => {
+        logger.debug(
+          `Pausing Soniox session for meeting ${meetingId} (${targetLanguage})`,
+        );
+        session.pause();
+      },
+      resume: () => {
+        logger.debug(
+          `Resuming Soniox session for meeting ${meetingId} (${targetLanguage})`,
+        );
+        session.resume();
+      },
+      finish: async () => {
+        logger.info(
+          `Finishing Soniox session for meeting ${meetingId} (${targetLanguage})`,
+        );
+        await session.finish();
+      },
     };
   }
 }

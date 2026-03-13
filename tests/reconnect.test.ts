@@ -1,92 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { db } from "../core/database";
-import { users } from "../models/userModel";
-import { meetings } from "../models/meetingModel";
-import { generateApiSessionToken } from "../utils/security";
 import { eq } from "drizzle-orm";
-import * as fs from "fs";
-
-const PORT = process.env.PORT || 8000;
-const BASE_URL = `http://localhost:${PORT}/api`;
-const WS_URL = `ws://localhost:${PORT}/ws`;
-const AUDIO_FILE = "./tests/samples/sample.raw";
-
-// Load audio file into memory once
-const audioData = fs.readFileSync(AUDIO_FILE);
-
-/**
- * Helper to seed a test user into the database and generate a session token.
- */
-async function createTestUser(id: string, name: string, languageCode: string) {
-  await db
-    .insert(users)
-    .values({ id, name, email: `${id}@test.com`, languageCode })
-    .onConflictDoUpdate({
-      target: users.id,
-      set: { languageCode },
-    });
-
-  const token = await generateApiSessionToken(id, "test-tenant");
-  return { id, token, languageCode };
-}
-
-/**
- * Helper to make authenticated POST requests to the API.
- */
-async function apiFetch(path: string, token: string, body?: any) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
-    headers: {
-      Cookie: `auth_session=${token}`,
-      "Content-Type": "application/json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
-}
-
-/**
- * Helper to continuously stream PCM audio chunks to a WebSocket for a set duration.
- * Loops the audio buffer if the duration exceeds the file length.
- */
-function streamAudio(ws: WebSocket, durationMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    let offset = 0;
-    const chunkSize = 3200; // ~100ms of 16kHz PCM audio
-
-    const interval = setInterval(() => {
-      if (ws.readyState === 1) {
-        // 1 = OPEN
-        // Loop the audio file if we hit the end
-        if (offset >= audioData.length) offset = 0;
-        const end = Math.min(offset + chunkSize, audioData.length);
-        ws.send(audioData.subarray(offset, end));
-        offset += chunkSize;
-      }
-    }, 100);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      resolve();
-    }, durationMs);
-  });
-}
-
-/**
- * Helper to block execution until a specific condition is met in an event array.
- */
-async function waitForEvent(
-  messages: any[],
-  predicate: (msg: any) => boolean,
-  timeout = 10000,
-) {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    if (messages.find(predicate)) return true;
-    await new Promise((r) => setTimeout(r, 100)); // Poll every 100ms
-  }
-  throw new Error("Timeout waiting for specific WebSocket event.");
-}
+import { db } from "../core/database";
+import { meetings } from "../models/meetingModel";
+import {
+  createTestUser,
+  cleanupTestUsers,
+  apiFetch,
+  createMeeting,
+  endMeeting,
+  streamAudio,
+  waitForEvent,
+  WS_URL,
+} from "./utils/testHelpers";
 
 describe("Host Reconnection and Timeout Logic", () => {
   let host: any;
@@ -102,24 +27,31 @@ describe("Host Reconnection and Timeout Logic", () => {
   });
 
   afterAll(async () => {
+    // 1. Clean up active websockets
     for (const ws of activeSockets) {
       if (ws.readyState === 1 || ws.readyState === 0) ws.close();
     }
+
+    // 2. Clean up active meetings
     for (const meeting of createdMeetings) {
       try {
-        await apiFetch(`/meeting/end/${meeting.id}`, meeting.hostToken);
+        await endMeeting(meeting.id, meeting.hostToken);
       } catch (err) {
         console.error(`Cleanup failed for meeting ${meeting.id}:`, err);
       }
     }
+
+    // 3. Destroy all test users from the database
+    await cleanupTestUsers();
   });
 
   it("should allow host to disconnect and reconnect without ending the session", async () => {
     /* Host creates and joins meeting */
-    const createRes = await apiFetch("/meeting/create", host.token, {
+    const createRes = await createMeeting(host.token, {
       topic: "Reconnection Test",
       languages: ["en"],
     });
+
     const meetingId = createRes.meetingId;
     const readableId = createRes.readableId;
     createdMeetings.push({ id: meetingId, hostToken: host.token });
@@ -209,17 +141,19 @@ describe("Host Reconnection and Timeout Logic", () => {
     /* Proactively clean up to prevent bleeding into the next test */
     hostWs.close();
     attendeeWs.close();
-    await apiFetch(`/meeting/end/${meetingId}`, host.token);
+    await endMeeting(meetingId, host.token);
+
     const cleanupIdx = createdMeetings.findIndex((m) => m.id === meetingId);
     if (cleanupIdx > -1) createdMeetings.splice(cleanupIdx, 1);
-  }, 30000); // 30 second timeout to accommodate audio streaming delays
+  }, 30000);
 
   it("should automatically end the meeting if the host is gone for more than 60 seconds", async () => {
     /* Host starts meeting */
-    const createRes = await apiFetch("/meeting/create", host.token, {
+    const createRes = await createMeeting(host.token, {
       topic: "Timeout Test",
       languages: ["en"],
     });
+
     const meetingId = createRes.meetingId;
     const readableId = createRes.readableId;
 
@@ -250,5 +184,5 @@ describe("Host Reconnection and Timeout Logic", () => {
       .where(eq(meetings.id, meetingId));
 
     expect(dbMeeting.ended_at).not.toBeNull();
-  }, 85000); // Extended timeout to accommodate the initial audio streaming
+  }, 85000);
 });

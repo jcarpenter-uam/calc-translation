@@ -7,6 +7,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { users } from "./userModel";
+import { tenants } from "./tenantModel";
 
 export const meetings = pgTable("meetings", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -22,4 +23,5 @@ export const meetings = pgTable("meetings", {
   host_id: text("host_id").references(() => users.id),
   attendees: jsonb("attendees").$type<string[]>(),
   topic: text("topic"),
+  tenant_id: text("tenant_id").references(() => tenants.tenantId),
 });

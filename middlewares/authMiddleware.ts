@@ -107,3 +107,18 @@ export const requireWsAuth = (app: Elysia) =>
 
       logger.debug(`WS Auth: Connection authorized for ${wsUser.email}`);
     });
+
+/**
+ * Middleware: Enforces that the authenticated user has a specific role.
+ * MUST be chained after `requireAuth`.
+ */
+export const requireRole = (allowedRoles: string[]) => (app: Elysia) =>
+  app.onBeforeHandle(({ user, set }: any) => {
+    if (!user || !allowedRoles.includes(user.role)) {
+      logger.warn(
+        `User ${user?.email} attempted to access restricted route requiring roles: ${allowedRoles.join(", ")}`,
+      );
+      set.status = 403;
+      return { error: "Forbidden - Insufficient permissions" };
+    }
+  });

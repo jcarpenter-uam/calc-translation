@@ -1,7 +1,8 @@
 import { db } from "../../core/database";
 import { users } from "../../models/userModel";
 import { meetings } from "../../models/meetingModel";
-import { inArray } from "drizzle-orm";
+import { tenants } from "../../models/tenantModel";
+import { inArray, eq } from "drizzle-orm";
 import { generateApiSessionToken } from "../../utils/security";
 import * as fs from "fs";
 
@@ -23,6 +24,15 @@ export async function createTestUser(
   name: string,
   languageCode: string,
 ) {
+  // Ensure the dummy tenant exists in the database to satisfy the foreign key constraint
+  await db
+    .insert(tenants)
+    .values({
+      tenantId: "test-tenant",
+      organizationName: "Test Organization",
+    })
+    .onConflictDoNothing();
+
   await db
     .insert(users)
     .values({ id, name, email: `${id}@test.com`, languageCode })
@@ -41,23 +51,31 @@ export async function createTestUser(
 }
 
 /**
- * Bulk deletes all tracked test users from the database.
+ * Bulk deletes all tracked test users, their meetings, and the dummy tenant from the database.
  * Call this in the `afterAll` hook of your test suites.
  */
 export async function cleanupTestUsers() {
   if (createdTestUsers.length === 0) return;
 
   try {
+    // 1. Delete the meetings first to avoid foreign key errors
     await db
       .delete(meetings)
       .where(inArray(meetings.host_id, createdTestUsers));
+
+    // 2. Delete the test users
     await db.delete(users).where(inArray(users.id, createdTestUsers));
+
+    // 3. Clean up the dummy tenant
+    await db.delete(tenants).where(eq(tenants.tenantId, "test-tenant"));
+
     console.log(
-      `Destroyed ${createdTestUsers.length} test users from the database.`,
+      `Destroyed ${createdTestUsers.length} test users and the dummy tenant from the database.`,
     );
+
     createdTestUsers.length = 0; // Reset the tracker
   } catch (err) {
-    console.error("Failed to clean up test users:", err);
+    console.error("Failed to clean up test data:", err);
   }
 }
 

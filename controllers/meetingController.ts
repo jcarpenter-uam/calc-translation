@@ -3,19 +3,21 @@ import { logger } from "../core/logger";
 import { generateWsTicket } from "../utils/security";
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, or } from "drizzle-orm";
 
 /**
  * Retrieves a lightweight list of all meetings associated with the requesting user.
  * * @param {Object} context.user - The authenticated user.
  * @param {Object} context.set - The Elysia response state object.
  */
-export const getMeetingsList = async ({ user, set }: any) => {
+export const getMeetingsList = async ({ user, tenantId, set }: any) => {
   const userEmail = user?.email || user?.id || "unknown_user";
-  logger.debug(`User ${userEmail} requesting their meeting list.`);
+  logger.debug(
+    `User ${userEmail} (Role: ${user.role}) requesting meeting list.`,
+  );
 
   try {
-    const meetingList = await db
+    let query = db
       .select({
         id: meetings.id,
         readable_id: meetings.readable_id,
@@ -24,14 +26,33 @@ export const getMeetingsList = async ({ user, set }: any) => {
         started_at: meetings.started_at,
         ended_at: meetings.ended_at,
       })
-      .from(meetings)
-      .where(eq(meetings.host_id, user.id))
-      .orderBy(desc(meetings.scheduled_time));
+      .from(meetings);
+
+    // RBAC Logic Application
+    if (user.role === "super_admin") {
+      // Super admins see literally everything across all tenants
+      query = query as any;
+    } else if (user.role === "tenant_admin") {
+      // Tenant admins see all meetings, but STRICTLY within their own organization
+      query = query.where(eq(meetings.tenant_id, tenantId)) as any;
+    } else {
+      // Regular users only see meetings they host or are invited to
+      query = query.where(
+        and(
+          eq(meetings.tenant_id, tenantId), // Safety boundary
+          or(
+            eq(meetings.host_id, user.id),
+            sql`${meetings.attendees} @> ${JSON.stringify([user.id])}::jsonb`,
+          ),
+        ),
+      ) as any;
+    }
+
+    const meetingList = await query.orderBy(desc(meetings.scheduled_time));
 
     logger.info(
       `User ${userEmail} successfully retrieved ${meetingList.length} meetings.`,
     );
-
     return { meetings: meetingList };
   } catch (err) {
     logger.error(`Error fetching meeting list for ${userEmail}:`, err);
@@ -46,7 +67,12 @@ export const getMeetingsList = async ({ user, set }: any) => {
  * @param {Object} context.user - The authenticated user.
  * @param {Object} context.set - The Elysia response state object.
  */
-export const getMeetingDetails = async ({ params: { id }, user, set }: any) => {
+export const getMeetingDetails = async ({
+  params: { id },
+  user,
+  tenantId,
+  set,
+}: any) => {
   const userEmail = user?.email || user?.id || "unknown_user";
   logger.debug(`User ${userEmail} requesting details for meeting: ${id}`);
 
@@ -64,9 +90,15 @@ export const getMeetingDetails = async ({ params: { id }, user, set }: any) => {
       return { error: "Meeting not found" };
     }
 
-    // Security check: Only allow the host or a recorded attendee to view full details
+    // RBAC Security Check
     const currentAttendees = meeting.attendees || [];
-    if (meeting.host_id !== user.id && !currentAttendees.includes(user.id)) {
+    const isHost = meeting.host_id === user.id;
+    const isAttendee = currentAttendees.includes(user.id);
+    const isTenantAdmin =
+      user.role === "tenant_admin" && meeting.tenant_id === tenantId;
+    const isSuperAdmin = user.role === "super_admin";
+
+    if (!isHost && !isAttendee && !isTenantAdmin && !isSuperAdmin) {
       logger.warn(
         `User ${userEmail} denied access to view meeting details: ${id}`,
       );
@@ -77,7 +109,6 @@ export const getMeetingDetails = async ({ params: { id }, user, set }: any) => {
     logger.info(
       `User ${userEmail} successfully retrieved details for meeting: ${id}`,
     );
-
     return { meeting };
   } catch (err) {
     logger.error(
@@ -113,7 +144,7 @@ function generateReadableId() {
  * A JSON response containing the success message, the internal database UUID (`meetingId`),
  * and the public 10-digit ID (`readableId`) that users will use to join.
  */
-export const createMeeting = async ({ body, user, set }: any) => {
+export const createMeeting = async ({ body, user, tenantId, set }: any) => {
   const userEmail = user?.email || user?.id || "unknown_user";
   logger.debug(`Attempting to create a meeting for user: ${userEmail}`);
 
@@ -125,6 +156,7 @@ export const createMeeting = async ({ body, user, set }: any) => {
       readable_id: readableId,
       topic: body?.topic || "Untitled Meeting",
       host_id: user.id,
+      tenant_id: tenantId,
       attendees: [],
       languages: body?.languages || [],
       integration: body?.integration,

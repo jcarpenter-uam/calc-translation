@@ -32,6 +32,10 @@ export class WebsocketController {
 
   // --- State Management ---
   createMeeting(meetingId: string) {
+    if (this.meetings.size >= 100) {
+      throw new Error("Maximum concurrent Soniox connections reached.");
+    }
+
     // Initialize a new real-time connection to Soniox.
     // We explicitly define the PCM audio formats here so Soniox knows
     // exactly how to decode the raw bytes we send it later.

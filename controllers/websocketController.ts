@@ -69,12 +69,13 @@ export class WebsocketController {
     const session = transcriptionService.createSession(
       meetingId,
       config,
-      (text, language) => {
+      (text, language, isFinal) => {
         const payload = JSON.stringify({
           type: "transcription",
           meetingId,
           language, // Tag the payload so the frontend knows who to show this to
           text,
+          isFinal,
         });
         this.broadcastToMeeting(meetingId, payload);
       },
@@ -115,6 +116,8 @@ export class WebsocketController {
     participantId: string,
     ws: ElysiaWS<any, any, any>,
   ) {
+    this.initMeeting(meetingId);
+
     const meeting = this.meetings.get(meetingId);
     if (meeting) {
       meeting.participants.set(participantId, {
@@ -211,7 +214,7 @@ export class WebsocketController {
    * @param meetingId - The internal database ID of the target meeting.
    * @param data - The JSON string payload to send.
    */
-  private broadcastToMeeting(meetingId: string, data: any) {
+  public broadcastToMeeting(meetingId: string, data: any) {
     this.meetings
       .get(meetingId)
       ?.participants.forEach((p) => p.socket.send(data));

@@ -1,4 +1,4 @@
-import { SonioxNodeClient } from "@soniox/node";
+import { SonioxNodeClient, RealtimeUtteranceBuffer } from "@soniox/node";
 import { env } from "../core/config";
 import { logger } from "../core/logger";
 
@@ -15,7 +15,6 @@ export interface TranscriptionConfig {
 
 /**
  * An abstracted interface for a real-time transcription session.
- * This ensures consuming controllers do not depend on provider-specific types.
  */
 export interface TranscriptionSession {
   connect: () => Promise<void>;
@@ -29,21 +28,15 @@ export interface TranscriptionSession {
 class SonioxTranscriptionService {
   private client = new SonioxNodeClient({ apiKey: env.SONIOX_API_KEY });
 
-  /**
-   * Starts a new STT (Speech-to-Text) session, configures audio parameters,
-   * and sets up event listeners for incoming transcriptions.
-   *
-   * @param meetingId - The internal database ID of the associated meeting.
-   * @param config - Options for translation, diarization, and language hints.
-   * @param onTranscriptionReady - Callback triggered when transcribed text is received.
-   * @returns An abstracted TranscriptionSession object to control the stream.
-   */
   createSession(
     meetingId: string,
     config: TranscriptionConfig,
-    onTranscriptionReady: (text: string, targetLanguage: string) => void,
+    onTranscriptionReady: (
+      text: string,
+      targetLanguage: string,
+      isFinal: boolean,
+    ) => void,
   ): TranscriptionSession {
-    // Determine what language this specific session is outputting
     const targetLanguage =
       config.translation?.type === "one_way"
         ? config.translation.target_language
@@ -51,7 +44,6 @@ class SonioxTranscriptionService {
           ? "two_way"
           : "original";
 
-    // Construct the base configuration with required PCM audio settings
     const sttConfig: any = {
       model: "stt-rt-v4",
       audio_format: "pcm_s16le",
@@ -60,7 +52,6 @@ class SonioxTranscriptionService {
       enable_endpoint_detection: true,
     };
 
-    // Dynamically apply optional client configuration parameters
     if (config.enableSpeakerDiarization !== undefined) {
       sttConfig.enable_speaker_diarization = config.enableSpeakerDiarization;
     }
@@ -75,6 +66,9 @@ class SonioxTranscriptionService {
 
     const session = this.client.realtime.stt(sttConfig);
 
+    // Instantiate the official Soniox Utterance Buffer
+    const utteranceBuffer = new RealtimeUtteranceBuffer();
+
     session.on("error", (error: any) => {
       logger.error(`Soniox session error [${meetingId}]:`, error);
     });
@@ -83,15 +77,49 @@ class SonioxTranscriptionService {
       logger.warn(`Soniox session closed [${meetingId}]`);
     });
 
-    // Parse the Soniox-specific token structure and pass pure text to the callback
+    let activeSentenceFinalTokens = "";
+
     session.on("result", (result: any) => {
-      const text = result.tokens.map((t: any) => t.text).join("");
-      if (text) {
-        onTranscriptionReady(text, targetLanguage);
+      // Feed the SDK buffer so it can track the official state
+      utteranceBuffer.addResult(result);
+
+      if (!result || !result.tokens) return;
+
+      // Track the live intermediate state for the UI's real-time typing effect
+      const finalTokens = result.tokens
+        .filter((t: any) => t.is_final)
+        .map((t: any) => t.text)
+        .join("");
+      activeSentenceFinalTokens += finalTokens;
+
+      const nonFinalTokens = result.tokens
+        .filter((t: any) => !t.is_final)
+        .map((t: any) => t.text)
+        .join("");
+
+      const currentText = activeSentenceFinalTokens + nonFinalTokens;
+      if (currentText) {
+        onTranscriptionReady(currentText, targetLanguage, false);
       }
     });
 
-    // Return generic methods that the controller can safely use
+    // Use the SDK's built-in endpoint flusher for clean sentence boundaries
+    session.on("endpoint", () => {
+      const utterance = utteranceBuffer.markEndpoint();
+      if (utterance) {
+        onTranscriptionReady(utterance.text, targetLanguage, true);
+        activeSentenceFinalTokens = ""; // Reset our live tracker for the next sentence
+      }
+    });
+
+    // Flush any remaining tokens when the host ends the stream
+    session.on("finished", () => {
+      const utterance = utteranceBuffer.markEndpoint();
+      if (utterance) {
+        onTranscriptionReady(utterance.text, targetLanguage, true);
+      }
+    });
+
     return {
       connect: async () => await session.connect(),
       sendAudio: (chunk: Buffer) => session.sendAudio(chunk),
@@ -100,5 +128,4 @@ class SonioxTranscriptionService {
   }
 }
 
-// Export a singleton instance
 export const transcriptionService = new SonioxTranscriptionService();

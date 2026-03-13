@@ -5,6 +5,9 @@ import {
   type TranscriptionSession,
   type TranscriptionConfig,
 } from "../services/transcriptionService";
+import { db } from "../core/database";
+import { meetings } from "../models/meetingModel";
+import { eq } from "drizzle-orm";
 
 /**
  * Represents a single user connected via WebSocket.
@@ -19,8 +22,10 @@ interface Participant {
  */
 interface Meeting {
   id: string;
+  hostId: string | null;
   participants: Map<string, Participant>;
   audioSessions: Map<string, TranscriptionSession>;
+  hostTimeout?: ReturnType<typeof setTimeout>;
 }
 
 /**
@@ -40,13 +45,18 @@ export class WebsocketController {
   /**
    * Sets up the meeting container in memory without starting any audio sessions.
    */
-  initMeeting(meetingId: string) {
+  initMeeting(meetingId: string, hostId?: string) {
     if (!this.meetings.has(meetingId)) {
       this.meetings.set(meetingId, {
         id: meetingId,
+        hostId: hostId || null,
         participants: new Map(),
         audioSessions: new Map(),
       });
+    } else if (hostId) {
+      // Ensure hostId is attached if it was lazily created earlier
+      const meeting = this.meetings.get(meetingId)!;
+      if (!meeting.hostId) meeting.hostId = hostId;
     }
   }
 
@@ -120,6 +130,27 @@ export class WebsocketController {
 
     const meeting = this.meetings.get(meetingId);
     if (meeting) {
+      // Host reconnect logic
+      if (meeting.hostId === participantId && meeting.hostTimeout) {
+        clearTimeout(meeting.hostTimeout);
+        meeting.hostTimeout = undefined;
+
+        // Resume all active transcription streams
+        meeting.audioSessions.forEach((session) => session.resume());
+
+        logger.info(
+          `Host reconnected to meeting ${meetingId}. Sessions resumed.`,
+        );
+        this.broadcastToMeeting(
+          meetingId,
+          JSON.stringify({
+            type: "status",
+            event: "host_reconnected",
+            message: "Host reconnected. Resuming audio...",
+          }),
+        );
+      }
+
       meeting.participants.set(participantId, {
         id: participantId,
         socket: ws,
@@ -165,13 +196,69 @@ export class WebsocketController {
    */
   removeSubscriber(ws: ElysiaWS<any, any, any>) {
     this.globalSubscribers.delete(ws.id);
+    const meetingId = this.socketToMeeting.get(ws.id);
     this.socketToMeeting.delete(ws.id);
 
-    this.meetings.forEach((m) => {
-      m.participants.forEach((p, id) => {
-        if (p.socket.id === ws.id) m.participants.delete(id);
-      });
-    });
+    if (meetingId) {
+      const meeting = this.meetings.get(meetingId);
+      if (meeting) {
+        let disconnectedParticipantId: string | null = null;
+
+        meeting.participants.forEach((p, id) => {
+          if (p.socket.id === ws.id) {
+            disconnectedParticipantId = id;
+            meeting.participants.delete(id);
+          }
+        });
+
+        // Host reconnection logic
+        if (
+          disconnectedParticipantId &&
+          disconnectedParticipantId === meeting.hostId
+        ) {
+          logger.warn(
+            `Host ${meeting.hostId} disconnected from meeting ${meetingId}. Pausing sessions...`,
+          );
+
+          // Pause all active Soniox sessions
+          meeting.audioSessions.forEach((session) => session.pause());
+
+          // Notify other participants
+          this.broadcastToMeeting(
+            meetingId,
+            JSON.stringify({
+              type: "status",
+              event: "host_disconnected",
+              message:
+                "Host disconnected. Meeting will end in 60 seconds if they do not return.",
+            }),
+          );
+
+          // Set the timeout to forcefully end the meeting
+          meeting.hostTimeout = setTimeout(async () => {
+            logger.info(
+              `Host timeout reached for meeting ${meetingId}. Ending meeting.`,
+            );
+
+            try {
+              // Mark the meeting as ended in the DB
+              await db
+                .update(meetings)
+                .set({ ended_at: new Date() })
+                .where(eq(meetings.id, meetingId));
+            } catch (err) {
+              logger.error(
+                `Error updating meeting status in DB for ${meetingId}`,
+                err,
+              );
+            }
+
+            // Cleanup memory and kick everyone out
+            this.deleteMeeting(meetingId);
+          }, 60000); // 60 seconds
+        }
+      }
+    }
   }
 
   /**

@@ -19,6 +19,8 @@ export interface TranscriptionConfig {
 export interface TranscriptionSession {
   connect: () => Promise<void>;
   sendAudio: (chunk: Buffer) => void;
+  pause: () => void;
+  resume: () => void;
   finish: () => Promise<void>;
 }
 
@@ -123,6 +125,8 @@ class SonioxTranscriptionService {
     return {
       connect: async () => await session.connect(),
       sendAudio: (chunk: Buffer) => session.sendAudio(chunk),
+      pause: () => session.pause(),
+      resume: () => session.resume(),
       finish: async () => await session.finish(),
     };
   }

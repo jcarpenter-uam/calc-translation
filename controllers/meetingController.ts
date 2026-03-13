@@ -97,6 +97,8 @@ export const joinMeeting = async ({
   const internalId = dbMeeting.id;
   const isHost = dbMeeting.host_id === user.id;
 
+  websocketController.initMeeting(internalId, dbMeeting.host_id);
+
   let activeMeeting = websocketController.getMeeting(internalId);
 
   const isAudioRunning = activeMeeting
@@ -130,7 +132,6 @@ export const joinMeeting = async ({
   }
 
   if (!isAudioRunning && isHost) {
-    websocketController.initMeeting(internalId);
     activeMeeting = websocketController.getMeeting(internalId);
 
     if (method === "two_way" && currentLanguages.length >= 2) {
@@ -173,7 +174,6 @@ export const joinMeeting = async ({
     );
   }
 
-  // 3. DYNAMIC LATE-JOINER LOGIC
   // Only spin up a standalone session if the audio engines are ALREADY running,
   // and we just added a brand new language to the database in Step 1.
   if (

@@ -9,4 +9,6 @@ drizzle/
 
 # secrets
 .env
-tests/
+
+# test audio files
+tests/samples/

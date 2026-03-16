@@ -6,6 +6,32 @@ import { inArray, eq } from "drizzle-orm";
 import { generateApiSessionToken } from "../../utils/security";
 import * as fs from "fs";
 
+export interface TestUser {
+  id: string;
+  token: string;
+  languageCode: string;
+}
+
+export interface CreateMeetingResponse {
+  message: string;
+  meetingId: string;
+  readableId: string;
+}
+
+export interface JoinMeetingResponse {
+  message: string;
+  meetingId: string;
+  readableId: string;
+  token: string;
+  isActive: boolean;
+  isHost: boolean;
+}
+
+export interface EndMeetingResponse {
+  message: string;
+  meetingId: string;
+}
+
 export const PORT = process.env.PORT || 8000;
 export const BASE_URL = `http://localhost:${PORT}/api`;
 export const WS_URL = `ws://localhost:${PORT}/ws`;
@@ -23,7 +49,7 @@ export async function createTestUser(
   id: string,
   name: string,
   languageCode: string,
-) {
+): Promise<TestUser> {
   // Ensure the dummy tenant exists in the database to satisfy the foreign key constraint
   await db
     .insert(tenants)
@@ -82,7 +108,11 @@ export async function cleanupTestUsers() {
 /**
  * Executes an authenticated HTTP POST request.
  */
-export async function apiFetch(path: string, token: string, body?: any) {
+export async function apiFetch<T = any>(
+  path: string,
+  token: string,
+  body?: any,
+): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
     headers: {
@@ -92,7 +122,7 @@ export async function apiFetch(path: string, token: string, body?: any) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(`API Error [${path}]: ${await res.text()}`);
-  return res.json();
+  return (await res.json()) as T;
 }
 
 /**
@@ -101,20 +131,23 @@ export async function apiFetch(path: string, token: string, body?: any) {
 export async function createMeeting(
   token: string,
   config: { topic?: string; method?: string; languages?: string[] } = {},
-) {
+): Promise<CreateMeetingResponse> {
   const body = {
     topic: config.topic || "Test Meeting",
     method: config.method || "one_way",
     languages: config.languages || ["en"],
   };
-  return apiFetch("/meeting/create", token, body);
+  return apiFetch<CreateMeetingResponse>("/meeting/create", token, body);
 }
 
 /**
  * High-level factory to end a meeting.
  */
-export async function endMeeting(meetingId: string, hostToken: string) {
-  return apiFetch(`/meeting/end/${meetingId}`, hostToken);
+export async function endMeeting(
+  meetingId: string,
+  hostToken: string,
+): Promise<EndMeetingResponse> {
+  return apiFetch<EndMeetingResponse>(`/meeting/end/${meetingId}`, hostToken);
 }
 
 /**

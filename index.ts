@@ -8,6 +8,8 @@ import { authRoutes } from "./api/authRoutes";
 import { requireWsAuth, requireAuth } from "./middlewares/authMiddleware";
 import { metricRoutes } from "./api/metricRoutes";
 
+const requestStartTimes = new WeakMap<Request, number>();
+
 // Test DB Connection
 await testDbConnection();
 
@@ -15,6 +17,30 @@ await testDbConnection();
 await runMigrations();
 
 const app = new Elysia()
+  .onRequest(({ request }) => {
+    requestStartTimes.set(request, Date.now());
+  })
+  .onAfterHandle(({ request, set }) => {
+    const start = requestStartTimes.get(request) || Date.now();
+    const durationMs = Date.now() - start;
+    requestStartTimes.delete(request);
+
+    const url = new URL(request.url);
+    const status = typeof set.status === "number" ? set.status : 200;
+    const message = `${request.method} ${url.pathname} -> ${status} (${durationMs}ms)`;
+
+    if (status >= 500) {
+      logger.error(message);
+      return;
+    }
+
+    if (status >= 400) {
+      logger.warn(message);
+      return;
+    }
+
+    logger.debug(message);
+  })
   // Mount the isolated WebSocket routes
   .guard({}, (wsApp) => wsApp.use(requireWsAuth).use(websocketRoute))
 

@@ -28,8 +28,9 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     // Seed 5 attendees, giving some of them unique languages to test dynamic spawning
     const languages = ["en", "es", "fr", "de", "it"];
     for (let i = 0; i < 5; i++) {
+      const language = languages[i] || "en";
       attendees.push(
-        await createTestUser(`attendee-${i}`, `User ${i}`, languages[i]),
+        await createTestUser(`attendee-${i}`, `User ${i}`, language),
       );
     }
   });

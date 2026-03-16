@@ -28,7 +28,7 @@ export interface TranscriptionSession {
  * Service responsible for managing connections and interactions with the Soniox API.
  */
 class SonioxTranscriptionService {
-  private client = new SonioxNodeClient({ apiKey: env.SONIOX_API_KEY });
+  private client = new SonioxNodeClient({ api_key: env.SONIOX_API_KEY });
 
   createSession(
     meetingId: string,
@@ -46,9 +46,10 @@ class SonioxTranscriptionService {
           ? "two_way"
           : "original";
 
-    logger.debug(
-      `Configuring Soniox session for meeting ${meetingId} (Target Language: ${targetLanguage})`,
-    );
+    logger.debug("Configuring Soniox session.", {
+      meetingId,
+      targetLanguage,
+    });
 
     const sttConfig: any = {
       model: "stt-rt-v4",
@@ -76,16 +77,15 @@ class SonioxTranscriptionService {
     const utteranceBuffer = new RealtimeUtteranceBuffer();
 
     session.on("error", (error: any) => {
-      logger.error(
-        `Soniox session error for meeting ${meetingId} (${targetLanguage}):`,
-        error,
-      );
+      logger.error("Soniox session error.", { meetingId, targetLanguage, error });
     });
 
-    session.on("close", () => {
-      logger.warn(
-        `Soniox WebSocket connection closed unexpectedly for meeting ${meetingId} (${targetLanguage})`,
-      );
+    session.on("disconnected", (reason?: string) => {
+      logger.warn("Soniox session disconnected.", {
+        meetingId,
+        targetLanguage,
+        reason,
+      });
     });
 
     let activeSentenceFinalTokens = "";
@@ -136,29 +136,21 @@ class SonioxTranscriptionService {
 
     return {
       connect: async () => {
-        logger.info(
-          `Connecting Soniox session for meeting ${meetingId} (${targetLanguage})`,
-        );
+        logger.info("Connecting Soniox session.", { meetingId, targetLanguage });
         await session.connect();
       },
       // Intentionally omitting logs here to prevent console spam
       sendAudio: (chunk: Buffer) => session.sendAudio(chunk),
       pause: () => {
-        logger.debug(
-          `Pausing Soniox session for meeting ${meetingId} (${targetLanguage})`,
-        );
+        logger.debug("Pausing Soniox session.", { meetingId, targetLanguage });
         session.pause();
       },
       resume: () => {
-        logger.debug(
-          `Resuming Soniox session for meeting ${meetingId} (${targetLanguage})`,
-        );
+        logger.debug("Resuming Soniox session.", { meetingId, targetLanguage });
         session.resume();
       },
       finish: async () => {
-        logger.info(
-          `Finishing Soniox session for meeting ${meetingId} (${targetLanguage})`,
-        );
+        logger.info("Finishing Soniox session.", { meetingId, targetLanguage });
         await session.finish();
       },
     };

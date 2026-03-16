@@ -1,8 +1,13 @@
 import winston from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 
+type LogLevel = "debug" | "info" | "warn" | "error";
+
+const resolvedLogLevel = Bun.env.LOG_LEVEL as LogLevel;
+
 // Define the custom format for clean terminal output
 const consoleFormat = winston.format.combine(
+  winston.format.errors({ stack: true }),
   winston.format.colorize(),
   winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
@@ -13,38 +18,35 @@ const consoleFormat = winston.format.combine(
 
 // Define the standard JSON format for files (easier to parse later)
 const fileFormat = winston.format.combine(
+  winston.format.errors({ stack: true }),
   winston.format.timestamp(),
   winston.format.json(),
 );
 
+const transports: winston.transport[] = [
+  new winston.transports.Console({
+    format: consoleFormat,
+  }),
+  new DailyRotateFile({
+    filename: "logs/error-%DATE%.log",
+    datePattern: "YYYY-MM-DD",
+    level: "error",
+    format: fileFormat,
+    zippedArchive: true,
+    maxSize: "20m",
+    maxFiles: "14d",
+  }),
+  new DailyRotateFile({
+    filename: "logs/combined-%DATE%.log",
+    datePattern: "YYYY-MM-DD",
+    format: fileFormat,
+    zippedArchive: true,
+    maxSize: "20m",
+    maxFiles: "30d",
+  }),
+];
+
 export const logger = winston.createLogger({
-  // Only log 'info' and above in prod, but 'debug' and above in dev
-  level: Bun.env.NODE_ENV === "production" ? "info" : "debug",
-  transports: [
-    // Clean console logs
-    new winston.transports.Console({
-      format: consoleFormat,
-    }),
-
-    // File retention policy: Error logs only
-    new DailyRotateFile({
-      filename: "logs/error-%DATE%.log",
-      datePattern: "YYYY-MM-DD",
-      level: "error", // Only write errors to this file
-      format: fileFormat,
-      zippedArchive: true, // Compress old logs to save space
-      maxSize: "20m", // Rotate if the file hits 20MB
-      maxFiles: "14d", // Retention policy: Delete logs older than 14 days
-    }),
-
-    // File retention policy: All logs
-    new DailyRotateFile({
-      filename: "logs/combined-%DATE%.log",
-      datePattern: "YYYY-MM-DD",
-      format: fileFormat,
-      zippedArchive: true, // Compress old logs to save space
-      maxSize: "20m", // Rotate if the file hits 20MB
-      maxFiles: "30d", // Keep combined logs for 30 days
-    }),
-  ],
+  level: resolvedLogLevel,
+  transports,
 });

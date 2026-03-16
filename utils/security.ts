@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { env } from "../core/config";
+import { logger } from "../core/logger";
 
 // Ensure you have a strong secret in your .env file
 const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
@@ -41,6 +42,7 @@ export async function verifyToken(token: string) {
     const { payload } = await jwtVerify(token, JWT_SECRET);
     return payload;
   } catch (error) {
+    logger.debug("Token verification failed.", { error });
     return null; // Token is invalid or expired
   }
 }

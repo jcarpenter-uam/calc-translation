@@ -5,7 +5,15 @@ import { meetings } from "../models/meetingModel";
 import { tenants } from "../models/tenantModel";
 import { inArray, eq } from "drizzle-orm";
 import { generateApiSessionToken } from "../utils/security";
-import { apiFetch, BASE_URL } from "./utils/testHelpers";
+import {
+  apiFetch,
+  BASE_URL,
+  type CreateMeetingResponse,
+} from "./utils/testHelpers";
+
+interface MeetingListResponse {
+  meetings: Array<{ topic: string }>;
+}
 
 describe("Role-Based Access Control (RBAC)", () => {
   const testTenantIds = ["rbac-tenant-1", "rbac-tenant-2"];
@@ -86,15 +94,27 @@ describe("Role-Based Access Control (RBAC)", () => {
     tokens.u2 = await generateApiSessionToken("rbac_user_2", "rbac-tenant-1");
 
     // 4. Create Meetings using the API (this ensures the tenant_id gets stamped automatically based on the JWT)
-    const u1Meeting = await apiFetch("/meeting/create", tokens.u1, {
+    const u1Meeting = await apiFetch<CreateMeetingResponse>(
+      "/meeting/create",
+      tokens.u1,
+      {
       topic: "User 1 Meeting",
-    });
-    const t1AdminMeeting = await apiFetch("/meeting/create", tokens.t1admin, {
+      },
+    );
+    const t1AdminMeeting = await apiFetch<CreateMeetingResponse>(
+      "/meeting/create",
+      tokens.t1admin,
+      {
       topic: "T1 Admin Meeting",
-    });
-    const t2AdminMeeting = await apiFetch("/meeting/create", tokens.t2admin, {
+      },
+    );
+    const t2AdminMeeting = await apiFetch<CreateMeetingResponse>(
+      "/meeting/create",
+      tokens.t2admin,
+      {
       topic: "T2 Admin Meeting",
-    });
+      },
+    );
 
     meetingIds.u1 = u1Meeting.meetingId;
     meetingIds.t1admin = t1AdminMeeting.meetingId;
@@ -104,7 +124,7 @@ describe("Role-Based Access Control (RBAC)", () => {
     await db
       .update(meetings)
       .set({ attendees: ["rbac_user_2"] })
-      .where(eq(meetings.id, meetingIds.t1admin));
+      .where(eq(meetings.id, meetingIds.t1admin!));
   });
 
   afterAll(async () => {
@@ -123,7 +143,7 @@ describe("Role-Based Access Control (RBAC)", () => {
     });
 
     expect(listRes.status).toBe(200);
-    const data = await listRes.json();
+    const data = (await listRes.json()) as MeetingListResponse;
     const topics = data.meetings.map((m: any) => m.topic);
 
     expect(topics).toContain("User 1 Meeting");
@@ -143,7 +163,7 @@ describe("Role-Based Access Control (RBAC)", () => {
     const t1ListRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.t1admin}` },
     });
-    const t1Data = await t1ListRes.json();
+    const t1Data = (await t1ListRes.json()) as MeetingListResponse;
     const t1Topics = t1Data.meetings.map((m: any) => m.topic);
 
     expect(t1Topics).toContain("User 1 Meeting"); // They didn't host this, but it's in their org
@@ -163,7 +183,7 @@ describe("Role-Based Access Control (RBAC)", () => {
     const t2ListRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.t2admin}` },
     });
-    const t2Data = await t2ListRes.json();
+    const t2Data = (await t2ListRes.json()) as MeetingListResponse;
     const t2Topics = t2Data.meetings.map((m: any) => m.topic);
 
     expect(t2Topics).toContain("T2 Admin Meeting");
@@ -175,7 +195,7 @@ describe("Role-Based Access Control (RBAC)", () => {
     const u1ListRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.u1}` },
     });
-    const u1Data = await u1ListRes.json();
+    const u1Data = (await u1ListRes.json()) as MeetingListResponse;
     const u1Topics = u1Data.meetings.map((m: any) => m.topic);
 
     expect(u1Topics).toContain("User 1 Meeting"); // They hosted it
@@ -194,7 +214,7 @@ describe("Role-Based Access Control (RBAC)", () => {
     const u2ListRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.u2}` },
     });
-    const u2Data = await u2ListRes.json();
+    const u2Data = (await u2ListRes.json()) as MeetingListResponse;
     const u2Topics = u2Data.meetings.map((m: any) => m.topic);
 
     expect(u2Topics).toContain("T1 Admin Meeting"); // They didn't host it, but they are an attendee

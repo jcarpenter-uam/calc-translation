@@ -16,6 +16,31 @@ import {
   clearSessionCookie,
 } from "../utils/security";
 
+interface OAuthUserProfile {
+  id?: string;
+  sub?: string;
+  email?: string;
+  mail?: string;
+  userPrincipalName?: string;
+  name?: string;
+  displayName?: string;
+  locale?: string;
+  preferredLanguage?: string;
+}
+
+function maskEmail(email: string) {
+  const [localPart, domain] = email.split("@");
+  if (!localPart || !domain) {
+    return "invalid_email";
+  }
+
+  if (localPart.length <= 2) {
+    return `**@${domain}`;
+  }
+
+  return `${localPart[0]}***${localPart[localPart.length - 1]}@${domain}`;
+}
+
 /**
  * Retrieves and initializes the OAuth provider configuration for a specific tenant.
  *
@@ -27,9 +52,10 @@ import {
 async function getTenantAuthProvider(tenantId: string, providerType: string) {
   const normalizedProvider = providerType.toLowerCase();
 
-  logger.debug(
-    `Looking up auth config for tenant: ${tenantId}, provider: ${normalizedProvider}`,
-  );
+  logger.debug("Looking up auth config.", {
+    tenantId,
+    provider: normalizedProvider,
+  });
 
   const [config] = await db
     .select()
@@ -42,9 +68,10 @@ async function getTenantAuthProvider(tenantId: string, providerType: string) {
     );
 
   if (!config) {
-    logger.warn(
-      `Auth config not found for tenant: ${tenantId}, provider: ${providerType}`,
-    );
+    logger.warn("Auth config not found.", {
+      tenantId,
+      provider: providerType,
+    });
     throw new Error(
       `Auth config not found for tenant ${tenantId} and provider ${providerType}`,
     );
@@ -59,7 +86,7 @@ async function getTenantAuthProvider(tenantId: string, providerType: string) {
     return createEntraProvider(entraTenantId, config.clientId, decryptedSecret);
   }
 
-  logger.warn(`Unsupported provider requested: "${providerType}"`);
+  logger.warn("Unsupported provider requested.", { providerType });
   throw new Error(`Unsupported provider: "${providerType}"`);
 }
 
@@ -81,8 +108,21 @@ export const unifiedLogin = async ({
   set,
 }: any) => {
   try {
-    logger.info(`Initiating SSO login flow for: ${email}`);
-    const domain = email.split("@")[1].toLowerCase();
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const domain = normalizedEmail.split("@")[1];
+
+    if (!domain) {
+      logger.warn("Login rejected due to malformed email.", {
+        email: maskEmail(normalizedEmail),
+      });
+      set.status = 400;
+      return { error: "A valid email is required" };
+    }
+
+    logger.info("Initiating SSO login flow.", {
+      email: maskEmail(normalizedEmail),
+      domain,
+    });
 
     const [domainRecord] = await db
       .select()
@@ -90,19 +130,39 @@ export const unifiedLogin = async ({
       .where(eq(tenantDomains.domain, domain));
 
     if (!domainRecord) {
-      logger.warn(
-        `SSO login attempted for unconfigured domain: ${domain} (Email: ${email})`,
-      );
+      logger.warn("SSO login attempted for unconfigured domain.", {
+        domain,
+        email: maskEmail(normalizedEmail),
+      });
       set.status = 400;
       return { error: "SSO is not configured for this domain." };
     }
 
-    logger.debug(`Found domain record for ${domain}:`, domainRecord);
+    logger.debug("Resolved domain auth routing.", {
+      domain,
+      tenantId: domainRecord.tenantId,
+      provider: domainRecord.providerType,
+    });
 
-    const { tenantId, providerType: provider } = domainRecord;
-    const normalizedProvider = provider.toLowerCase();
+    const { tenantId, providerType } = domainRecord;
+    if (!tenantId) {
+      logger.warn("Domain record has no tenant id.", { domain });
+      set.status = 400;
+      return { error: "SSO tenant mapping is incomplete for this domain" };
+    }
 
-    const authProvider = await getTenantAuthProvider(tenantId, provider);
+    if (!providerType) {
+      logger.warn("Domain record has no provider type.", {
+        domain,
+        tenantId,
+      });
+      set.status = 400;
+      return { error: "Unsupported provider configured for this domain" };
+    }
+
+    const normalizedProvider = providerType.toLowerCase();
+
+    const authProvider = await getTenantAuthProvider(tenantId, providerType);
 
     const state = generateState();
     const codeVerifier = generateCodeVerifier();
@@ -144,12 +204,17 @@ export const unifiedLogin = async ({
     oauth_code_verifier.set({ value: codeVerifier, ...cookieOpts });
     oauth_tenant_id.set({ value: tenantId, ...cookieOpts });
 
-    logger.debug(
-      `Redirecting ${email} to ${normalizedProvider} for authentication`,
-    );
+    logger.debug("Redirecting user to identity provider.", {
+      provider: normalizedProvider,
+      tenantId,
+      email: maskEmail(normalizedEmail),
+    });
     return Response.redirect(url.href, 302);
   } catch (err) {
-    logger.error(`Unified login flow failed for email ${email}:`, err);
+    logger.error("Unified login flow failed.", {
+      email: maskEmail(String(email)),
+      err,
+    });
     set.status = 500;
     return { error: "Internal Server Error" };
   }
@@ -177,7 +242,7 @@ export const providerCallback = async ({
   cookie: { oauth_state, oauth_code_verifier, oauth_tenant_id, auth_session },
   set,
 }: any) => {
-  logger.debug(`Received OAuth callback for provider: ${provider}`);
+  logger.debug("Received OAuth callback.", { provider });
 
   const code = query.code;
   const state = query.state;
@@ -186,17 +251,15 @@ export const providerCallback = async ({
   const tenantId = oauth_tenant_id.value;
 
   if (!code || !state || !storedState || state !== storedState) {
-    logger.warn(
-      `OAuth callback failed: Invalid state or missing code for provider ${provider}`,
-    );
+    logger.warn("OAuth callback failed state validation.", { provider });
     set.status = 400;
     return { error: "Invalid state or missing code" };
   }
 
   if (!tenantId) {
-    logger.warn(
-      `OAuth callback failed: Missing tenant context in cookies for provider ${provider}`,
-    );
+    logger.warn("OAuth callback failed due to missing tenant context.", {
+      provider,
+    });
     set.status = 400;
     return {
       error:
@@ -212,7 +275,7 @@ export const providerCallback = async ({
     );
 
     let tokens;
-    let userProfile;
+    let userProfile: OAuthUserProfile | null = null;
 
     if (normalizedProvider === "google") {
       tokens = await authProvider.validateAuthorizationCode(
@@ -224,7 +287,7 @@ export const providerCallback = async ({
         "https://openidconnect.googleapis.com/v1/userinfo",
         { headers: { Authorization: `Bearer ${tokens.accessToken()}` } },
       );
-      userProfile = await response.json();
+      userProfile = (await response.json()) as OAuthUserProfile;
     } else if (normalizedProvider === "entra") {
       tokens = await authProvider.validateAuthorizationCode(
         code,
@@ -234,17 +297,47 @@ export const providerCallback = async ({
       const response = await fetch("https://graph.microsoft.com/v1.0/me", {
         headers: { Authorization: `Bearer ${tokens.accessToken()}` },
       });
-      userProfile = await response.json();
+      userProfile = (await response.json()) as OAuthUserProfile;
+    }
+
+    if (!userProfile) {
+      logger.warn("OAuth callback returned no user profile.", {
+        provider: normalizedProvider,
+        tenantId,
+      });
+      set.status = 400;
+      return { error: "Failed to fetch user profile" };
     }
 
     const userEmail =
       userProfile.email || userProfile.mail || userProfile.userPrincipalName;
 
-    logger.info(
-      `Successful ${normalizedProvider} authentication for: ${userEmail}`,
-    );
+    if (!userEmail) {
+      logger.warn("OAuth callback profile missing email.", {
+        provider: normalizedProvider,
+        tenantId,
+      });
+      set.status = 400;
+      return { error: "Identity provider did not return an email" };
+    }
+
+    logger.info("OAuth authentication succeeded.", {
+      provider: normalizedProvider,
+      tenantId,
+      email: maskEmail(userEmail),
+    });
 
     const userId = userProfile.id || userProfile.sub;
+    if (!userId) {
+      logger.warn("OAuth callback profile missing user id.", {
+        provider: normalizedProvider,
+        tenantId,
+        email: maskEmail(userEmail),
+      });
+      set.status = 400;
+      return { error: "Identity provider did not return a user id" };
+    }
+
     const userName =
       userProfile.name || userProfile.displayName || userEmail.split("@")[0];
     const userLanguage = userProfile.locale || userProfile.preferredLanguage;
@@ -267,12 +360,25 @@ export const providerCallback = async ({
       })
       .returning();
 
-    logger.debug(`User record created/updated successfully for: ${userEmail}`);
+    if (!user) {
+      logger.error("User upsert returned no record.", {
+        provider: normalizedProvider,
+        tenantId,
+        userId,
+      });
+      set.status = 500;
+      return { error: "Failed to persist user profile" };
+    }
+
+    logger.debug("User record upserted.", { userId: user.id, tenantId });
 
     const sessionToken = await generateApiSessionToken(user.id, tenantId);
     setSessionCookie(auth_session, sessionToken);
 
-    logger.debug(`Session token generated and cookie set for: ${userEmail}`);
+    logger.debug("Session token generated and cookie set.", {
+      userId: user.id,
+      tenantId,
+    });
 
     oauth_state.remove();
     oauth_code_verifier.remove();
@@ -285,10 +391,11 @@ export const providerCallback = async ({
       user,
     };
   } catch (err) {
-    logger.error(
-      `OAuth callback flow failed for ${provider} (Tenant: ${tenantId}):`,
+    logger.error("OAuth callback flow failed.", {
+      provider,
+      tenantId,
       err,
-    );
+    });
     set.status = 400;
     return { error: "Failed to validate authorization code" };
   }
@@ -306,8 +413,9 @@ export const providerCallback = async ({
 export const logout = async ({ user, set, cookie: { auth_session } }: any) => {
   clearSessionCookie(auth_session);
 
-  const userEmail = user?.email || "unknown_user";
-  logger.info(`User logged out successfully: ${userEmail}`);
+  logger.info("User logged out successfully.", {
+    userId: user?.id || "unknown_user",
+  });
 
   return { message: "Logged out successfully" };
 };

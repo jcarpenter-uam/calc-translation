@@ -15,7 +15,7 @@ import { eq } from "drizzle-orm";
 interface Participant {
   id: string;
   email: string;
-  socket: ElysiaWS<any, any, any>;
+  socket: ElysiaWS;
 }
 
 /**
@@ -38,7 +38,7 @@ export class WebsocketController {
   private meetings = new Map<string, Meeting>();
 
   // Tracks global connections by their stable string ID (`ws.id`).
-  private globalSubscribers = new Map<string, ElysiaWS<any, any, any>>();
+  private globalSubscribers = new Map<string, ElysiaWS>();
 
   // Maps a specific socket ID to a meeting ID for O(1) audio routing lookups.
   private socketToMeeting = new Map<string, string>();
@@ -48,9 +48,7 @@ export class WebsocketController {
    */
   initMeeting(meetingId: string, hostId?: string) {
     if (!this.meetings.has(meetingId)) {
-      logger.debug(
-        `Initializing new meeting container in memory: ${meetingId}`,
-      );
+      logger.debug("Initializing meeting container in memory.", { meetingId });
       this.meetings.set(meetingId, {
         id: meetingId,
         hostId: hostId || null,
@@ -61,9 +59,10 @@ export class WebsocketController {
       // Ensure hostId is attached if it was lazily created earlier
       const meeting = this.meetings.get(meetingId)!;
       if (!meeting.hostId) {
-        logger.debug(
-          `Attaching host ${hostId} to existing meeting container: ${meetingId}`,
-        );
+        logger.debug("Attaching host to existing meeting container.", {
+          hostId,
+          meetingId,
+        });
         meeting.hostId = hostId;
       }
     }
@@ -79,23 +78,23 @@ export class WebsocketController {
   ) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting) {
-      logger.warn(
-        `Attempted to add transcription session to non-existent meeting: ${meetingId}`,
-      );
+      logger.warn("Attempted to add session to missing meeting.", { meetingId });
       return null;
     }
 
     // Prevent duplicate sessions for the same language
     if (meeting.audioSessions.has(languageKey)) {
-      logger.debug(
-        `Transcription session for ${languageKey} already exists in meeting: ${meetingId}`,
-      );
+      logger.debug("Transcription session already exists.", {
+        meetingId,
+        languageKey,
+      });
       return meeting.audioSessions.get(languageKey);
     }
 
-    logger.debug(
-      `Creating new transcription session for ${languageKey} in meeting: ${meetingId}`,
-    );
+    logger.debug("Creating transcription session.", {
+      meetingId,
+      languageKey,
+    });
 
     const session = transcriptionService.createSession(
       meetingId,
@@ -121,9 +120,9 @@ export class WebsocketController {
    *
    * @param ws - The active Elysia WebSocket instance.
    */
-  addGlobalSubscriber(ws: ElysiaWS<any, any, any>) {
+  addGlobalSubscriber(ws: ElysiaWS) {
     this.globalSubscribers.set(ws.id, ws);
-    logger.debug(`Global WebSocket subscriber added: ${ws.id}`);
+    logger.debug("Global WebSocket subscriber added.", { socketId: ws.id });
   }
 
   /**
@@ -146,7 +145,7 @@ export class WebsocketController {
   joinMeeting(
     meetingId: string,
     participantId: string,
-    ws: ElysiaWS<any, any, any>,
+    ws: ElysiaWS,
   ) {
     this.initMeeting(meetingId);
 
@@ -162,9 +161,11 @@ export class WebsocketController {
         // Resume all active transcription streams
         meeting.audioSessions.forEach((session) => session.resume());
 
-        logger.info(
-          `Host ${userEmail} reconnected to meeting ${meetingId}. Sessions resumed.`,
-        );
+        logger.info("Host reconnected and sessions resumed.", {
+          userId: participantId,
+          userEmail,
+          meetingId,
+        });
 
         this.broadcastToMeeting(
           meetingId,
@@ -183,9 +184,11 @@ export class WebsocketController {
       });
 
       this.socketToMeeting.set(ws.id, meetingId);
-      logger.info(
-        `User ${userEmail} successfully subscribed to WebSocket stream for meeting ${meetingId}`,
-      );
+      logger.info("User subscribed to meeting websocket stream.", {
+        userId: participantId,
+        userEmail,
+        meetingId,
+      });
     }
   }
 
@@ -199,8 +202,7 @@ export class WebsocketController {
     const meetingId = this.socketToMeeting.get(wsId);
 
     if (!meetingId) {
-      // Switched to 'warn' as this frequently occurs harmlessly if a client sends a final audio chunk right as they disconnect
-      logger.warn(
+      logger.debug(
         `Audio dropped: Socket ${wsId} is not mapped to an active meeting.`,
       );
       return;
@@ -213,10 +215,10 @@ export class WebsocketController {
         try {
           session.sendAudio(audioChunk);
         } catch (err) {
-          logger.error(
-            `Error sending audio to transcription service for meeting ${meetingId}:`,
+          logger.error("Error sending audio to transcription service.", {
+            meetingId,
             err,
-          );
+          });
         }
       });
     }
@@ -228,7 +230,7 @@ export class WebsocketController {
    *
    * @param ws - The disconnecting Elysia WebSocket instance.
    */
-  removeSubscriber(ws: ElysiaWS<any, any, any>) {
+  removeSubscriber(ws: ElysiaWS) {
     this.globalSubscribers.delete(ws.id);
     const meetingId = this.socketToMeeting.get(ws.id);
     this.socketToMeeting.delete(ws.id);
@@ -249,7 +251,12 @@ export class WebsocketController {
 
         if (disconnectedParticipantId) {
           logger.debug(
-            `User ${disconnectedParticipantEmail} removed from memory for meeting ${meetingId}`,
+            "Disconnected user removed from meeting memory.",
+            {
+              userId: disconnectedParticipantId,
+              userEmail: disconnectedParticipantEmail,
+              meetingId,
+            },
           );
         }
 
@@ -258,9 +265,11 @@ export class WebsocketController {
           disconnectedParticipantId &&
           disconnectedParticipantId === meeting.hostId
         ) {
-          logger.warn(
-            `Host ${disconnectedParticipantEmail} disconnected from meeting ${meetingId}. Pausing sessions...`,
-          );
+          logger.warn("Host disconnected; pausing sessions.", {
+            hostId: disconnectedParticipantId,
+            hostEmail: disconnectedParticipantEmail,
+            meetingId,
+          });
 
           // Pause all active Soniox sessions
           meeting.audioSessions.forEach((session) => session.pause());
@@ -278,9 +287,10 @@ export class WebsocketController {
 
           // Set the timeout to forcefully end the meeting
           meeting.hostTimeout = setTimeout(async () => {
-            logger.info(
-              `Host timeout reached for meeting ${meetingId} (${disconnectedParticipantEmail} did not return). Ending meeting.`,
-            );
+            logger.info("Host reconnect timeout reached; ending meeting.", {
+              meetingId,
+              hostEmail: disconnectedParticipantEmail,
+            });
 
             try {
               // Mark the meeting as ended in the DB
@@ -289,10 +299,10 @@ export class WebsocketController {
                 .set({ ended_at: new Date() })
                 .where(eq(meetings.id, meetingId));
             } catch (err) {
-              logger.error(
-                `Error updating meeting status in DB for timeout on ${meetingId}:`,
+              logger.error("Failed updating meeting status after host timeout.", {
+                meetingId,
                 err,
-              );
+              });
             }
 
             // Cleanup memory and kick everyone out
@@ -314,14 +324,20 @@ export class WebsocketController {
 
     if (meeting) {
       logger.info(
-        `Tearing down meeting ${id} and finishing all active audio sessions`,
+        "Tearing down meeting and finishing audio sessions.",
+        {
+          meetingId: id,
+        },
       );
 
       // Clear the timeout so it doesn't fire a minute from now
       if (meeting.hostTimeout) {
         clearTimeout(meeting.hostTimeout);
         logger.debug(
-          `Canceling host reconnect timeout timer for meeting: ${id}`,
+          "Canceling host reconnect timeout timer.",
+          {
+            meetingId: id,
+          },
         );
       }
 
@@ -333,7 +349,11 @@ export class WebsocketController {
       meeting.participants.forEach((p) => {
         try {
           p.socket.send(disconnectMsg);
-        } catch (e) {}
+        } catch (err) {
+          logger.debug(`Failed to send disconnect message for meeting ${id}.`, {
+            err,
+          });
+        }
       });
 
       // Finish ALL active audio sessions
@@ -341,19 +361,20 @@ export class WebsocketController {
         session
           .finish()
           .catch((err) =>
-            logger.error(
-              `Error finishing ${languageKey} audio session for ${id}:`,
+            logger.error("Failed finishing audio session.", {
               err,
-            ),
+              meetingId: id,
+              languageKey,
+            }),
           );
       });
 
       this.meetings.delete(id);
-      logger.debug(`Meeting ${id} successfully removed from memory`);
+      logger.debug("Meeting removed from memory.", { meetingId: id });
     } else {
-      logger.warn(
-        `Attempted to delete meeting ${id} from memory, but it was not found.`,
-      );
+      logger.warn("Attempted to delete meeting not found in memory.", {
+        meetingId: id,
+      });
     }
   }
 

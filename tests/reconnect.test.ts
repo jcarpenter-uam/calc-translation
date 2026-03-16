@@ -183,6 +183,10 @@ describe("Host Reconnection and Timeout Logic", () => {
       .from(meetings)
       .where(eq(meetings.id, meetingId));
 
+    if (!dbMeeting) {
+      throw new Error("Expected meeting record to exist after reconnect timeout.");
+    }
+
     expect(dbMeeting.ended_at).not.toBeNull();
   }, 85000);
 });

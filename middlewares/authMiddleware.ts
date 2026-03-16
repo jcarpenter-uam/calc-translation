@@ -14,16 +14,18 @@ async function getAuthenticatedUser(payload: any) {
     return null;
   }
 
-  logger.debug(`Fetching user record for ID: ${payload.userId}`);
+  logger.debug("Fetching user record from token payload.", {
+    userId: payload.userId,
+  });
   const [user] = await db
     .select()
     .from(users)
     .where(eq(users.id, payload.userId));
 
   if (!user) {
-    logger.warn(
-      `User ID ${payload.userId} found in token, but no matching record exists in the database.`,
-    );
+    logger.warn("Token references missing user record.", {
+      userId: payload.userId,
+    });
   }
 
   return user || null;
@@ -35,7 +37,8 @@ async function getAuthenticatedUser(payload: any) {
 export const requireAuth = (app: Elysia) =>
   app
     .derive(async ({ cookie: { auth_session } }) => {
-      const token = auth_session?.value;
+      const token =
+        typeof auth_session?.value === "string" ? auth_session.value : undefined;
 
       if (!token) {
         logger.debug("API Auth: No auth_session cookie found.");
@@ -44,9 +47,9 @@ export const requireAuth = (app: Elysia) =>
       const payload = token ? await verifyToken(token) : null;
 
       if (payload?.purpose === "websocket_ticket") {
-        logger.warn(
-          `API Auth: Rejected token with 'websocket_ticket' purpose for user ID: ${payload.userId}.`,
-        );
+        logger.warn("API auth rejected websocket ticket token.", {
+          userId: payload.userId,
+        });
         return { user: null, tenantId: null };
       }
 
@@ -60,14 +63,17 @@ export const requireAuth = (app: Elysia) =>
     .onBeforeHandle(({ user, set, request }) => {
       if (!user) {
         const url = new URL(request.url);
-        logger.warn(
-          `Unauthorized API request blocked: ${request.method} ${url.pathname}`,
-        );
+        logger.warn("Unauthorized API request blocked.", {
+          method: request.method,
+          path: url.pathname,
+        });
         set.status = 401;
         return { error: "Unauthorized - API session required" };
       }
 
-      logger.debug(`API Auth: Request authorized for ${user.email}`);
+      logger.debug("API request authorized.", {
+        userId: user.id,
+      });
     });
 
 /**
@@ -86,9 +92,9 @@ export const requireWsAuth = (app: Elysia) =>
 
       // Strict Check: Only allow tokens explicitly marked for WebSockets
       if (!payload || payload.purpose !== "websocket_ticket") {
-        logger.warn(
-          "WS Auth: Rejected ticket. Invalid payload or wrong token purpose.",
-        );
+        logger.warn("WebSocket auth rejected ticket.", {
+          reason: !payload ? "missing_payload" : "wrong_token_purpose",
+        });
         return { wsUser: null, wsTenantId: null };
       }
 
@@ -105,7 +111,9 @@ export const requireWsAuth = (app: Elysia) =>
         return "Unauthorized - Valid WebSocket ticket required";
       }
 
-      logger.debug(`WS Auth: Connection authorized for ${wsUser.email}`);
+      logger.debug("WebSocket connection authorized.", {
+        userId: wsUser.id,
+      });
     });
 
 /**
@@ -115,9 +123,11 @@ export const requireWsAuth = (app: Elysia) =>
 export const requireRole = (allowedRoles: string[]) => (app: Elysia) =>
   app.onBeforeHandle(({ user, set }: any) => {
     if (!user || !allowedRoles.includes(user.role)) {
-      logger.warn(
-        `User ${user?.email} attempted to access restricted route requiring roles: ${allowedRoles.join(", ")}`,
-      );
+      logger.warn("Access to restricted route denied by role policy.", {
+        userId: user?.id,
+        userRole: user?.role,
+        allowedRoles,
+      });
       set.status = 403;
       return { error: "Forbidden - Insufficient permissions" };
     }

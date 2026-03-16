@@ -193,6 +193,10 @@ describe("Stress Test & TTFT Measurement", () => {
       // Close sockets and remove them from the global safety tracker
       for (let i = activeSockets.length - 1; i >= 0; i--) {
         const ws = activeSockets[i];
+        if (!ws) {
+          continue;
+        }
+
         if (meetings.some((m) => ws.url.includes(m.token))) {
           ws.close();
           activeSockets.splice(i, 1);

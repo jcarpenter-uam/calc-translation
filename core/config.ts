@@ -2,11 +2,11 @@ import { z } from "zod";
 import { logger } from "./logger";
 
 const envSchema = z.object({
-  PORT: z.string().transform(Number).default("8000"),
+  PORT: z.coerce.number().default(8000),
 
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "production"]).default("development"),
+
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 
   BASE_URL: z
     .string()

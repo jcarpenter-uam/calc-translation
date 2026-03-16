@@ -11,10 +11,12 @@ import { eq, and, sql, desc, or } from "drizzle-orm";
  * @param {Object} context.set - The Elysia response state object.
  */
 export const getMeetingsList = async ({ user, tenantId, set }: any) => {
-  const userEmail = user?.email || user?.id || "unknown_user";
-  logger.debug(
-    `User ${userEmail} (Role: ${user.role}) requesting meeting list.`,
-  );
+  const userId = user?.id || "unknown_user";
+  logger.debug("Meeting list requested.", {
+    userId,
+    userRole: user.role,
+    tenantId,
+  });
 
   try {
     let query = db
@@ -50,12 +52,10 @@ export const getMeetingsList = async ({ user, tenantId, set }: any) => {
 
     const meetingList = await query.orderBy(desc(meetings.scheduled_time));
 
-    logger.info(
-      `User ${userEmail} successfully retrieved ${meetingList.length} meetings.`,
-    );
+    logger.debug("Meeting list retrieved.", { userId, count: meetingList.length });
     return { meetings: meetingList };
   } catch (err) {
-    logger.error(`Error fetching meeting list for ${userEmail}:`, err);
+    logger.error("Error fetching meeting list.", { userId, tenantId, err });
     set.status = 500;
     return { error: "Failed to fetch meetings" };
   }
@@ -73,8 +73,8 @@ export const getMeetingDetails = async ({
   tenantId,
   set,
 }: any) => {
-  const userEmail = user?.email || user?.id || "unknown_user";
-  logger.debug(`User ${userEmail} requesting details for meeting: ${id}`);
+  const userId = user?.id || "unknown_user";
+  logger.debug("Meeting details requested.", { userId, meetingId: id, tenantId });
 
   try {
     const [meeting] = await db
@@ -84,7 +84,8 @@ export const getMeetingDetails = async ({
 
     if (!meeting) {
       logger.warn(
-        `User ${userEmail} requested details for non-existent meeting: ${id}`,
+        "Meeting details requested for missing meeting.",
+        { userId, meetingId: id },
       );
       set.status = 404;
       return { error: "Meeting not found" };
@@ -100,21 +101,21 @@ export const getMeetingDetails = async ({
 
     if (!isHost && !isAttendee && !isTenantAdmin && !isSuperAdmin) {
       logger.warn(
-        `User ${userEmail} denied access to view meeting details: ${id}`,
+        "Meeting details access denied.",
+        { userId, meetingId: id, tenantId },
       );
       set.status = 403;
       return { error: "Not authorized to view this meeting" };
     }
 
-    logger.info(
-      `User ${userEmail} successfully retrieved details for meeting: ${id}`,
-    );
+    logger.debug("Meeting details retrieved.", { userId, meetingId: id });
     return { meeting };
   } catch (err) {
-    logger.error(
-      `Error fetching details for meeting ${id} by ${userEmail}:`,
+    logger.error("Error fetching meeting details.", {
+      userId,
+      meetingId: id,
       err,
-    );
+    });
     set.status = 500;
     return { error: "Failed to fetch meeting details" };
   }
@@ -145,40 +146,54 @@ function generateReadableId() {
  * and the public 10-digit ID (`readableId`) that users will use to join.
  */
 export const createMeeting = async ({ body, user, tenantId, set }: any) => {
-  const userEmail = user?.email || user?.id || "unknown_user";
-  logger.debug(`Attempting to create a meeting for user: ${userEmail}`);
+  const userId = user?.id || "unknown_user";
+  logger.debug("Attempting to create meeting.", { userId, tenantId });
 
-  const readableId = generateReadableId();
+  try {
+    const readableId = generateReadableId();
 
-  const [newMeeting] = await db
-    .insert(meetings)
-    .values({
-      readable_id: readableId,
-      topic: body?.topic || "Untitled Meeting",
-      host_id: user.id,
-      tenant_id: tenantId,
-      attendees: [],
-      languages: body?.languages || [],
-      integration: body?.integration,
-      method: body?.method || "one_way",
-      scheduled_time: body?.scheduled_time
-        ? new Date(body.scheduled_time)
-        : null,
-    })
-    .returning({
-      id: meetings.id,
-      readable_id: meetings.readable_id,
+    const [newMeeting] = await db
+      .insert(meetings)
+      .values({
+        readable_id: readableId,
+        topic: body?.topic || "Untitled Meeting",
+        host_id: user.id,
+        tenant_id: tenantId,
+        attendees: [],
+        languages: body?.languages || [],
+        integration: body?.integration,
+        method: body?.method || "one_way",
+        scheduled_time: body?.scheduled_time
+          ? new Date(body.scheduled_time)
+          : null,
+      })
+      .returning({
+        id: meetings.id,
+        readable_id: meetings.readable_id,
+      });
+
+    if (!newMeeting) {
+      logger.error("Meeting insert returned no record.", { userId, tenantId });
+      set.status = 500;
+      return { error: "Failed to create meeting" };
+    }
+
+    logger.info("Meeting created successfully.", {
+      meetingId: newMeeting.id,
+      userId,
+      tenantId,
     });
 
-  logger.info(
-    `Meeting '${newMeeting.id}' created successfully by ${userEmail}`,
-  );
-
-  return {
-    message: "Meeting created successfully",
-    meetingId: newMeeting.id,
-    readableId: newMeeting.readable_id,
-  };
+    return {
+      message: "Meeting created successfully",
+      meetingId: newMeeting.id,
+      readableId: newMeeting.readable_id,
+    };
+  } catch (err) {
+    logger.error("Failed to create meeting.", { userId, tenantId, err });
+    set.status = 500;
+    return { error: "Failed to create meeting" };
+  }
 };
 
 /**
@@ -202,149 +217,185 @@ export const joinMeeting = async ({
   tenantId,
   set,
 }: any) => {
-  const userEmail = user?.email || user?.id || "unknown_user";
+  const userId = user?.id || "unknown_user";
   const cleanReadableId = id.replace(/[\s-]/g, "");
 
-  logger.debug(
-    `User ${userEmail} attempting to join meeting with readable ID: ${cleanReadableId}`,
-  );
+  logger.debug("Attempting to join meeting.", {
+    userId,
+    readableId: cleanReadableId,
+    tenantId,
+  });
 
-  const [dbMeeting] = await db
-    .select()
-    .from(meetings)
-    .where(eq(meetings.readable_id, cleanReadableId));
+  try {
+    const [dbMeeting] = await db
+      .select()
+      .from(meetings)
+      .where(eq(meetings.readable_id, cleanReadableId));
 
-  if (!dbMeeting) {
-    logger.warn(
-      `User ${userEmail} attempted to join non-existent meeting: ${cleanReadableId}`,
-    );
-    set.status = 404;
-    return { error: "Meeting not found" };
-  }
-
-  const internalId = dbMeeting.id;
-  const isHost = dbMeeting.host_id === user.id;
-
-  websocketController.initMeeting(internalId, dbMeeting.host_id);
-
-  let activeMeeting = websocketController.getMeeting(internalId);
-
-  const isAudioRunning = activeMeeting
-    ? activeMeeting.audioSessions.size > 0
-    : false;
-
-  // Grab the existing array from the database record (fallback to empty)
-  const currentAttendees = dbMeeting.attendees || [];
-
-  // Add the user ONLY if they aren't already in the list
-  if (!currentAttendees.includes(user.id)) {
-    currentAttendees.push(user.id);
-  }
-
-  // Pass the clean TypeScript array directly to Drizzle
-  const dbUpdatePayload: any = {
-    attendees: currentAttendees,
-  };
-
-  const method = dbMeeting.method || "one_way";
-  let currentLanguages = dbMeeting.languages || [];
-  const userLanguage = user.languageCode;
-
-  if (
-    method === "one_way" &&
-    userLanguage &&
-    !currentLanguages.includes(userLanguage)
-  ) {
-    currentLanguages.push(userLanguage);
-    dbUpdatePayload.languages = currentLanguages;
-  }
-
-  if (!isAudioRunning && isHost) {
-    activeMeeting = websocketController.getMeeting(internalId);
-
-    if (method === "two_way" && currentLanguages.length >= 2) {
-      // Spin up the single bilingual session
-      const session = websocketController.addTranscriptionSession(
-        internalId,
-        "two_way",
-        {
-          enableSpeakerDiarization: true,
-          translation: {
-            type: "two_way",
-            language_a: currentLanguages[0],
-            language_b: currentLanguages[1],
-          },
-        },
+    if (!dbMeeting) {
+      logger.warn(
+        "Join attempted for missing meeting.",
+        { userId, readableId: cleanReadableId },
       );
-      await session?.connect();
-    } else {
-      // Spin up individual sessions for the pre-configured languages
-      for (const lang of currentLanguages) {
+      set.status = 404;
+      return { error: "Meeting not found" };
+    }
+
+    const internalId = dbMeeting.id;
+    const isHost = dbMeeting.host_id === user.id;
+
+    websocketController.initMeeting(internalId, dbMeeting.host_id ?? undefined);
+
+    let activeMeeting = websocketController.getMeeting(internalId);
+
+    const isAudioRunning = activeMeeting
+      ? activeMeeting.audioSessions.size > 0
+      : false;
+
+    // Grab the existing array from the database record (fallback to empty)
+    const currentAttendees = dbMeeting.attendees || [];
+
+    // Add the user ONLY if they aren't already in the list
+    if (!currentAttendees.includes(user.id)) {
+      currentAttendees.push(user.id);
+    }
+
+    // Pass the clean TypeScript array directly to Drizzle
+    const dbUpdatePayload: any = {
+      attendees: currentAttendees,
+    };
+
+    const method = dbMeeting.method || "one_way";
+    let currentLanguages = dbMeeting.languages || [];
+    const userLanguage = user.languageCode;
+
+    if (
+      method === "one_way" &&
+      userLanguage &&
+      !currentLanguages.includes(userLanguage)
+    ) {
+      currentLanguages.push(userLanguage);
+      dbUpdatePayload.languages = currentLanguages;
+    }
+
+    if (!isAudioRunning && isHost) {
+      activeMeeting = websocketController.getMeeting(internalId);
+
+      if (method === "two_way" && currentLanguages.length >= 2) {
+        const [languageA, languageB] = currentLanguages;
+        if (!languageA || !languageB) {
+          logger.warn(
+            "Skipping two-way session startup due to incomplete language configuration.",
+            { meetingId: internalId, userId },
+          );
+          set.status = 400;
+          return { error: "Meeting language configuration is incomplete" };
+        }
+
+        // Spin up the single bilingual session
         const session = websocketController.addTranscriptionSession(
           internalId,
-          lang,
+          "two_way",
           {
             enableSpeakerDiarization: true,
-            translation: { type: "one_way", target_language: lang },
+            translation: {
+              type: "two_way",
+              language_a: languageA,
+              language_b: languageB,
+            },
           },
         );
         await session?.connect();
+      } else {
+        // Spin up individual sessions for the pre-configured languages
+        for (const lang of currentLanguages) {
+          const session = websocketController.addTranscriptionSession(
+            internalId,
+            lang,
+            {
+              enableSpeakerDiarization: true,
+              translation: { type: "one_way", target_language: lang },
+            },
+          );
+          await session?.connect();
+        }
       }
+
+      logger.info("Host started meeting.", {
+        meetingId: internalId,
+        hostId: userId,
+      });
+      dbUpdatePayload.started_at = new Date();
+
+      // Notify any attendees who are already subscribed in the waiting room
+      websocketController.broadcastToMeeting(
+        internalId,
+        JSON.stringify({ type: "status", event: "meeting_started" }),
+      );
     }
 
-    logger.info(`Host ${userEmail} started meeting: '${internalId}'`);
-    dbUpdatePayload.started_at = new Date();
+    // Only spin up a standalone session if the audio engines are ALREADY running,
+    // and we just added a brand new language to the database in Step 1.
+    if (
+      isAudioRunning &&
+      method === "one_way" &&
+      userLanguage &&
+      dbUpdatePayload.languages
+    ) {
+      const newSession = websocketController.addTranscriptionSession(
+        internalId,
+        userLanguage,
+        {
+          enableSpeakerDiarization: true,
+          translation: { type: "one_way", target_language: userLanguage },
+        },
+      );
 
-    // Notify any attendees who are already subscribed in the waiting room
-    websocketController.broadcastToMeeting(
-      internalId,
-      JSON.stringify({ type: "status", event: "meeting_started" }),
-    );
-  }
+      await newSession?.connect();
+      logger.info(
+        "Started dynamic one-way session.",
+        {
+          meetingId: internalId,
+          language: userLanguage,
+          triggeredBy: userId,
+        },
+      );
+    }
 
-  // Only spin up a standalone session if the audio engines are ALREADY running,
-  // and we just added a brand new language to the database in Step 1.
-  if (
-    isAudioRunning &&
-    method === "one_way" &&
-    userLanguage &&
-    dbUpdatePayload.languages
-  ) {
-    const newSession = websocketController.addTranscriptionSession(
-      internalId,
-      userLanguage,
+    await db
+      .update(meetings)
+      .set(dbUpdatePayload)
+      .where(eq(meetings.id, internalId));
+
+    const wsTicket = await generateWsTicket(user.id, tenantId || "");
+    const isActiveNow = isAudioRunning || isHost;
+
+    logger.info(
+      "User joined meeting.",
       {
-        enableSpeakerDiarization: true,
-        translation: { type: "one_way", target_language: userLanguage },
+        meetingId: internalId,
+        userId,
+        isActive: isActiveNow,
+        isHost,
       },
     );
 
-    await newSession?.connect();
-    logger.info(
-      `Started new dynamic session for ${userLanguage} in meeting '${internalId}' triggered by ${userEmail}`,
+    return {
+      message: "Joined meeting",
+      meetingId: internalId,
+      readableId: cleanReadableId,
+      token: wsTicket,
+      isActive: isActiveNow,
+      isHost: isHost,
+    };
+  } catch (err) {
+    logger.error(
+      "Failed to join meeting.",
+      { err },
     );
+    set.status = 500;
+    return { error: "Failed to join meeting" };
   }
-
-  await db
-    .update(meetings)
-    .set(dbUpdatePayload)
-    .where(eq(meetings.id, internalId));
-
-  const wsTicket = await generateWsTicket(user.id, tenantId || "");
-  const isActiveNow = isAudioRunning || isHost;
-
-  logger.info(
-    `User ${userEmail} successfully joined meeting '${internalId}' (Active: ${isActiveNow})`,
-  );
-
-  return {
-    message: "Joined meeting",
-    meetingId: internalId,
-    readableId: cleanReadableId,
-    token: wsTicket,
-    isActive: isActiveNow,
-    isHost: isHost,
-  };
 };
 
 /**
@@ -361,38 +412,46 @@ export const joinMeeting = async ({
  * Returns a success message or an error if the user is not authorized/meeting not found.
  */
 export const endMeeting = async ({ params: { id }, user, set }: any) => {
-  const userEmail = user?.email || user?.id || "unknown_user";
-  logger.debug(`User ${userEmail} attempting to end meeting: ${id}`);
+  const userId = user?.id || "unknown_user";
+  logger.debug("Attempting to end meeting.", { userId, meetingId: id });
 
-  const meeting = websocketController.getMeeting(id);
-  if (!meeting) {
-    logger.warn(
-      `User ${userEmail} attempted to end non-existent or inactive meeting: ${id}`,
-    );
-    set.status = 404;
-    return { error: "Meeting not found" };
+  try {
+    const meeting = websocketController.getMeeting(id);
+    if (!meeting) {
+      logger.warn(
+        "Attempted to end non-existent or inactive meeting.",
+        { userId, meetingId: id },
+      );
+      set.status = 404;
+      return { error: "Meeting not found" };
+    }
+
+    const updatedMeeting = await db
+      .update(meetings)
+      .set({ ended_at: new Date() })
+      .where(and(eq(meetings.id, id), eq(meetings.host_id, user.id)))
+      .returning();
+
+    if (!updatedMeeting.length) {
+      logger.warn(
+        "Authorization check failed while ending meeting.",
+        { userId, meetingId: id },
+      );
+      set.status = 403;
+      return { error: "Not authorized to end this meeting" };
+    }
+
+    websocketController.deleteMeeting(id);
+
+    logger.info("Meeting ended successfully.", { userId, meetingId: id });
+
+    return {
+      message: "Meeting ended",
+      meetingId: id,
+    };
+  } catch (err) {
+    logger.error("Failed to end meeting.", { userId, meetingId: id, err });
+    set.status = 500;
+    return { error: "Failed to end meeting" };
   }
-
-  const updatedMeeting = await db
-    .update(meetings)
-    .set({ ended_at: new Date() })
-    .where(and(eq(meetings.id, id), eq(meetings.host_id, user.id)))
-    .returning();
-
-  if (!updatedMeeting.length) {
-    logger.warn(
-      `User ${userEmail} failed authorization check to end meeting: ${id}`,
-    );
-    set.status = 403;
-    return { error: "Not authorized to end this meeting" };
-  }
-
-  websocketController.deleteMeeting(id);
-
-  logger.info(`User ${userEmail} successfully ended meeting '${id}'`);
-
-  return {
-    message: "Meeting ended",
-    meetingId: id,
-  };
 };

@@ -7,6 +7,7 @@ import { logger } from "../core/logger";
 import { db } from "../core/database";
 import { tenantAuthConfigs, tenantDomains } from "../models/tenantModel";
 import { users } from "../models/userModel";
+import { userTenants } from "../models/userTenantModel";
 import { and, eq } from "drizzle-orm";
 import { decrypt } from "../utils/fernet";
 import { env } from "../core/config";
@@ -423,6 +424,23 @@ export const providerCallback = async ({
 
     logger.debug("User record upserted.", { userId: user.id, tenantId });
 
+    if (user.deletedAt) {
+      logger.warn("Deleted user attempted to authenticate.", {
+        userId: user.id,
+        tenantId,
+      });
+      set.status = 403;
+      return { error: "User account is deactivated" };
+    }
+
+    await db
+      .insert(userTenants)
+      .values({
+        userId: user.id,
+        tenantId,
+      })
+      .onConflictDoNothing();
+
     const sessionToken = await generateApiSessionToken(user.id, tenantId);
     setSessionCookie(auth_session, sessionToken);
 
@@ -446,21 +464,6 @@ export const providerCallback = async ({
     set.status = 400;
     return { error: "Failed to validate authorization code" };
   }
-};
-
-/**
- * Returns the current authenticated user profile for frontend session checks.
- */
-export const getMe = async ({ user, tenantId }: any) => {
-  return {
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-    },
-    tenantId,
-  };
 };
 
 /**

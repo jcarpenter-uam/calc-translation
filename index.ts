@@ -7,6 +7,7 @@ import { websocketRoute } from "./api/websocketRoute";
 import { authRoutes } from "./api/authRoutes";
 import { requireWsAuth, requireAuth } from "./middlewares/authMiddleware";
 import { metricRoutes } from "./api/metricRoutes";
+import { userRoutes } from "./api/userRoutes";
 
 const requestStartTimes = new WeakMap<Request, number>();
 
@@ -50,7 +51,7 @@ export function buildApp() {
         .use(authRoutes)
         .use(metricRoutes)
         .guard({}, (protectedApi) =>
-          protectedApi.use(requireAuth).use(meetingRoutes),
+          protectedApi.use(requireAuth).use(meetingRoutes).use(userRoutes),
         ),
     );
 }

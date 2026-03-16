@@ -2,7 +2,6 @@ import { Elysia, t } from "elysia";
 import {
   unifiedLogin,
   providerCallback,
-  getMe,
   logout,
 } from "../controllers/authController";
 import { requireAuth } from "../middlewares/authMiddleware";
@@ -31,5 +30,4 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     }),
   })
   .use(requireAuth)
-  .get("/me", getMe)
   .post("/logout", logout);

@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 import { verifyToken } from "../utils/security";
 import { db } from "../core/database";
 import { users } from "../models/userModel";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "../core/logger";
 
 /**
@@ -20,7 +20,7 @@ async function getAuthenticatedUser(payload: any) {
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.id, payload.userId));
+    .where(and(eq(users.id, payload.userId), isNull(users.deletedAt)));
 
   if (!user) {
     logger.warn("Token references missing user record.", {

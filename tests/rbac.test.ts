@@ -26,10 +26,9 @@ describe("Role-Based Access Control (RBAC)", () => {
   ];
 
   let tokens: Record<string, string> = {};
-  let meetingIds: Record<string, string> = {}; // Stores internal UUIDs to test the detail endpoint
+  let meetingIds: Record<string, string> = {};
 
   beforeAll(async () => {
-    // 1. Seed two distinct tenants
     await db
       .insert(tenants)
       .values([
@@ -38,7 +37,6 @@ describe("Role-Based Access Control (RBAC)", () => {
       ])
       .onConflictDoNothing();
 
-    // 2. Seed users with specific roles
     await db
       .insert(users)
       .values([
@@ -80,7 +78,6 @@ describe("Role-Based Access Control (RBAC)", () => {
       ])
       .onConflictDoNothing();
 
-    // 3. Mint JWTs representing the users assigned to their respective tenants
     tokens.super = await generateApiSessionToken("rbac_super", "rbac-tenant-1");
     tokens.t1admin = await generateApiSessionToken(
       "rbac_t1_admin",
@@ -93,7 +90,6 @@ describe("Role-Based Access Control (RBAC)", () => {
     tokens.u1 = await generateApiSessionToken("rbac_user_1", "rbac-tenant-1");
     tokens.u2 = await generateApiSessionToken("rbac_user_2", "rbac-tenant-1");
 
-    // 4. Create Meetings using the API (this ensures the tenant_id gets stamped automatically based on the JWT)
     const u1Meeting = await apiFetch<CreateMeetingResponse>(
       "/meeting/create",
       tokens.u1,
@@ -120,7 +116,7 @@ describe("Role-Based Access Control (RBAC)", () => {
     meetingIds.t1admin = t1AdminMeeting.meetingId;
     meetingIds.t2admin = t2AdminMeeting.meetingId;
 
-    // 5. Backdoor User 2 into the T1 Admin meeting as an attendee so we can test the attendee access logic
+    // Add User 2 as an attendee to validate attendee-level access checks.
     await db
       .update(meetings)
       .set({ attendees: ["rbac_user_2"] })
@@ -128,16 +124,12 @@ describe("Role-Based Access Control (RBAC)", () => {
   });
 
   afterAll(async () => {
-    // Teardown: Clean up meetings, users, and tenants to prevent database pollution
     await db.delete(meetings).where(inArray(meetings.host_id, testUserIds));
     await db.delete(users).where(inArray(users.id, testUserIds));
     await db.delete(tenants).where(inArray(tenants.tenantId, testTenantIds));
   });
 
-  // --- TEST CASES ---
-
   it("1. Super Admin can see all meetings across all tenants", async () => {
-    // Test the List Endpoint
     const listRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.super}` },
     });
@@ -150,7 +142,6 @@ describe("Role-Based Access Control (RBAC)", () => {
     expect(topics).toContain("T1 Admin Meeting");
     expect(topics).toContain("T2 Admin Meeting");
 
-    // Test the Detail Endpoint (Super admin querying a meeting from Tenant 2)
     const detailRes = await fetch(`${BASE_URL}/meeting/${meetingIds.t2admin}`, {
       headers: { Cookie: `auth_session=${tokens.super}` },
     });
@@ -159,18 +150,16 @@ describe("Role-Based Access Control (RBAC)", () => {
   });
 
   it("2. Tenant Admin can see all meetings across their tenant ONLY", async () => {
-    // --- Tenant 1 Admin ---
     const t1ListRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.t1admin}` },
     });
     const t1Data = (await t1ListRes.json()) as MeetingListResponse;
     const t1Topics = t1Data.meetings.map((m: any) => m.topic);
 
-    expect(t1Topics).toContain("User 1 Meeting"); // They didn't host this, but it's in their org
-    expect(t1Topics).toContain("T1 Admin Meeting"); // They hosted this
-    expect(t1Topics).not.toContain("T2 Admin Meeting"); // Different org, should be hidden!
+    expect(t1Topics).toContain("User 1 Meeting");
+    expect(t1Topics).toContain("T1 Admin Meeting");
+    expect(t1Topics).not.toContain("T2 Admin Meeting");
 
-    // Ensure Tenant 1 Admin gets a 403 Forbidden if they try to fetch Tenant 2's meeting details directly
     const crossTenantRes = await fetch(
       `${BASE_URL}/meeting/${meetingIds.t2admin}`,
       {
@@ -179,7 +168,6 @@ describe("Role-Based Access Control (RBAC)", () => {
     );
     expect(crossTenantRes.status).toBe(403);
 
-    // --- Tenant 2 Admin ---
     const t2ListRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.t2admin}` },
     });
@@ -191,17 +179,15 @@ describe("Role-Based Access Control (RBAC)", () => {
   });
 
   it("3. Regular User can only see meetings they hosted or explicitly attended", async () => {
-    // --- User 1 (The Host) ---
     const u1ListRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.u1}` },
     });
     const u1Data = (await u1ListRes.json()) as MeetingListResponse;
     const u1Topics = u1Data.meetings.map((m: any) => m.topic);
 
-    expect(u1Topics).toContain("User 1 Meeting"); // They hosted it
-    expect(u1Topics).not.toContain("T1 Admin Meeting"); // Same tenant, but they weren't invited!
+    expect(u1Topics).toContain("User 1 Meeting");
+    expect(u1Topics).not.toContain("T1 Admin Meeting");
 
-    // Ensure User 1 gets 403 on a meeting in their tenant they didn't attend
     const u1DetailRes = await fetch(
       `${BASE_URL}/meeting/${meetingIds.t1admin}`,
       {
@@ -210,17 +196,15 @@ describe("Role-Based Access Control (RBAC)", () => {
     );
     expect(u1DetailRes.status).toBe(403);
 
-    // --- User 2 (The Attendee) ---
     const u2ListRes = await fetch(`${BASE_URL}/meeting/list`, {
       headers: { Cookie: `auth_session=${tokens.u2}` },
     });
     const u2Data = (await u2ListRes.json()) as MeetingListResponse;
     const u2Topics = u2Data.meetings.map((m: any) => m.topic);
 
-    expect(u2Topics).toContain("T1 Admin Meeting"); // They didn't host it, but they are an attendee
-    expect(u2Topics).not.toContain("User 1 Meeting"); // They are not an attendee here
+    expect(u2Topics).toContain("T1 Admin Meeting");
+    expect(u2Topics).not.toContain("User 1 Meeting");
 
-    // Ensure User 2 gets 200 OK on the meeting they attended
     const u2DetailRes = await fetch(
       `${BASE_URL}/meeting/${meetingIds.t1admin}`,
       {

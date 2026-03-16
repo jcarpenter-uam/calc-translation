@@ -28,6 +28,9 @@ interface OAuthUserProfile {
   preferredLanguage?: string;
 }
 
+/**
+ * Masks an email address for safe logging.
+ */
 function maskEmail(email: string) {
   const [localPart, domain] = email.split("@");
   if (!localPart || !domain) {
@@ -42,12 +45,7 @@ function maskEmail(email: string) {
 }
 
 /**
- * Retrieves and initializes the OAuth provider configuration for a specific tenant.
- *
- * @param {string} tenantId - The unique identifier for the tenant.
- * @param {string} providerType - The type of provider (e.g., 'google' or 'entra').
- * @returns {Promise<any>} The initialized Arctic authentication provider instance.
- * @throws {Error} If the configuration is missing or the provider is unsupported.
+ * Resolves and initializes an OAuth provider for a tenant.
  */
 async function getTenantAuthProvider(tenantId: string, providerType: string) {
   const normalizedProvider = providerType.toLowerCase();
@@ -91,16 +89,7 @@ async function getTenantAuthProvider(tenantId: string, providerType: string) {
 }
 
 /**
- * Initiates the unified SSO login flow.
- * Looks up the user's email domain to find their tenant, initializes the correct OAuth
- * provider, sets secure temporary cookies, and redirects the user to the provider's login page.
- *
- * @param {Object} context - The Elysia request context.
- * @param {Object} context.body - The request body.
- * @param {string} context.body.email - The email address the user is attempting to log in with.
- * @param {Object} context.cookie - The Elysia cookie jar for managing temporary OAuth state.
- * @param {Object} context.set - The Elysia response state object.
- * @returns {Promise<Response | { error: string }>} An HTTP redirect to the identity provider, or an error payload.
+ * Starts SSO login by resolving tenant domain routing and redirecting to OAuth.
  */
 export const unifiedLogin = async ({
   body: { email },
@@ -184,9 +173,10 @@ export const unifiedLogin = async ({
         "User.Read",
       ]);
     } else {
-      logger.warn(
-        `Unsupported provider configured for domain ${domain}: "${normalizedProvider}"`,
-      );
+      logger.warn("Unsupported provider configured for domain.", {
+        domain,
+        provider: normalizedProvider,
+      });
       set.status = 400;
       return { error: "Unsupported provider configured for this domain" };
     }
@@ -221,20 +211,7 @@ export const unifiedLogin = async ({
 };
 
 /**
- * Handles the callback from the OAuth identity provider.
- * Validates the authorization code against the PKCE verifier, fetches the user's profile,
- * upserts their data into the local database, and issues an internal session JWT.
- *
- * @param {Object} context - The Elysia request context.
- * @param {Object} context.params - The URL parameters.
- * @param {string} context.params.provider - The provider handling the callback (e.g., 'google').
- * @param {Object} context.query - The URL query parameters returned by the provider.
- * @param {string} context.query.code - The authorization code.
- * @param {string} context.query.state - The state string to prevent CSRF.
- * @param {Object} context.cookie - The Elysia cookie jar holding temporary OAuth state and the final session.
- * @param {Object} context.set - The Elysia response state object.
- * @returns {Promise<{ message: string, tenantId: string, provider: string, user: Object } | { error: string }>}
- * A JSON payload containing the authenticated user's details and tenant context.
+ * Completes OAuth callback validation and creates an API session.
  */
 export const providerCallback = async ({
   params: { provider },
@@ -402,13 +379,7 @@ export const providerCallback = async ({
 };
 
 /**
- * Logs out the currently authenticated user by invalidating their session cookie.
- *
- * @param {Object} context - The Elysia request context.
- * @param {Object} context.user - The user object extracted by the requireAuth middleware.
- * @param {Object} context.set - The Elysia response state object.
- * @param {Object} context.cookie - The Elysia cookie jar containing the session cookie.
- * @returns {Promise<{ message: string }>} A success message.
+ * Logs out the authenticated user by clearing the API session cookie.
  */
 export const logout = async ({ user, set, cookie: { auth_session } }: any) => {
   clearSessionCookie(auth_session);

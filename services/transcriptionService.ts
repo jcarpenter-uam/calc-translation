@@ -30,6 +30,9 @@ export interface TranscriptionSession {
 class SonioxTranscriptionService {
   private client = new SonioxNodeClient({ api_key: env.SONIOX_API_KEY });
 
+  /**
+   * Creates a realtime Soniox session bound to a meeting.
+   */
   createSession(
     meetingId: string,
     config: TranscriptionConfig,
@@ -73,7 +76,6 @@ class SonioxTranscriptionService {
 
     const session = this.client.realtime.stt(sttConfig);
 
-    // Instantiate the official Soniox Utterance Buffer
     const utteranceBuffer = new RealtimeUtteranceBuffer();
 
     session.on("error", (error: any) => {
@@ -91,12 +93,10 @@ class SonioxTranscriptionService {
     let activeSentenceFinalTokens = "";
 
     session.on("result", (result: any) => {
-      // Feed the SDK buffer so it can track the official state
       utteranceBuffer.addResult(result);
 
       if (!result || !result.tokens) return;
 
-      // Track the live intermediate state for the UI's real-time typing effect
       const finalTokens = result.tokens
         .filter((t: any) => t.is_final)
         .map((t: any) => t.text)
@@ -114,16 +114,14 @@ class SonioxTranscriptionService {
       }
     });
 
-    // Use the SDK's built-in endpoint flusher for clean sentence boundaries
     session.on("endpoint", () => {
       const utterance = utteranceBuffer.markEndpoint();
       if (utterance) {
         onTranscriptionReady(utterance.text, targetLanguage, true);
-        activeSentenceFinalTokens = ""; // Reset our live tracker for the next sentence
+        activeSentenceFinalTokens = "";
       }
     });
 
-    // Flush any remaining tokens when the host ends the stream
     session.on("finished", () => {
       logger.debug(
         `Soniox session stream finished flushing for meeting ${meetingId} (${targetLanguage})`,
@@ -139,7 +137,6 @@ class SonioxTranscriptionService {
         logger.info("Connecting Soniox session.", { meetingId, targetLanguage });
         await session.connect();
       },
-      // Intentionally omitting logs here to prevent console spam
       sendAudio: (chunk: Buffer) => session.sendAudio(chunk),
       pause: () => {
         logger.debug("Pausing Soniox session.", { meetingId, targetLanguage });
@@ -157,4 +154,7 @@ class SonioxTranscriptionService {
   }
 }
 
+/**
+ * Shared transcription service instance.
+ */
 export const transcriptionService = new SonioxTranscriptionService();

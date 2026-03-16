@@ -9,6 +9,9 @@ import {
 import { users } from "./userModel";
 import { tenants } from "./tenantModel";
 
+/**
+ * Meetings table schema.
+ */
 export const meetings = pgTable("meetings", {
   id: uuid("id").defaultRandom().primaryKey(),
   readable_id: varchar("readable_id", { length: 255 }).unique(),

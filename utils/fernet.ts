@@ -4,6 +4,9 @@ import { logger } from "../core/logger";
 
 const secret = new fernet.Secret(env.ENCRYPTION_KEY);
 
+/**
+ * Encrypts provider secrets using Fernet.
+ */
 export function encrypt(plaintext: string): string {
   try {
     const token = new fernet.Token({
@@ -11,23 +14,26 @@ export function encrypt(plaintext: string): string {
     });
     return token.encode(plaintext);
   } catch (err) {
-    logger.error("Encryption failed:", err);
+    logger.error("Encryption failed.", { err });
     throw new Error("Encryption failed");
   }
 }
 
+/**
+ * Decrypts provider secrets using Fernet.
+ */
 export function decrypt(ciphertext: string): string {
   try {
     const token = new fernet.Token({
       secret: secret,
       token: ciphertext,
-      ttl: 0, // Python's base .decrypt() doesn't enforce TTL, so we disable it here
+      // Keep TTL disabled to match Python Fernet's base decrypt behavior.
+      ttl: 0,
     });
 
-    // token.decode() validates the HMAC signature and extracts the original string
     return token.decode();
   } catch (err) {
-    logger.error("Decryption failed:", err);
+    logger.error("Decryption failed.", { err });
     throw new Error("Internal configuration error.");
   }
 }

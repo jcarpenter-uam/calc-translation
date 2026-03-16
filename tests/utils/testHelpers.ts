@@ -36,7 +36,7 @@ export const PORT = process.env.PORT || 8000;
 export const BASE_URL = `http://localhost:${PORT}/api`;
 export const WS_URL = `ws://localhost:${PORT}/ws`;
 
-// Load audio file into memory ONCE for the entire test suite
+// Load test audio once per process.
 export const AUDIO_FILE = "./tests/samples/sample.raw";
 export const audioData = fs.readFileSync(AUDIO_FILE);
 
@@ -50,7 +50,7 @@ export async function createTestUser(
   name: string,
   languageCode: string,
 ): Promise<TestUser> {
-  // Ensure the dummy tenant exists in the database to satisfy the foreign key constraint
+  // Seed the shared tenant to satisfy foreign-key constraints.
   await db
     .insert(tenants)
     .values({
@@ -67,7 +67,7 @@ export async function createTestUser(
       set: { languageCode },
     });
 
-  // Track the user ID so we can destroy it later
+  // Track user ids for teardown.
   if (!createdTestUsers.includes(id)) {
     createdTestUsers.push(id);
   }
@@ -84,22 +84,20 @@ export async function cleanupTestUsers() {
   if (createdTestUsers.length === 0) return;
 
   try {
-    // 1. Delete the meetings first to avoid foreign key errors
+    // Delete meetings before users to satisfy foreign keys.
     await db
       .delete(meetings)
       .where(inArray(meetings.host_id, createdTestUsers));
 
-    // 2. Delete the test users
     await db.delete(users).where(inArray(users.id, createdTestUsers));
 
-    // 3. Clean up the dummy tenant
     await db.delete(tenants).where(eq(tenants.tenantId, "test-tenant"));
 
     console.log(
       `Destroyed ${createdTestUsers.length} test users and the dummy tenant from the database.`,
     );
 
-    createdTestUsers.length = 0; // Reset the tracker
+    createdTestUsers.length = 0;
   } catch (err) {
     console.error("Failed to clean up test data:", err);
   }
@@ -160,7 +158,6 @@ export function streamAudio(ws: WebSocket, durationMs: number): Promise<void> {
 
     const interval = setInterval(() => {
       if (ws.readyState === 1) {
-        // 1 = OPEN
         if (offset >= audioData.length) offset = 0; // Loop if needed
         const end = Math.min(offset + chunkSize, audioData.length);
         ws.send(audioData.subarray(offset, end));

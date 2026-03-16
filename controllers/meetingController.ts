@@ -6,9 +6,7 @@ import { meetings } from "../models/meetingModel";
 import { eq, and, sql, desc, or } from "drizzle-orm";
 
 /**
- * Retrieves a lightweight list of all meetings associated with the requesting user.
- * * @param {Object} context.user - The authenticated user.
- * @param {Object} context.set - The Elysia response state object.
+ * Returns meetings visible to the requesting user under RBAC policy.
  */
 export const getMeetingsList = async ({ user, tenantId, set }: any) => {
   const userId = user?.id || "unknown_user";
@@ -30,18 +28,14 @@ export const getMeetingsList = async ({ user, tenantId, set }: any) => {
       })
       .from(meetings);
 
-    // RBAC Logic Application
     if (user.role === "super_admin") {
-      // Super admins see literally everything across all tenants
       query = query as any;
     } else if (user.role === "tenant_admin") {
-      // Tenant admins see all meetings, but STRICTLY within their own organization
       query = query.where(eq(meetings.tenant_id, tenantId)) as any;
     } else {
-      // Regular users only see meetings they host or are invited to
       query = query.where(
         and(
-          eq(meetings.tenant_id, tenantId), // Safety boundary
+          eq(meetings.tenant_id, tenantId),
           or(
             eq(meetings.host_id, user.id),
             sql`${meetings.attendees} @> ${JSON.stringify([user.id])}::jsonb`,
@@ -62,10 +56,7 @@ export const getMeetingsList = async ({ user, tenantId, set }: any) => {
 };
 
 /**
- * Retrieves the full details of a specific meeting.
- * * @param {Object} context.params.id - The internal UUID (`meetingId`) to fetch.
- * @param {Object} context.user - The authenticated user.
- * @param {Object} context.set - The Elysia response state object.
+ * Returns full details for a meeting when the user is authorized to view it.
  */
 export const getMeetingDetails = async ({
   params: { id },
@@ -91,7 +82,6 @@ export const getMeetingDetails = async ({
       return { error: "Meeting not found" };
     }
 
-    // RBAC Security Check
     const currentAttendees = meeting.attendees || [];
     const isHost = meeting.host_id === user.id;
     const isAttendee = currentAttendees.includes(user.id);
@@ -122,28 +112,14 @@ export const getMeetingDetails = async ({
 };
 
 /**
- * Generates a random 10-digit number as a string (e.g., "8234567890")
+ * Generates a public 10-digit join code.
  */
 function generateReadableId() {
   return Math.floor(1000000000 + Math.random() * 9000000000).toString();
 }
 
 /**
- * Creates a new meeting record in the database.
- * This acts as the scheduling step; the real-time transcription session
- * is not actively started in memory until the host officially joins.
- *
- * @param {Object} context - The Elysia request context.
- * @param {Object} context.body - The request payload containing meeting configuration.
- * @param {string} [context.body.topic="Untitled Meeting"] - The topic or title of the meeting.
- * @param {string[]} [context.body.languages] - An array of language codes to be transcribed.
- * @param {string} [context.body.integration] - The third-party integration used (e.g., 'zoom', 'teams').
- * @param {string|Date} [context.body.scheduled_time] - The future date/time the meeting is scheduled for.
- * @param {Object} context.user - The authenticated user object provided by the auth middleware.
- * @param {Object} context.set - The Elysia response state object (used for setting HTTP status codes).
- * @returns {Promise<{ message: string, meetingId: string, readableId: string }>}
- * A JSON response containing the success message, the internal database UUID (`meetingId`),
- * and the public 10-digit ID (`readableId`) that users will use to join.
+ * Creates a meeting record and returns its internal and public IDs.
  */
 export const createMeeting = async ({ body, user, tenantId, set }: any) => {
   const userId = user?.id || "unknown_user";
@@ -197,19 +173,7 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
 };
 
 /**
- * Joins a user to a meeting using the public readable ID.
- * If the joining user is the host and the meeting hasn't started, it dynamically
- * initializes the transcription session in memory.
- *
- * @param {Object} context - The Elysia request context.
- * @param {Object} context.params - URL parameters.
- * @param {string} context.params.id - The 10-digit public `readableId` of the meeting.
- * @param {Object} context.user - The authenticated user attempting to join.
- * @param {string} context.tenantId - The organization/tenant ID of the user.
- * @param {Object} context.set - The Elysia response state object.
- * @returns {Promise<{ message: string, meetingId: string, readableId: string, token: string, isActive: boolean, isHost: boolean } | { error: string }>}
- * Returns the WebSocket connection token and routing info. The frontend should use `isActive`
- * to determine whether to connect to the WebSocket immediately or display a Waiting Room.
+ * Joins a user to a meeting and starts transcription workers when needed.
  */
 export const joinMeeting = async ({
   params: { id },
@@ -252,15 +216,12 @@ export const joinMeeting = async ({
       ? activeMeeting.audioSessions.size > 0
       : false;
 
-    // Grab the existing array from the database record (fallback to empty)
     const currentAttendees = dbMeeting.attendees || [];
 
-    // Add the user ONLY if they aren't already in the list
     if (!currentAttendees.includes(user.id)) {
       currentAttendees.push(user.id);
     }
 
-    // Pass the clean TypeScript array directly to Drizzle
     const dbUpdatePayload: any = {
       attendees: currentAttendees,
     };
@@ -292,7 +253,6 @@ export const joinMeeting = async ({
           return { error: "Meeting language configuration is incomplete" };
         }
 
-        // Spin up the single bilingual session
         const session = websocketController.addTranscriptionSession(
           internalId,
           "two_way",
@@ -307,7 +267,6 @@ export const joinMeeting = async ({
         );
         await session?.connect();
       } else {
-        // Spin up individual sessions for the pre-configured languages
         for (const lang of currentLanguages) {
           const session = websocketController.addTranscriptionSession(
             internalId,
@@ -327,15 +286,13 @@ export const joinMeeting = async ({
       });
       dbUpdatePayload.started_at = new Date();
 
-      // Notify any attendees who are already subscribed in the waiting room
       websocketController.broadcastToMeeting(
         internalId,
         JSON.stringify({ type: "status", event: "meeting_started" }),
       );
     }
 
-    // Only spin up a standalone session if the audio engines are ALREADY running,
-    // and we just added a brand new language to the database in Step 1.
+    // Start a new one-way worker when an active meeting gains a new language.
     if (
       isAudioRunning &&
       method === "one_way" &&
@@ -399,17 +356,7 @@ export const joinMeeting = async ({
 };
 
 /**
- * Ends an active meeting.
- * Strictly verifies that the requesting user is the host before updating the
- * database timestamp, stopping the audio stream, and clearing the memory session.
- *
- * @param {Object} context - The Elysia request context.
- * @param {Object} context.params - URL parameters.
- * @param {string} context.params.id - The internal UUID (`meetingId`) of the session to end.
- * @param {Object} context.user - The authenticated user attempting to end the session.
- * @param {Object} context.set - The Elysia response state object.
- * @returns {Promise<{ message: string, meetingId: string } | { error: string }>}
- * Returns a success message or an error if the user is not authorized/meeting not found.
+ * Ends a meeting when the requester is the host.
  */
 export const endMeeting = async ({ params: { id }, user, set }: any) => {
   const userId = user?.id || "unknown_user";

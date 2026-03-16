@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { logger } from "./logger";
 
+/**
+ * Runtime environment variable schema.
+ */
 const envSchema = z.object({
   PORT: z.coerce.number().default(8000),
 
@@ -25,20 +28,19 @@ const envSchema = z.object({
   SONIOX_API_KEY: z.string({ message: "SONIOX_API_KEY must be a string" }),
 });
 
-// Validate Bun.env against the schema
 const _env = envSchema.safeParse(Bun.env);
 
 if (!_env.success) {
-  // Map over the Zod errors and format them neatly
   const errorMessages = _env.error.issues
     .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
     .join("\n");
 
-  // Pass it to the logger as a single, nicely formatted string
   logger.error(`Invalid environment variables:\n${errorMessages}`);
 
   process.exit(1);
 }
 
-// Export the validated data
+/**
+ * Validated and typed application environment variables.
+ */
 export const env = _env.data;

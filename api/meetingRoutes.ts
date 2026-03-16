@@ -7,11 +7,13 @@ import {
   endMeeting,
 } from "../controllers/meetingController";
 
+/**
+ * Meeting routes for listing, creating, joining, and ending meetings.
+ */
 export const meetingRoutes = new Elysia({ prefix: "/meeting" })
   .get("/list", getMeetingsList)
   .get("/:id", getMeetingDetails)
   .post("/create", createMeeting, {
-    // Enforce the shape of the incoming JSON body
     body: t.Object({
       topic: t.Optional(t.String()),
       languages: t.Optional(t.Array(t.String())),

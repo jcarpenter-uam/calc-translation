@@ -92,6 +92,14 @@ These conventions are inferred from existing code and should be preserved.
 - Prefer double quotes for strings.
 - Keep chained Elysia builders readable with multiline formatting.
 
+### Documentation comments
+
+- Use `/** ... */` docblocks for exported functions, classes, constants, and types.
+- Keep docblocks concise: one-line summary first, then optional `@param`, `@returns`, and `@throws` when not obvious.
+- Use `//` comments only for non-obvious implementation details, invariants, or edge-case reasoning.
+- Avoid comments that merely restate code behavior.
+- When updating code, prefer editing/removing stale comments rather than adding parallel commentary.
+
 ### TypeScript types
 
 - `tsconfig.json` has `strict: true`; keep code type-safe.

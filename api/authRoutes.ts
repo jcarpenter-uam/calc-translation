@@ -6,6 +6,9 @@ import {
 } from "../controllers/authController";
 import { requireAuth } from "../middlewares/authMiddleware";
 
+/**
+ * Authentication routes for SSO login, OAuth callback handling, and logout.
+ */
 export const authRoutes = new Elysia({ prefix: "/auth" })
   .post("/login", unifiedLogin, {
     body: t.Object({

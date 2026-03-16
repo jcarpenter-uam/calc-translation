@@ -1,8 +1,13 @@
 import { pgTable, text, pgEnum } from "drizzle-orm/pg-core";
 
-// Define the available roles
+/**
+ * Supported user roles for RBAC checks.
+ */
 export const roleEnum = pgEnum("role", ["user", "tenant_admin", "super_admin"]);
 
+/**
+ * Users table schema.
+ */
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name"),

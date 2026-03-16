@@ -34,13 +34,10 @@ interface Meeting {
  * and broadcasts text results back to connected clients.
  */
 export class WebsocketController {
-  // Master record of all active meetings and their audio sessions.
   private meetings = new Map<string, Meeting>();
 
-  // Tracks global connections by their stable string ID (`ws.id`).
   private globalSubscribers = new Map<string, ElysiaWS>();
 
-  // Maps a specific socket ID to a meeting ID for O(1) audio routing lookups.
   private socketToMeeting = new Map<string, string>();
 
   /**
@@ -56,7 +53,6 @@ export class WebsocketController {
         audioSessions: new Map(),
       });
     } else if (hostId) {
-      // Ensure hostId is attached if it was lazily created earlier
       const meeting = this.meetings.get(meetingId)!;
       if (!meeting.hostId) {
         logger.debug("Attaching host to existing meeting container.", {
@@ -82,7 +78,6 @@ export class WebsocketController {
       return null;
     }
 
-    // Prevent duplicate sessions for the same language
     if (meeting.audioSessions.has(languageKey)) {
       logger.debug("Transcription session already exists.", {
         meetingId,
@@ -153,12 +148,10 @@ export class WebsocketController {
     const userEmail = (ws.data as any)?.wsUser?.email || participantId;
 
     if (meeting) {
-      // Host reconnect logic
       if (meeting.hostId === participantId && meeting.hostTimeout) {
         clearTimeout(meeting.hostTimeout);
         meeting.hostTimeout = undefined;
 
-        // Resume all active transcription streams
         meeting.audioSessions.forEach((session) => session.resume());
 
         logger.info("Host reconnected and sessions resumed.", {
@@ -210,7 +203,6 @@ export class WebsocketController {
 
     const meeting = this.meetings.get(meetingId);
     if (meeting) {
-      // Fan-out the raw microphone audio to ALL active language sessions
       meeting.audioSessions.forEach((session) => {
         try {
           session.sendAudio(audioChunk);
@@ -271,10 +263,8 @@ export class WebsocketController {
             meetingId,
           });
 
-          // Pause all active Soniox sessions
           meeting.audioSessions.forEach((session) => session.pause());
 
-          // Notify other participants
           this.broadcastToMeeting(
             meetingId,
             JSON.stringify({
@@ -285,7 +275,6 @@ export class WebsocketController {
             }),
           );
 
-          // Set the timeout to forcefully end the meeting
           meeting.hostTimeout = setTimeout(async () => {
             logger.info("Host reconnect timeout reached; ending meeting.", {
               meetingId,
@@ -293,7 +282,6 @@ export class WebsocketController {
             });
 
             try {
-              // Mark the meeting as ended in the DB
               await db
                 .update(meetings)
                 .set({ ended_at: new Date() })
@@ -305,9 +293,8 @@ export class WebsocketController {
               });
             }
 
-            // Cleanup memory and kick everyone out
             this.deleteMeeting(meetingId);
-          }, 60000); // 60 seconds
+          }, 60000);
         }
       }
     }
@@ -330,7 +317,6 @@ export class WebsocketController {
         },
       );
 
-      // Clear the timeout so it doesn't fire a minute from now
       if (meeting.hostTimeout) {
         clearTimeout(meeting.hostTimeout);
         logger.debug(
@@ -356,7 +342,6 @@ export class WebsocketController {
         }
       });
 
-      // Finish ALL active audio sessions
       meeting.audioSessions.forEach((session, languageKey) => {
         session
           .finish()
@@ -400,4 +385,7 @@ export class WebsocketController {
   }
 }
 
+/**
+ * Shared WebSocket controller instance.
+ */
 export const websocketController = new WebsocketController();

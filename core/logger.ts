@@ -1,11 +1,13 @@
 import winston from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 
+/**
+ * Supported application log levels.
+ */
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const resolvedLogLevel = Bun.env.LOG_LEVEL as LogLevel;
 
-// Define the custom format for clean terminal output
 const consoleFormat = winston.format.combine(
   winston.format.errors({ stack: true }),
   winston.format.colorize(),
@@ -16,7 +18,6 @@ const consoleFormat = winston.format.combine(
   }),
 );
 
-// Define the standard JSON format for files (easier to parse later)
 const fileFormat = winston.format.combine(
   winston.format.errors({ stack: true }),
   winston.format.timestamp(),
@@ -46,6 +47,9 @@ const transports: winston.transport[] = [
   }),
 ];
 
+/**
+ * Shared Winston logger with console and rotating file transports.
+ */
 export const logger = winston.createLogger({
   level: resolvedLogLevel,
   transports,

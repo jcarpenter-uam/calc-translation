@@ -3,11 +3,14 @@ import { db } from "../core/database";
 import { users } from "../models/userModel";
 import { meetings } from "../models/meetingModel";
 import { tenants } from "../models/tenantModel";
-import { inArray, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { generateApiSessionToken } from "../utils/security";
 import {
   apiFetch,
   BASE_URL,
+  trackTestUsers,
+  trackTestTenants,
+  cleanupTestData,
   type CreateMeetingResponse,
 } from "./utils/testHelpers";
 
@@ -29,6 +32,9 @@ describe("Role-Based Access Control (RBAC)", () => {
   let meetingIds: Record<string, string> = {};
 
   beforeAll(async () => {
+    trackTestTenants(...testTenantIds);
+    trackTestUsers(...testUserIds);
+
     await db
       .insert(tenants)
       .values([
@@ -124,9 +130,7 @@ describe("Role-Based Access Control (RBAC)", () => {
   });
 
   afterAll(async () => {
-    await db.delete(meetings).where(inArray(meetings.host_id, testUserIds));
-    await db.delete(users).where(inArray(users.id, testUserIds));
-    await db.delete(tenants).where(inArray(tenants.tenantId, testTenantIds));
+    await cleanupTestData();
   });
 
   it("1. Super Admin can see all meetings across all tenants", async () => {

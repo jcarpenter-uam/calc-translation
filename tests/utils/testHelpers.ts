@@ -1,8 +1,12 @@
 import { db } from "../../core/database";
 import { users } from "../../models/userModel";
 import { meetings } from "../../models/meetingModel";
-import { tenants } from "../../models/tenantModel";
-import { inArray, eq } from "drizzle-orm";
+import {
+  tenants,
+  tenantDomains,
+  tenantAuthConfigs,
+} from "../../models/tenantModel";
+import { inArray } from "drizzle-orm";
 import { generateApiSessionToken } from "../../utils/security";
 import * as fs from "fs";
 
@@ -41,6 +45,29 @@ export const AUDIO_FILE = "./tests/samples/sample.raw";
 export const audioData = fs.readFileSync(AUDIO_FILE);
 
 const createdTestUsers: string[] = [];
+const createdTestTenants: string[] = [];
+
+/**
+ * Tracks test tenant ids for teardown.
+ */
+export function trackTestTenants(...tenantIds: string[]) {
+  for (const tenantId of tenantIds) {
+    if (!createdTestTenants.includes(tenantId)) {
+      createdTestTenants.push(tenantId);
+    }
+  }
+}
+
+/**
+ * Tracks test user ids for teardown.
+ */
+export function trackTestUsers(...userIds: string[]) {
+  for (const userId of userIds) {
+    if (!createdTestUsers.includes(userId)) {
+      createdTestUsers.push(userId);
+    }
+  }
+}
 
 /**
  * Creates or updates a test user in the database and generates an auth token.
@@ -59,6 +86,8 @@ export async function createTestUser(
     })
     .onConflictDoNothing();
 
+  trackTestTenants("test-tenant");
+
   await db
     .insert(users)
     .values({ id, name, email: `${id}@test.com`, languageCode })
@@ -67,40 +96,74 @@ export async function createTestUser(
       set: { languageCode },
     });
 
-  // Track user ids for teardown.
-  if (!createdTestUsers.includes(id)) {
-    createdTestUsers.push(id);
-  }
+  trackTestUsers(id);
 
   const token = await generateApiSessionToken(id, "test-tenant");
   return { id, token, languageCode };
 }
 
 /**
- * Bulk deletes all tracked test users, their meetings, and the dummy tenant from the database.
- * Call this in the `afterAll` hook of your test suites.
+ * Bulk deletes tracked meetings, users, tenant domains/configs, and tenants.
+ * Deletion order is foreign-key safe for the current schema.
  */
-export async function cleanupTestUsers() {
-  if (createdTestUsers.length === 0) return;
+export async function cleanupTestData() {
+  if (createdTestUsers.length === 0 && createdTestTenants.length === 0) {
+    return;
+  }
 
   try {
-    // Delete meetings before users to satisfy foreign keys.
-    await db
-      .delete(meetings)
-      .where(inArray(meetings.host_id, createdTestUsers));
+    if (createdTestUsers.length > 0 && createdTestTenants.length > 0) {
+      await db
+        .delete(meetings)
+        .where(inArray(meetings.host_id, createdTestUsers));
 
-    await db.delete(users).where(inArray(users.id, createdTestUsers));
+      await db
+        .delete(meetings)
+        .where(inArray(meetings.tenant_id, createdTestTenants));
+    } else if (createdTestUsers.length > 0) {
+      await db
+        .delete(meetings)
+        .where(inArray(meetings.host_id, createdTestUsers));
+    } else if (createdTestTenants.length > 0) {
+      await db
+        .delete(meetings)
+        .where(inArray(meetings.tenant_id, createdTestTenants));
+    }
 
-    await db.delete(tenants).where(eq(tenants.tenantId, "test-tenant"));
+    if (createdTestUsers.length > 0) {
+      await db.delete(users).where(inArray(users.id, createdTestUsers));
+    }
+
+    if (createdTestTenants.length > 0) {
+      await db
+        .delete(tenantDomains)
+        .where(inArray(tenantDomains.tenantId, createdTestTenants));
+
+      await db
+        .delete(tenantAuthConfigs)
+        .where(inArray(tenantAuthConfigs.tenantId, createdTestTenants));
+
+      await db
+        .delete(tenants)
+        .where(inArray(tenants.tenantId, createdTestTenants));
+    }
 
     console.log(
-      `Destroyed ${createdTestUsers.length} test users and the dummy tenant from the database.`,
+      `Destroyed ${createdTestUsers.length} test users and ${createdTestTenants.length} test tenants (plus domains, auth configs, and meetings).`,
     );
 
     createdTestUsers.length = 0;
+    createdTestTenants.length = 0;
   } catch (err) {
     console.error("Failed to clean up test data:", err);
   }
+}
+
+/**
+ * Backward-compatible alias for existing tests.
+ */
+export async function cleanupTestUsers() {
+  await cleanupTestData();
 }
 
 /**

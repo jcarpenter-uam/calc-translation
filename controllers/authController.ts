@@ -29,6 +29,53 @@ interface OAuthUserProfile {
 }
 
 /**
+ * Resolves a safe post-login redirect URL from a user-provided value.
+ */
+function resolveSafeReturnTo(value: unknown): string | null {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+
+  const allowedDevOrigins = new Set([
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5174",
+    "http://localhost:5174",
+  ]);
+
+  if (env.NODE_ENV !== "production") {
+    if (!allowedDevOrigins.has(parsed.origin)) {
+      return null;
+    }
+
+    return parsed.toString();
+  }
+
+  const appOrigin = new URL(env.BASE_URL).origin;
+  if (parsed.origin !== appOrigin) {
+    return null;
+  }
+
+  return parsed.toString();
+}
+
+/**
+ * Returns the default frontend URL for redirecting after auth.
+ */
+function getDefaultReturnTo() {
+  return env.NODE_ENV === "production"
+    ? new URL(env.BASE_URL).toString()
+    : "http://localhost:5173/";
+}
+
+/**
  * Masks an email address for safe logging.
  */
 function maskEmail(email: string) {
@@ -47,7 +94,11 @@ function maskEmail(email: string) {
 /**
  * Resolves and initializes an OAuth provider for a tenant.
  */
-async function getTenantAuthProvider(tenantId: string, providerType: string) {
+async function getTenantAuthProvider(
+  tenantId: string,
+  providerType: string,
+  callbackBaseUrl?: string,
+) {
   const normalizedProvider = providerType.toLowerCase();
 
   logger.debug("Looking up auth config.", {
@@ -78,10 +129,15 @@ async function getTenantAuthProvider(tenantId: string, providerType: string) {
   const decryptedSecret = decrypt(config.clientSecretEncrypted);
 
   if (normalizedProvider === "google") {
-    return createGoogleProvider(config.clientId, decryptedSecret);
+    return createGoogleProvider(config.clientId, decryptedSecret, callbackBaseUrl);
   } else if (normalizedProvider === "entra") {
     const entraTenantId = config.tenantHint || "common";
-    return createEntraProvider(entraTenantId, config.clientId, decryptedSecret);
+    return createEntraProvider(
+      entraTenantId,
+      config.clientId,
+      decryptedSecret,
+      callbackBaseUrl,
+    );
   }
 
   logger.warn("Unsupported provider requested.", { providerType });
@@ -92,12 +148,21 @@ async function getTenantAuthProvider(tenantId: string, providerType: string) {
  * Starts SSO login by resolving tenant domain routing and redirecting to OAuth.
  */
 export const unifiedLogin = async ({
-  body: { email },
-  cookie: { oauth_state, oauth_code_verifier, oauth_tenant_id },
+  body,
+  query,
+  cookie: {
+    oauth_state,
+    oauth_code_verifier,
+    oauth_tenant_id,
+    oauth_return_to,
+  },
   set,
 }: any) => {
+  const rawEmail = String(body?.email ?? query?.email ?? "");
+  const returnTo = body?.returnTo ?? query?.returnTo;
+
   try {
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedEmail = rawEmail.trim().toLowerCase();
     const domain = normalizedEmail.split("@")[1];
 
     if (!domain) {
@@ -149,6 +214,7 @@ export const unifiedLogin = async ({
       return { error: "Unsupported provider configured for this domain" };
     }
 
+    const safeReturnTo = resolveSafeReturnTo(returnTo) || getDefaultReturnTo();
     const normalizedProvider = providerType.toLowerCase();
 
     const authProvider = await getTenantAuthProvider(tenantId, providerType);
@@ -181,7 +247,7 @@ export const unifiedLogin = async ({
       return { error: "Unsupported provider configured for this domain" };
     }
 
-    url.searchParams.set("login_hint", email);
+    url.searchParams.set("login_hint", rawEmail);
 
     const cookieOpts = {
       path: "/",
@@ -193,6 +259,7 @@ export const unifiedLogin = async ({
     oauth_state.set({ value: state, ...cookieOpts });
     oauth_code_verifier.set({ value: codeVerifier, ...cookieOpts });
     oauth_tenant_id.set({ value: tenantId, ...cookieOpts });
+    oauth_return_to.set({ value: safeReturnTo, ...cookieOpts });
 
     logger.debug("Redirecting user to identity provider.", {
       provider: normalizedProvider,
@@ -202,7 +269,7 @@ export const unifiedLogin = async ({
     return Response.redirect(url.href, 302);
   } catch (err) {
     logger.error("Unified login flow failed.", {
-      email: maskEmail(String(email)),
+      email: maskEmail(rawEmail),
       err,
     });
     set.status = 500;
@@ -216,7 +283,13 @@ export const unifiedLogin = async ({
 export const providerCallback = async ({
   params: { provider },
   query,
-  cookie: { oauth_state, oauth_code_verifier, oauth_tenant_id, auth_session },
+  cookie: {
+    oauth_state,
+    oauth_code_verifier,
+    oauth_tenant_id,
+    oauth_return_to,
+    auth_session,
+  },
   set,
 }: any) => {
   logger.debug("Received OAuth callback.", { provider });
@@ -226,6 +299,7 @@ export const providerCallback = async ({
   const storedState = oauth_state.value;
   const storedCodeVerifier = oauth_code_verifier.value;
   const tenantId = oauth_tenant_id.value;
+  const returnTo = resolveSafeReturnTo(oauth_return_to.value);
 
   if (!code || !state || !storedState || state !== storedState) {
     logger.warn("OAuth callback failed state validation.", { provider });
@@ -360,13 +434,9 @@ export const providerCallback = async ({
     oauth_state.remove();
     oauth_code_verifier.remove();
     oauth_tenant_id.remove();
+    oauth_return_to.remove();
 
-    return {
-      message: "Authentication successful",
-      tenantId,
-      provider: normalizedProvider,
-      user,
-    };
+    return Response.redirect(returnTo || getDefaultReturnTo(), 302);
   } catch (err) {
     logger.error("OAuth callback flow failed.", {
       provider,
@@ -376,6 +446,21 @@ export const providerCallback = async ({
     set.status = 400;
     return { error: "Failed to validate authorization code" };
   }
+};
+
+/**
+ * Returns the current authenticated user profile for frontend session checks.
+ */
+export const getMe = async ({ user, tenantId }: any) => {
+  return {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+    tenantId,
+  };
 };
 
 /**

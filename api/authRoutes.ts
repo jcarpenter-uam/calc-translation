@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import {
   unifiedLogin,
   providerCallback,
+  getMe,
   logout,
 } from "../controllers/authController";
 import { requireAuth } from "../middlewares/authMiddleware";
@@ -10,12 +11,13 @@ import { requireAuth } from "../middlewares/authMiddleware";
  * Authentication routes for SSO login, OAuth callback handling, and logout.
  */
 export const authRoutes = new Elysia({ prefix: "/auth" })
-  .post("/login", unifiedLogin, {
-    body: t.Object({
+  .get("/login", unifiedLogin, {
+    query: t.Object({
       email: t.String({
         format: "email",
         message: "A valid email is required",
       }),
+      returnTo: t.Optional(t.String()),
     }),
   })
   .get("/callback/:provider", providerCallback, {
@@ -29,4 +31,5 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     }),
   })
   .use(requireAuth)
+  .get("/me", getMe)
   .post("/logout", logout);

@@ -16,6 +16,7 @@ import {
   setSessionCookie,
   clearSessionCookie,
 } from "../utils/security";
+import { syncCalendarEventsForUser } from "../services/calendarSyncService";
 
 interface OAuthUserProfile {
   id?: string;
@@ -445,6 +446,24 @@ export const providerCallback = async ({
         tenantId,
       })
       .onConflictDoNothing();
+
+    if (tokens?.accessToken) {
+      try {
+        await syncCalendarEventsForUser({
+          provider: normalizedProvider as "google" | "entra",
+          accessToken: tokens.accessToken(),
+          userId: user.id,
+          tenantId,
+        });
+      } catch (syncErr) {
+        logger.warn("Calendar sync failed after successful OAuth login.", {
+          provider: normalizedProvider,
+          tenantId,
+          userId: user.id,
+          err: syncErr,
+        });
+      }
+    }
 
     const sessionToken = await generateApiSessionToken(user.id, tenantId);
     setSessionCookie(auth_session, sessionToken);

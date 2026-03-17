@@ -8,7 +8,7 @@ import { db } from "../core/database";
 import { tenantAuthConfigs, tenantDomains } from "../models/tenantModel";
 import { users } from "../models/userModel";
 import { userTenants } from "../models/userTenantModel";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { decrypt } from "../utils/fernet";
 import { env } from "../core/config";
 import {
@@ -130,7 +130,11 @@ async function getTenantAuthProvider(
   const decryptedSecret = decrypt(config.clientSecretEncrypted);
 
   if (normalizedProvider === "google") {
-    return createGoogleProvider(config.clientId, decryptedSecret, callbackBaseUrl);
+    return createGoogleProvider(
+      config.clientId,
+      decryptedSecret,
+      callbackBaseUrl,
+    );
   } else if (normalizedProvider === "entra") {
     const entraTenantId = config.tenantHint || "common";
     return createEntraProvider(
@@ -392,7 +396,8 @@ export const providerCallback = async ({
 
     const userName =
       userProfile.name || userProfile.displayName || userEmail.split("@")[0];
-    const userLanguage = userProfile.locale || userProfile.preferredLanguage;
+    const rawLanguage = userProfile.locale || userProfile.preferredLanguage;
+    const userLanguage = rawLanguage?.trim() || null;
 
     const [user] = await db
       .insert(users)
@@ -407,7 +412,7 @@ export const providerCallback = async ({
         set: {
           name: userName,
           email: userEmail,
-          languageCode: userLanguage,
+          languageCode: sql`COALESCE(${users.languageCode}, ${userLanguage})`,
         },
       })
       .returning();

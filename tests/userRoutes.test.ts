@@ -166,7 +166,7 @@ describe("User Routes", () => {
   });
 
   it("allows tenant admin to list only users in their tenant", async () => {
-    const response = await fetch(`${BASE_URL}/users/`, {
+    const response = await fetch(`${BASE_URL}/tenants/${tenantOneId}/users`, {
       headers: { Cookie: `auth_session=${tokens.t1admin}` },
     });
 
@@ -206,7 +206,7 @@ describe("User Routes", () => {
   });
 
   it("allows super admin to list users for any tenant", async () => {
-    const response = await fetch(`${BASE_URL}/users/?tenantId=${tenantTwoId}`, {
+    const response = await fetch(`${BASE_URL}/tenants/${tenantTwoId}/users`, {
       headers: { Cookie: `auth_session=${tokens.super}` },
     });
 
@@ -220,15 +220,31 @@ describe("User Routes", () => {
   });
 
   it("blocks tenant admins from cross-tenant list queries", async () => {
-    const response = await fetch(`${BASE_URL}/users/?tenantId=${tenantTwoId}`, {
+    const response = await fetch(`${BASE_URL}/tenants/${tenantTwoId}/users`, {
       headers: { Cookie: `auth_session=${tokens.t1admin}` },
     });
 
     expect(response.status).toBe(403);
   });
 
-  it("blocks regular users from /users routes", async () => {
-    const response = await fetch(`${BASE_URL}/users/`, {
+  it("supports tenant-scoped user search", async () => {
+    const response = await fetch(
+      `${BASE_URL}/tenants/${tenantOneId}/users?q=Member%20A`,
+      {
+        headers: { Cookie: `auth_session=${tokens.t1admin}` },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as any;
+    const listedIds = data.users.map((entry: any) => entry.id);
+    expect(listedIds).toContain("users_t1_member_a");
+    expect(listedIds).not.toContain("users_t1_member_b");
+    expect(data.pageInfo.hasMore).toBe(false);
+  });
+
+  it("blocks regular users from tenant user routes", async () => {
+    const response = await fetch(`${BASE_URL}/tenants/${tenantOneId}/users`, {
       headers: { Cookie: `auth_session=${tokens.t1memberA}` },
     });
 
@@ -236,7 +252,9 @@ describe("User Routes", () => {
   });
 
   it("allows tenant admin to edit users in their tenant", async () => {
-    const response = await fetch(`${BASE_URL}/users/users_t1_member_b`, {
+    const response = await fetch(
+      `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_b`,
+      {
       method: "PATCH",
       headers: {
         Cookie: `auth_session=${tokens.t1admin}`,
@@ -246,7 +264,8 @@ describe("User Routes", () => {
         name: "Updated Tenant One Member",
         languageCode: "it",
       }),
-    });
+      },
+    );
 
     expect(response.status).toBe(200);
     const data = (await response.json()) as any;
@@ -255,36 +274,41 @@ describe("User Routes", () => {
   });
 
   it("blocks cross-tenant user edits for tenant admins", async () => {
-    const response = await fetch(`${BASE_URL}/users/users_t2_member`, {
+    const response = await fetch(
+      `${BASE_URL}/tenants/${tenantTwoId}/users/users_t2_member`,
+      {
       method: "PATCH",
       headers: {
         Cookie: `auth_session=${tokens.t1admin}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ languageCode: "pt" }),
-    });
+      },
+    );
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(403);
   });
 
-  it("blocks tenant admins from overriding tenant context in edit payload", async () => {
-    const response = await fetch(`${BASE_URL}/users/users_t1_member_a`, {
+  it("allows tenant admins to edit users via path tenant context", async () => {
+    const response = await fetch(
+      `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_a`,
+      {
       method: "PATCH",
       headers: {
         Cookie: `auth_session=${tokens.t1admin}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        languageCode: "en",
-        tenantId: tenantTwoId,
-      }),
-    });
+      body: JSON.stringify({ languageCode: "en" }),
+      },
+    );
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
   });
 
   it("allows super admin to edit users in another tenant", async () => {
-    const response = await fetch(`${BASE_URL}/users/users_t2_member`, {
+    const response = await fetch(
+      `${BASE_URL}/tenants/${tenantTwoId}/users/users_t2_member`,
+      {
       method: "PATCH",
       headers: {
         Cookie: `auth_session=${tokens.super}`,
@@ -292,9 +316,9 @@ describe("User Routes", () => {
       },
       body: JSON.stringify({
         role: "super_admin",
-        tenantId: tenantTwoId,
       }),
-    });
+      },
+    );
 
     expect(response.status).toBe(200);
     const data = (await response.json()) as any;
@@ -302,23 +326,29 @@ describe("User Routes", () => {
   });
 
   it("prevents tenant admin from assigning super_admin role", async () => {
-    const response = await fetch(`${BASE_URL}/users/users_t1_member_a`, {
+    const response = await fetch(
+      `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_a`,
+      {
       method: "PATCH",
       headers: {
         Cookie: `auth_session=${tokens.t1admin}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ role: "super_admin" }),
-    });
+      },
+    );
 
     expect(response.status).toBe(403);
   });
 
   it("soft deletes user and blocks subsequent auth", async () => {
-    const deleteResponse = await fetch(`${BASE_URL}/users/users_t1_member_b`, {
+    const deleteResponse = await fetch(
+      `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_b`,
+      {
       method: "DELETE",
       headers: { Cookie: `auth_session=${tokens.t1admin}` },
-    });
+      },
+    );
     expect(deleteResponse.status).toBe(200);
 
     const [deletedUser] = await db
@@ -337,7 +367,7 @@ describe("User Routes", () => {
 
   it("allows super admin to soft delete users in another tenant", async () => {
     const deleteResponse = await fetch(
-      `${BASE_URL}/users/users_t2_member_delete?tenantId=${tenantTwoId}`,
+      `${BASE_URL}/tenants/${tenantTwoId}/users/users_t2_member_delete`,
       {
         method: "DELETE",
         headers: { Cookie: `auth_session=${tokens.super}` },

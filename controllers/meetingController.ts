@@ -3,7 +3,25 @@ import { logger } from "../core/logger";
 import { generateWsTicket } from "../utils/security";
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
-import { eq, and, sql, desc, or } from "drizzle-orm";
+import { userTenants } from "../models/userTenantModel";
+import { users } from "../models/userModel";
+import { eq, and, sql, desc, or, ilike, inArray, asc, isNull } from "drizzle-orm";
+
+const MAX_INVITEES = 100;
+
+function canAccessMeetingRecord(
+  meeting: { host_id: string | null; attendees: string[] | null; tenant_id: string | null },
+  user: { id: string; role: string },
+  tenantId: string | null,
+) {
+  const currentAttendees = meeting.attendees || [];
+  const isHost = meeting.host_id === user.id;
+  const isAttendee = currentAttendees.includes(user.id);
+  const isTenantAdmin = user.role === "tenant_admin" && meeting.tenant_id === tenantId;
+  const isSuperAdmin = user.role === "super_admin";
+
+  return isHost || isAttendee || isTenantAdmin || isSuperAdmin;
+}
 
 /**
  * Returns meetings visible to the requesting user under RBAC policy.
@@ -82,14 +100,7 @@ export const getMeetingDetails = async ({
       return { error: "Meeting not found" };
     }
 
-    const currentAttendees = meeting.attendees || [];
-    const isHost = meeting.host_id === user.id;
-    const isAttendee = currentAttendees.includes(user.id);
-    const isTenantAdmin =
-      user.role === "tenant_admin" && meeting.tenant_id === tenantId;
-    const isSuperAdmin = user.role === "super_admin";
-
-    if (!isHost && !isAttendee && !isTenantAdmin && !isSuperAdmin) {
+    if (!canAccessMeetingRecord(meeting, user, tenantId)) {
       logger.warn(
         "Meeting details access denied.",
         { userId, meetingId: id, tenantId },
@@ -112,11 +123,149 @@ export const getMeetingDetails = async ({
 };
 
 /**
+ * Returns meeting participants and their live connection presence.
+ */
+export const getMeetingParticipants = async ({ params: { id }, user, tenantId, set }: any) => {
+  const userId = user?.id || "unknown_user";
+
+  try {
+    const [meeting] = await db
+      .select({
+        id: meetings.id,
+        host_id: meetings.host_id,
+        attendees: meetings.attendees,
+        tenant_id: meetings.tenant_id,
+      })
+      .from(meetings)
+      .where(eq(meetings.id, id));
+
+    if (!meeting) {
+      set.status = 404;
+      return { error: "Meeting not found" };
+    }
+
+    if (!canAccessMeetingRecord(meeting, user, tenantId)) {
+      set.status = 403;
+      return { error: "Not authorized to view this meeting" };
+    }
+
+    const attendeeIds = Array.from(new Set(meeting.attendees || []));
+    const participantIds = Array.from(
+      new Set([meeting.host_id, ...attendeeIds].filter(Boolean) as string[]),
+    );
+
+    const rows = participantIds.length
+      ? await db
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            languageCode: users.languageCode,
+            role: users.role,
+          })
+          .from(users)
+          .where(and(inArray(users.id, participantIds), isNull(users.deletedAt)))
+      : [];
+
+    const connectedParticipantIds = Array.from(
+      websocketController.getMeeting(id)?.participants.keys() || [],
+    );
+    const connectedSet = new Set(connectedParticipantIds);
+    const attendeeSet = new Set(attendeeIds);
+
+    const participants = rows.map((participant) => ({
+      ...participant,
+      isHost: participant.id === meeting.host_id,
+      isInvited: attendeeSet.has(participant.id),
+      isConnected: connectedSet.has(participant.id),
+    }));
+
+    logger.debug("Meeting participants retrieved.", {
+      userId,
+      meetingId: id,
+      count: participants.length,
+      connected: connectedParticipantIds.length,
+    });
+
+    return {
+      participants,
+      connectedCount: connectedParticipantIds.length,
+    };
+  } catch (err) {
+    logger.error("Failed to fetch meeting participants.", {
+      userId,
+      meetingId: id,
+      err,
+    });
+    set.status = 500;
+    return { error: "Failed to fetch meeting participants" };
+  }
+};
+
+/**
  * Generates a public 10-digit join code.
  */
 function generateReadableId() {
   return Math.floor(1000000000 + Math.random() * 9000000000).toString();
 }
+
+/**
+ * Lists users available as invite candidates within the current tenant.
+ */
+export const listMeetingInvitees = async ({ query, user, tenantId, set }: any) => {
+  const requesterId = user?.id || "unknown_user";
+
+  if (!tenantId) {
+    set.status = 400;
+    return { error: "Missing tenant context" };
+  }
+
+  try {
+    const q = typeof query?.q === "string" ? query.q.trim() : "";
+    const rawLimit = Number(query?.limit ?? 20);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(Math.floor(rawLimit), 1), 100)
+      : 20;
+
+    const filters = [
+      eq(userTenants.tenantId, tenantId),
+      isNull(users.deletedAt),
+      sql`${users.id} <> ${user.id}`,
+    ];
+
+    if (q.length > 0) {
+      filters.push(
+        or(
+          ilike(users.name, `%${q}%`),
+          ilike(users.email, `%${q}%`),
+        )!,
+      );
+    }
+
+    const invitees = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        languageCode: users.languageCode,
+      })
+      .from(userTenants)
+      .innerJoin(users, eq(userTenants.userId, users.id))
+      .where(and(...filters))
+      .orderBy(asc(users.name), asc(users.id))
+      .limit(limit);
+
+    return { invitees };
+  } catch (err) {
+    logger.error("Failed to list meeting invitees.", {
+      requesterId,
+      tenantId,
+      err,
+    });
+    set.status = 500;
+    return { error: "Failed to list invitees" };
+  }
+};
 
 /**
  * Creates a meeting record and returns its internal and public IDs.
@@ -167,6 +316,101 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
     };
   } catch (err) {
     logger.error("Failed to create meeting.", { userId, tenantId, err });
+    set.status = 500;
+    return { error: "Failed to create meeting" };
+  }
+};
+
+/**
+ * Creates an instant meeting with a title and tenant-scoped invitees.
+ */
+export const createQuickMeeting = async ({ body, user, tenantId, set }: any) => {
+  const userId = user?.id || "unknown_user";
+  logger.debug("Attempting to quick-create meeting.", { userId, tenantId });
+
+  if (!tenantId) {
+    set.status = 400;
+    return { error: "Missing tenant context" };
+  }
+
+  try {
+    const title = String(body?.title || "").trim();
+    if (!title) {
+      set.status = 400;
+      return { error: "Meeting title is required" };
+    }
+
+    const rawAttendeeIds = Array.isArray(body?.attendeeIds)
+      ? (body.attendeeIds as unknown[])
+      : [];
+
+    const attendeeIds = Array.from(
+      new Set(
+        rawAttendeeIds
+          .map((value) => String(value))
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0 && value !== user.id),
+      ),
+    );
+
+    if (attendeeIds.length > MAX_INVITEES) {
+      set.status = 400;
+      return { error: `A maximum of ${MAX_INVITEES} attendees can be invited` };
+    }
+
+    if (attendeeIds.length > 0) {
+      const scopedMembers = await db
+        .select({ userId: userTenants.userId })
+        .from(userTenants)
+        .innerJoin(users, eq(userTenants.userId, users.id))
+        .where(
+          and(
+            eq(userTenants.tenantId, tenantId),
+            inArray(userTenants.userId, attendeeIds),
+            isNull(users.deletedAt),
+          ),
+        );
+
+      const allowedIds = new Set(scopedMembers.map((row) => row.userId));
+      const invalidIds = attendeeIds.filter((id) => !allowedIds.has(id));
+      if (invalidIds.length > 0) {
+        set.status = 400;
+        return { error: "One or more attendees are invalid for this tenant" };
+      }
+    }
+
+    const readableId = generateReadableId();
+
+    const [newMeeting] = await db
+      .insert(meetings)
+      .values({
+        readable_id: readableId,
+        topic: title,
+        host_id: user.id,
+        tenant_id: tenantId,
+        attendees: attendeeIds,
+        languages: [],
+        method: "one_way",
+      })
+      .returning({
+        id: meetings.id,
+        readable_id: meetings.readable_id,
+      });
+
+    if (!newMeeting) {
+      logger.error("Quick meeting insert returned no record.", { userId, tenantId });
+      set.status = 500;
+      return { error: "Failed to create meeting" };
+    }
+
+    return {
+      message: "Quick meeting created successfully",
+      meetingId: newMeeting.id,
+      readableId: newMeeting.readable_id,
+      invitedCount: attendeeIds.length,
+    };
+  } catch (err) {
+    logger.error("Failed to quick-create meeting.", { userId, tenantId, err });
     set.status = 500;
     return { error: "Failed to create meeting" };
   }

@@ -14,7 +14,10 @@ import { eq } from "drizzle-orm";
  */
 interface Participant {
   id: string;
+  name: string | null;
   email: string;
+  role: string | null;
+  languageCode: string | null;
   socket: ElysiaWS;
 }
 
@@ -145,7 +148,11 @@ export class WebsocketController {
     this.initMeeting(meetingId);
 
     const meeting = this.meetings.get(meetingId);
-    const userEmail = (ws.data as any)?.wsUser?.email || participantId;
+    const wsUser = (ws.data as any)?.wsUser;
+    const userEmail = wsUser?.email || participantId;
+    const userName = wsUser?.name || null;
+    const userRole = wsUser?.role || null;
+    const userLanguageCode = wsUser?.languageCode || null;
 
     if (meeting) {
       if (meeting.hostId === participantId && meeting.hostTimeout) {
@@ -172,7 +179,10 @@ export class WebsocketController {
 
       meeting.participants.set(participantId, {
         id: participantId,
+        name: userName,
         email: userEmail,
+        role: userRole,
+        languageCode: userLanguageCode,
         socket: ws,
       });
 
@@ -182,7 +192,54 @@ export class WebsocketController {
         userEmail,
         meetingId,
       });
+
+      this.broadcastToMeeting(
+        meetingId,
+        JSON.stringify({
+          type: "presence",
+          event: "participant_joined",
+          meetingId,
+          participant: {
+            id: participantId,
+            name: userName,
+            email: userEmail,
+            role: userRole,
+            languageCode: userLanguageCode,
+            isConnected: true,
+          },
+          connectedCount: meeting.participants.size,
+        }),
+      );
     }
+  }
+
+  /**
+   * Returns a presence snapshot for a meeting's active websocket connections.
+   */
+  getMeetingPresenceSnapshot(meetingId: string) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting) {
+      return {
+        participants: [],
+        connectedCount: 0,
+      };
+    }
+
+    const participants = Array.from(meeting.participants.values()).map(
+      (participant) => ({
+        id: participant.id,
+        name: participant.name,
+        email: participant.email,
+        role: participant.role,
+        languageCode: participant.languageCode,
+        isConnected: true,
+      }),
+    );
+
+    return {
+      participants,
+      connectedCount: meeting.participants.size,
+    };
   }
 
   /**
@@ -249,6 +306,21 @@ export class WebsocketController {
               userEmail: disconnectedParticipantEmail,
               meetingId,
             },
+          );
+
+          this.broadcastToMeeting(
+            meetingId,
+            JSON.stringify({
+              type: "presence",
+              event: "participant_left",
+              meetingId,
+              participant: {
+                id: disconnectedParticipantId,
+                email: disconnectedParticipantEmail,
+                isConnected: false,
+              },
+              connectedCount: meeting.participants.size,
+            }),
           );
         }
 

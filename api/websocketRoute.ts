@@ -91,6 +91,19 @@ export const websocketRoute = new Elysia().ws("/ws", {
         ws.send(
           JSON.stringify({ status: `Subscribed to ${payload.meetingId}` }),
         );
+
+        const snapshot = websocketController.getMeetingPresenceSnapshot(
+          payload.meetingId,
+        );
+        ws.send(
+          JSON.stringify({
+            type: "presence",
+            event: "snapshot",
+            meetingId: payload.meetingId,
+            participants: snapshot.participants,
+            connectedCount: snapshot.connectedCount,
+          }),
+        );
       }
     }
   },

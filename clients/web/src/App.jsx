@@ -10,6 +10,7 @@ import Terms from "./pages/terms";
 import ReviewPage from "./pages/review";
 import ScrollToTop from "./components/misc/scroll-to-top";
 import OnboardingTour from "./components/misc/onboarding-tour";
+import RouteLogger from "./components/misc/route-logger.jsx";
 import AdminPage from "./pages/admin";
 import NotFound from "./pages/not-found";
 import StandalonePage from "./pages/standalone";
@@ -19,6 +20,7 @@ export default function App() {
     <div className="min-h-screen bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors">
       <BrowserRouter>
         <ScrollToTop />
+        <RouteLogger />
         <OnboardingTour />
         <Routes>
           <Route element={<Layout />}>

@@ -30,6 +30,11 @@ export const API_ROUTES = {
     submit: "/api/reviews/submit",
     mine: "/api/reviews/me",
   },
+  bugReports: {
+    base: "/api/bug-reports/",
+    resolve: (reportId) => `/api/bug-reports/${reportId}/resolve`,
+    log: (reportId) => `/api/bug-reports/${reportId}/log`,
+  },
 };
 
 export function buildSessionPath(type, sessionId, token, isHost = false) {

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useLanguage } from "../../context/language.jsx";
 import { useTranslation } from "react-i18next";
+import { clientLogger } from "../../lib/client-logger.js";
 
 /**
  * A button component to download a .vtt transcript file.
@@ -15,6 +16,11 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
     if (isLoading || !isDownloadable || !integration || !sessionId) return;
 
     setIsLoading(true);
+    clientLogger.info("Transcript Download: Starting VTT download", {
+      integration,
+      sessionId,
+      language: targetLanguage,
+    });
 
     const encodedSessionId = encodeURIComponent(sessionId);
     const downloadUrl = `/api/session/${integration}/${encodedSessionId}/download/vtt?token=${token}&language=${targetLanguage}`;
@@ -47,8 +53,14 @@ function DownloadVttButton({ isDownloadable, integration, sessionId, token }) {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
+      clientLogger.info("Transcript Download: Completed VTT download", {
+        integration,
+        sessionId,
+        language: targetLanguage,
+        fileName: serverFilename || `meeting_transcript_${targetLanguage}.vtt`,
+      });
     } catch (err) {
-      console.error("Download failed:", err);
+      clientLogger.error("Transcript Download: Download failed", err);
     } finally {
       setIsLoading(false);
     }

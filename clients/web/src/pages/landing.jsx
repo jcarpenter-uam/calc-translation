@@ -11,6 +11,7 @@ import { BiLogoZoom, BiUser } from "react-icons/bi";
 import { API_ROUTES } from "../constants/routes.js";
 import { apiFetch, getErrorMessage } from "../lib/api-client.js";
 import { useJoinMeeting } from "../hooks/use-join-meeting.js";
+import { clientLogger } from "../lib/client-logger.js";
 
 const getCurrentWorkWeek = () => {
   const now = new Date();
@@ -53,9 +54,11 @@ export default function LandingPage() {
     const lastSync = localStorage.getItem(SYNC_KEY);
 
     if (!lastSync || now - parseInt(lastSync, 10) > TTL) {
+      clientLogger.info("Landing: Auto syncing calendar", {
+        hadPreviousSync: Boolean(lastSync),
+      });
       syncCalendar();
       localStorage.setItem(SYNC_KEY, now.toString());
-      console.log("Calendar auto synced");
     }
   }, [syncCalendar]);
 
@@ -65,7 +68,7 @@ export default function LandingPage() {
 
       if (needsLink === "true") {
         try {
-          console.log("Found pending Zoom link, attempting to link account...");
+          clientLogger.info("Landing: Found pending Zoom link, linking account");
           alert(t("finishing_zoom_setup"));
 
           const response = await apiFetch(API_ROUTES.auth.zoomLinkPending, {
@@ -78,10 +81,10 @@ export default function LandingPage() {
             );
           }
 
-          console.log("Zoom account linked successfully!");
+          clientLogger.info("Landing: Zoom account linked successfully");
           alert(t("zoom_linked_success"));
         } catch (err) {
-          console.error("Zoom link error:", err);
+          clientLogger.error("Landing: Zoom link flow failed", err);
           alert(t("zoom_link_failed", { error: err.message }));
         } finally {
           sessionStorage.removeItem("zoom_link_pending");
@@ -118,7 +121,10 @@ export default function LandingPage() {
           <div className="flex border-b border-zinc-200 dark:border-zinc-700">
             <button
               id="landing-zoom-tab-web"
-              onClick={() => setIntegration("zoom")}
+              onClick={() => {
+                clientLogger.info("Landing: Switched integration tab", { integration: "zoom" });
+                setIntegration("zoom");
+              }}
               className={`cursor-pointer flex-1 flex items-center justify-center gap-2 py-4 text-lg font-bold transition-colors ${
                 integration === "zoom"
                   ? "bg-white dark:bg-zinc-800 text-blue-600 border-b-2 border-blue-600"
@@ -130,7 +136,10 @@ export default function LandingPage() {
             </button>
             <button
               id="landing-standalone-tab-web"
-              onClick={() => setIntegration("standalone")}
+              onClick={() => {
+                clientLogger.info("Landing: Switched integration tab", { integration: "standalone" });
+                setIntegration("standalone");
+              }}
               className={`cursor-pointer flex-1 flex items-center justify-center gap-2 py-4 text-lg font-bold transition-colors ${
                 integration === "standalone"
                   ? "bg-white dark:bg-zinc-800 text-blue-600 border-b-2 border-blue-600"

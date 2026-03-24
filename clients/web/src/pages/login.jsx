@@ -6,6 +6,7 @@ import { FaMicrosoft, FaGoogle } from "react-icons/fa";
 import { API_ROUTES } from "../constants/routes.js";
 import { JSON_HEADERS, apiFetch, getErrorMessage } from "../lib/api-client.js";
 import ProviderLoginButton from "../components/auth/provider-login-button.jsx";
+import { clientLogger } from "../lib/client-logger.js";
 
 export default function Login() {
   const { t } = useTranslation();
@@ -20,6 +21,7 @@ export default function Login() {
   const [infoMessageKey, setInfoMessageKey] = useState(null);
   useEffect(() => {
     if (searchParams.get("reason") === "zoom_link_required") {
+      clientLogger.info("Login: Zoom link required flow detected");
       setInfoMessageKey("zoom_link_info");
     }
   }, [searchParams]);
@@ -28,6 +30,11 @@ export default function Login() {
     if (e) e.preventDefault();
     setError(null);
     setIsLoading(true);
+    clientLogger.info("Login: Submitting login request", {
+      hasEmail: Boolean(email),
+      uiLanguage,
+      provider: forcedProvider || null,
+    });
 
     try {
       const payload = { email, language: uiLanguage };
@@ -55,14 +62,21 @@ export default function Login() {
       const data = await response.json();
 
       if (data.action === "select_provider") {
+        clientLogger.info("Login: Provider selection required", {
+          providers: data.providers || [],
+        });
         setAvailableProviders(data.providers);
         setIsLoading(false);
       } else if (data.login_url) {
+        clientLogger.info("Login: Redirecting to provider login", {
+          provider: forcedProvider || null,
+        });
         window.location.href = data.login_url;
       } else {
         throw new Error(t("invalid_server_response"));
       }
     } catch (err) {
+      clientLogger.error("Login: Login request failed", err);
       setError(err.message);
       setIsLoading(false);
       setAvailableProviders([]);

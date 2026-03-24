@@ -2,6 +2,7 @@ import UserManagement from "./user-management.jsx";
 import TenantManagement from "./tenant-management.jsx";
 import LogViewing from "./log-viewing.jsx";
 import ReviewsManagement from "./reviews.jsx";
+import BugReportsManagement from "./bug-reports.jsx";
 import { useAdmin } from "../../context/admin.jsx";
 
 export function UserManagementSection() {
@@ -52,6 +53,23 @@ export function ReviewsSection() {
       loading={reviews.loading}
       error={reviews.error}
       onRefresh={reviews.refetchReviews}
+    />
+  );
+}
+
+export function BugReportsSection() {
+  const { bugReports } = useAdmin();
+
+  return (
+    <BugReportsManagement
+      reports={bugReports.data}
+      loading={bugReports.loading}
+      error={bugReports.error}
+      filter={bugReports.status}
+      onFilterChange={bugReports.setStatus}
+      onRefresh={bugReports.refetchBugReports}
+      onViewLog={bugReports.getBugReportLog}
+      onSetResolved={bugReports.setBugReportResolved}
     />
   );
 }

@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { useSessionRoute } from "../hooks/use-session-route.js";
 import { SessionProvider } from "../context/session.jsx";
 import { buildSessionWsUrl } from "../constants/routes.js";
+import { clientLogger } from "../lib/client-logger.js";
 
 export default function SessionPage() {
   const { integration, sessionId, token, isHost, joinUrl } = useSessionRoute();
@@ -31,9 +32,31 @@ export default function SessionPage() {
   );
 
   const handleAuthFailure = useCallback(() => {
+    clientLogger.warn("Web Session: Authorization failed", {
+      integration,
+      sessionId,
+      isHost,
+    });
     setIsAuthorized(false);
     setShowUnauthorized(true);
-  }, []);
+  }, [integration, sessionId, isHost]);
+
+  useEffect(() => {
+    clientLogger.info("Web Session: Opening session page", {
+      integration,
+      sessionId,
+      isHost,
+      hasJoinUrl: Boolean(joinUrl),
+    });
+
+    return () => {
+      clientLogger.info("Web Session: Leaving session page", {
+        integration,
+        sessionId,
+        isHost,
+      });
+    };
+  }, [integration, sessionId, isHost, joinUrl]);
 
   useEffect(() => {
     if (showUnauthorized || !isAuthorized) {

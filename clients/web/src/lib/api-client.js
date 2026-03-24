@@ -1,7 +1,17 @@
 export const JSON_HEADERS = { "Content-Type": "application/json" };
 
 export async function apiFetch(url, options = {}) {
-  return fetch(url, options);
+  const method = options.method || "GET";
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      console.warn("API request failed", { method, url, status: response.status });
+    }
+    return response;
+  } catch (error) {
+    console.error("API request threw", { method, url, error });
+    throw error;
+  }
 }
 
 export async function getErrorMessage(response, fallbackMessage) {

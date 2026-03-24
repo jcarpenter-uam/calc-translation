@@ -4,6 +4,7 @@ import SupportedLangs from "../components/standalone/supported-langs";
 import { API_ROUTES } from "../constants/routes.js";
 import { JSON_HEADERS, apiFetch, getErrorMessage } from "../lib/api-client.js";
 import { useSessionNavigation } from "../hooks/use-session-navigation.js";
+import { clientLogger } from "../lib/client-logger.js";
 
 export default function StandalonePage() {
   const [error, setError] = useState(null);
@@ -11,6 +12,14 @@ export default function StandalonePage() {
 
   const handleJoin = async (data) => {
     setError(null);
+    clientLogger.info("Standalone: Starting standalone join flow", {
+      mode: data?.mode || null,
+      hasJoinUrl: Boolean(data?.joinUrl),
+      translationType: data?.translationType || null,
+      languageA: data?.languageA || null,
+      languageB: data?.languageB || null,
+      languageHints: Array.isArray(data?.languageHints) ? data.languageHints : null,
+    });
     try {
       const response = await apiFetch(API_ROUTES.auth.standalone, {
         method: "POST",
@@ -33,9 +42,15 @@ export default function StandalonePage() {
       const { sessionId, token, type, joinUrl } = responseData;
 
       const isHost = data.mode === "host";
+      clientLogger.info("Standalone: Join flow succeeded", {
+        sessionId,
+        type,
+        isHost,
+        hasJoinUrl: Boolean(joinUrl),
+      });
       navigateToSession(type, sessionId, token, isHost, joinUrl);
     } catch (err) {
-      console.error("Join failed:", err);
+      clientLogger.error("Standalone: Join flow failed", err);
       setError(err.message);
     }
   };

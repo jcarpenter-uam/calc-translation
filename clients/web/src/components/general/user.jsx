@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from "react";
 import { useAuth } from "../../context/auth.jsx";
 import SettingsModal from "../settings/modal.jsx";
+import BugReportModal from "../settings/bug-report-modal.jsx";
 import { useTranslation } from "react-i18next";
 import { useClickOutside } from "../../hooks/use-click-outside.js";
 
@@ -27,6 +28,7 @@ export default function UserAvatar() {
   const { user, isLoading, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBugReportOpen, setIsBugReportOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   const closeDropdown = useCallback(() => {
@@ -139,6 +141,30 @@ export default function UserAvatar() {
                 </button>
               </li>
 
+              <li>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsBugReportOpen(true);
+                  }}
+                  className="
+                    block
+                    w-full
+                    text-left
+                    px-4 py-2
+                    text-sm
+                    text-zinc-700
+                    dark:text-zinc-200
+                    hover:bg-zinc-100
+                    dark:hover:bg-zinc-700
+                    transition-colors
+                    cursor-pointer
+                  "
+                >
+                  Report a bug
+                </button>
+              </li>
+
               {is_admin && (
                 <li>
                   <a
@@ -190,6 +216,10 @@ export default function UserAvatar() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+      <BugReportModal
+        isOpen={isBugReportOpen}
+        onClose={() => setIsBugReportOpen(false)}
       />
     </>
   );

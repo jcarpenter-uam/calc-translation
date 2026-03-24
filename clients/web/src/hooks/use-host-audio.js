@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { clientLogger } from "../lib/client-logger.js";
 
 function floatTo16BitPCM(input) {
   const output = new Int16Array(input.length);
@@ -68,13 +69,44 @@ export function useHostAudio(sessionId, integration) {
   const isAudioInitializedRef = useRef(false);
   const hasConnectedOnceRef = useRef(false);
 
+  const stopAudio = useCallback(() => {
+    clientLogger.info("Host Audio: Stopping microphone capture", {
+      integration,
+      sessionId,
+    });
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    setIsAudioInitialized(false);
+    isAudioInitializedRef.current = false;
+  }, [integration, sessionId]);
+
   useEffect(() => {
     if (!sessionId || !integration) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws/transcribe/${integration}/${sessionId}`;
 
-    console.log("Host connecting to:", wsUrl);
+    clientLogger.info("Host Audio: Opening websocket", {
+      integration,
+      sessionId,
+    });
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -92,17 +124,25 @@ export function useHostAudio(sessionId, integration) {
     }, 250);
 
     ws.onopen = () => {
-      console.log("Host Audio WS connected");
+      clientLogger.info("Host Audio: Websocket connected", {
+        integration,
+        sessionId,
+      });
       setStatus("connected");
     };
 
     ws.onerror = (err) => {
-      console.error("Host Audio WS error", err);
+      clientLogger.error("Host Audio: Websocket error", err);
       setStatus("error");
     };
 
     ws.onclose = (event) => {
-      console.log("Host Audio WS closed", event.code, event.reason);
+      clientLogger.info("Host Audio: Websocket closed", {
+        integration,
+        sessionId,
+        code: event.code,
+        reason: event.reason || null,
+      });
       setStatus("disconnected");
       stopAudio();
     };
@@ -114,7 +154,7 @@ export function useHostAudio(sessionId, integration) {
       }
       stopAudio();
     };
-  }, [integration, sessionId]);
+  }, [integration, sessionId, stopAudio]);
 
   useEffect(() => {
     if (isAudioInitialized && canvasRef.current && analyserRef.current) {
@@ -185,7 +225,11 @@ export function useHostAudio(sessionId, integration) {
           workerPid: "browser",
         };
 
-        console.log(`Sending ${type} to backend...`);
+        clientLogger.info("Host Audio: Sending session lifecycle event", {
+          type,
+          integration,
+          sessionId,
+        });
         wsRef.current.send(
           JSON.stringify({
             type: type,
@@ -251,45 +295,33 @@ export function useHostAudio(sessionId, integration) {
       isAudioInitializedRef.current = true;
       setIsMuted(false);
       isMutedRef.current = false;
+      clientLogger.info("Host Audio: Started microphone capture", {
+        integration,
+        sessionId,
+      });
     } catch (err) {
-      console.error("Failed to start microphone", err);
+      clientLogger.error("Host Audio: Failed to start microphone", err);
       alert("Could not access microphone.");
     }
-  };
-
-  const stopAudio = () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
-    }
-    if (sourceRef.current) {
-      sourceRef.current.disconnect();
-      sourceRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    setIsAudioInitialized(false);
-    isAudioInitializedRef.current = false;
   };
 
   const toggleMute = () => {
     const nextState = !isMuted;
     setIsMuted(nextState);
     isMutedRef.current = nextState;
+    clientLogger.info("Host Audio: Toggled mute", {
+      integration,
+      sessionId,
+      isMuted: nextState,
+    });
   };
 
   const disconnectSession = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log("Sending session_end to backend...");
+      clientLogger.info("Host Audio: Sending session_end", {
+        integration,
+        sessionId,
+      });
       wsRef.current.send(JSON.stringify({ type: "session_end" }));
     }
     if (wsRef.current) {

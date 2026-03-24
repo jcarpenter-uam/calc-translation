@@ -7,6 +7,7 @@ import {
   TenantManagementSection,
   LogViewingSection,
   ReviewsSection,
+  BugReportsSection,
 } from "../components/admin/sections.jsx";
 
 export default function AdminPage() {
@@ -40,6 +41,8 @@ export default function AdminPage() {
           <TenantManagementSection />
           <hr className="border-zinc-200 dark:border-zinc-700" />
           <ReviewsSection />
+          <hr className="border-zinc-200 dark:border-zinc-700" />
+          <BugReportsSection />
           <hr className="border-zinc-200 dark:border-zinc-700" />
           <LogViewingSection />
         </div>

@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { useLogs } from "./use-logs.js";
 import { useUsers } from "./use-users.js";
 import { useTenants } from "./use-tenants";
 import { useAdminReviews } from "./use-admin-reviews.js";
+import { useAdminBugReports } from "./use-admin-bug-reports.js";
 
 export function useAdminPageData() {
+  const [bugReportStatus, setBugReportStatus] = useState("open");
   const {
     users,
     loading: usersLoading,
@@ -36,6 +39,15 @@ export function useAdminPageData() {
     refetch: refetchReviews,
   } = useAdminReviews();
 
+  const {
+    bugReports,
+    loading: bugReportsLoading,
+    error: bugReportsError,
+    refetch: refetchBugReports,
+    setResolved: setBugReportResolved,
+    getLog: getBugReportLog,
+  } = useAdminBugReports(bugReportStatus);
+
   const isPageLoading = usersLoading || tenantsLoading;
   const pageError = usersError || tenantsError;
 
@@ -65,6 +77,16 @@ export function useAdminPageData() {
       loading: reviewsLoading,
       error: reviewsError,
       refetchReviews,
+    },
+    bugReports: {
+      data: bugReports,
+      loading: bugReportsLoading,
+      error: bugReportsError,
+      refetchBugReports,
+      setBugReportResolved,
+      getBugReportLog,
+      status: bugReportStatus,
+      setStatus: setBugReportStatus,
     },
   };
 }

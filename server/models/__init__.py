@@ -1,4 +1,5 @@
 from .calendar_events import CalendarEvent
+from .bug_reports import BugReport
 from .integrations import Integration
 from .meetings import Meeting
 from .reviews import Review
@@ -22,10 +23,12 @@ POST_CREATE_STATEMENTS = [
         END IF;
     END $$;
     """,
+    "ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS is_resolved BOOLEAN NOT NULL DEFAULT false",
 ]
 
 __all__ = [
     "CalendarEvent",
+    "BugReport",
     "Integration",
     "Meeting",
     "Review",

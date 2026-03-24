@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"Configuration loaded. Log level set to: {settings.LOGGING_LEVEL}")
 
 from api.auth import create_auth_router
+from api.bug_reports import create_bug_report_router
 from api.calender import create_calender_router
 from api.logs import create_logs_router
 from api.metrics import create_metrics_router
@@ -79,6 +80,9 @@ app.include_router(user_router)
 
 auth_router = create_auth_router()
 app.include_router(auth_router)
+
+bug_reports_router = create_bug_report_router()
+app.include_router(bug_reports_router)
 
 logs_router = create_logs_router()
 app.include_router(logs_router)

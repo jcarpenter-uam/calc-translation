@@ -86,6 +86,28 @@ async def test_submit_bug_report_requires_existing_user(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_submit_bug_report_rejects_blank_title(monkeypatch):
+    endpoint = _endpoint("/api/bug-reports/", "POST")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(title="   ", description="Desc", payload={"sub": "u1"})
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Title is required."
+
+
+@pytest.mark.asyncio
+async def test_submit_bug_report_rejects_blank_description(monkeypatch):
+    endpoint = _endpoint("/api/bug-reports/", "POST")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(title="Bug", description="   ", payload={"sub": "u1"})
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Description is required."
+
+
+@pytest.mark.asyncio
 async def test_submit_bug_report_persists_and_writes_log(monkeypatch, tmp_path):
     fake_local = fake_session_local(FakeResult(scalar="u1"))
     monkeypatch.setattr(bug_reports, "AsyncSessionLocal", fake_local)
@@ -111,6 +133,32 @@ async def test_submit_bug_report_persists_and_writes_log(monkeypatch, tmp_path):
     assert report.description == "Description"
     assert report.log_file_name == "desktop-main.log"
     assert (tmp_path / "1" / "desktop-main.log").read_text(encoding="utf-8") == "hello log\n"
+
+
+@pytest.mark.asyncio
+async def test_submit_bug_report_rejects_oversized_log(monkeypatch, tmp_path):
+    fake_local = fake_session_local(FakeResult(scalar="u1"))
+    monkeypatch.setattr(bug_reports, "AsyncSessionLocal", fake_local)
+    monkeypatch.setattr(bug_reports, "BUG_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(bug_reports, "MAX_LOG_UPLOAD_BYTES", 4)
+
+    endpoint = _endpoint("/api/bug-reports/", "POST")
+    upload = UploadFile(filename="desktop-main.log", file=BytesIO(b"hello log\n"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(
+            title="Title",
+            description="Description",
+            steps_to_reproduce="",
+            expected_behavior="",
+            actual_behavior="",
+            app_version="",
+            platform="",
+            main_log=upload,
+            payload={"sub": "u1"},
+        )
+
+    assert exc_info.value.status_code == 413
 
 
 @pytest.mark.asyncio
@@ -255,6 +303,63 @@ async def test_set_bug_report_resolved_updates_report(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_set_bug_report_resolved_404_when_missing_before_update(monkeypatch):
+    monkeypatch.setattr(
+        bug_reports,
+        "AsyncSessionLocal",
+        fake_session_local(FakeResult(first_row=None)),
+    )
+
+    endpoint = _endpoint("/api/bug-reports/{report_id}/resolve", "PATCH")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(
+            report_id=3,
+            payload=bug_reports.BugReportResolveRequest(is_resolved=True),
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_set_bug_report_resolved_404_when_missing_after_update(monkeypatch):
+    now = datetime.now(timezone.utc)
+    initial_row = (
+        SimpleNamespace(
+            id=3,
+            user_id="u1",
+            title="Crash",
+            description="It broke",
+            steps_to_reproduce=None,
+            expected_behavior=None,
+            actual_behavior=None,
+            app_version="2.0.4",
+            platform="linux",
+            log_file_name="main.log",
+            is_resolved=False,
+            created_at=now,
+        ),
+        "Alice",
+        "a@example.com",
+    )
+    monkeypatch.setattr(
+        bug_reports,
+        "AsyncSessionLocal",
+        fake_session_local(FakeResult(first_row=initial_row), FakeResult(), FakeResult(first_row=None)),
+    )
+
+    endpoint = _endpoint("/api/bug-reports/{report_id}/resolve", "PATCH")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(
+            report_id=3,
+            payload=bug_reports.BugReportResolveRequest(is_resolved=True),
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_get_bug_report_log_reads_saved_file(monkeypatch, tmp_path):
     row = SimpleNamespace(id=7, log_file_name="main.log")
     monkeypatch.setattr(
@@ -274,6 +379,37 @@ async def test_get_bug_report_log_reads_saved_file(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_get_bug_report_log_404_when_report_missing(monkeypatch):
+    monkeypatch.setattr(
+        bug_reports,
+        "AsyncSessionLocal",
+        fake_session_local(FakeResult(scalar=None)),
+    )
+
+    endpoint = _endpoint("/api/bug-reports/{report_id}/log", "GET")
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(report_id=7)
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_bug_report_log_404_when_filename_missing(monkeypatch):
+    row = SimpleNamespace(id=7, log_file_name=None)
+    monkeypatch.setattr(
+        bug_reports,
+        "AsyncSessionLocal",
+        fake_session_local(FakeResult(scalar=row)),
+    )
+
+    endpoint = _endpoint("/api/bug-reports/{report_id}/log", "GET")
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(report_id=7)
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_get_bug_report_log_404_when_missing(monkeypatch):
     row = SimpleNamespace(id=7, log_file_name="main.log")
     monkeypatch.setattr(
@@ -287,3 +423,28 @@ async def test_get_bug_report_log_404_when_missing(monkeypatch):
         await endpoint(report_id=7)
 
     assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_bug_report_log_500_when_read_fails(monkeypatch, tmp_path):
+    row = SimpleNamespace(id=7, log_file_name="main.log")
+    monkeypatch.setattr(
+        bug_reports,
+        "AsyncSessionLocal",
+        fake_session_local(FakeResult(scalar=row)),
+    )
+    monkeypatch.setattr(bug_reports, "BUG_REPORTS_DIR", tmp_path)
+    report_dir = tmp_path / "7"
+    report_dir.mkdir(parents=True)
+    (report_dir / "main.log").write_text("line 1\n", encoding="utf-8")
+
+    def raise_read_error(self, encoding=None, errors=None):
+        raise OSError("boom")
+
+    monkeypatch.setattr(type(report_dir / "main.log"), "read_text", raise_read_error)
+
+    endpoint = _endpoint("/api/bug-reports/{report_id}/log", "GET")
+    with pytest.raises(HTTPException) as exc_info:
+        await endpoint(report_id=7)
+
+    assert exc_info.value.status_code == 500

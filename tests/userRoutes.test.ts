@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "../core/database";
-import { tenants } from "../models/tenantModel";
+import { tenantAuthConfigs, tenantDomains, tenants } from "../models/tenantModel";
 import { users } from "../models/userModel";
 import { userTenants } from "../models/userTenantModel";
+import { decrypt, encrypt } from "../utils/fernet";
 import { generateApiSessionToken } from "../utils/security";
 import {
   BASE_URL,
@@ -105,6 +106,42 @@ describe("User Routes", () => {
         { userId: "users_t2_admin", tenantId: tenantTwoId },
         { userId: "users_t2_member", tenantId: tenantTwoId },
         { userId: "users_t2_member_delete", tenantId: tenantTwoId },
+      ])
+      .onConflictDoNothing();
+
+    await db
+      .insert(tenantDomains)
+      .values([
+        {
+          domain: "tenant-one.example.com",
+          tenantId: tenantOneId,
+          providerType: "google",
+        },
+        {
+          domain: "tenant-two.example.com",
+          tenantId: tenantTwoId,
+          providerType: "entra",
+        },
+      ])
+      .onConflictDoNothing();
+
+    await db
+      .insert(tenantAuthConfigs)
+      .values([
+        {
+          tenantId: tenantOneId,
+          providerType: "google",
+          clientId: "google-client-1",
+          clientSecretEncrypted: encrypt("secret-one"),
+          tenantHint: null,
+        },
+        {
+          tenantId: tenantTwoId,
+          providerType: "entra",
+          clientId: "entra-client-2",
+          clientSecretEncrypted: encrypt("secret-two"),
+          tenantHint: "common",
+        },
       ])
       .onConflictDoNothing();
 
@@ -249,6 +286,145 @@ describe("User Routes", () => {
     });
 
     expect(response.status).toBe(403);
+  });
+
+  it("returns tenant settings for a tenant admin without exposing secrets", async () => {
+    const response = await fetch(`${BASE_URL}/tenants/${tenantOneId}/settings`, {
+      headers: { Cookie: `auth_session=${tokens.t1admin}` },
+    });
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as any;
+    expect(data.tenant.id).toBe(tenantOneId);
+    expect(data.domains).toEqual([
+      {
+        domain: "tenant-one.example.com",
+        providerType: "google",
+      },
+    ]);
+    expect(data.authConfigs).toEqual([
+      {
+        providerType: "google",
+        clientId: "google-client-1",
+        tenantHint: null,
+        hasSecret: true,
+      },
+    ]);
+    expect(data.authConfigs[0].clientSecret).toBeUndefined();
+  });
+
+  it("allows tenant admin to update settings for their tenant", async () => {
+    const response = await fetch(`${BASE_URL}/tenants/${tenantOneId}/settings`, {
+      method: "PATCH",
+      headers: {
+        Cookie: `auth_session=${tokens.t1admin}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        organizationName: "Tenant One Renamed",
+        domains: [
+          {
+            domain: "tenant-one.example.com",
+            providerType: "google",
+          },
+          {
+            domain: "new.tenant-one.example.com",
+            providerType: "google",
+          },
+        ],
+        authConfigs: [
+          {
+            providerType: "google",
+            clientId: "google-client-1-updated",
+            tenantHint: null,
+          },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as any;
+    expect(data.tenant.name).toBe("Tenant One Renamed");
+    expect(data.domains).toHaveLength(2);
+    expect(data.authConfigs[0].clientId).toBe("google-client-1-updated");
+
+    const [updatedConfig] = await db
+      .select({
+        clientId: tenantAuthConfigs.clientId,
+        clientSecretEncrypted: tenantAuthConfigs.clientSecretEncrypted,
+      })
+      .from(tenantAuthConfigs)
+      .where(
+        and(
+          eq(tenantAuthConfigs.tenantId, tenantOneId),
+          eq(tenantAuthConfigs.providerType, "google"),
+        ),
+      );
+
+    expect(updatedConfig?.clientId).toBe("google-client-1-updated");
+    expect(decrypt(updatedConfig!.clientSecretEncrypted)).toBe("secret-one");
+  });
+
+  it("blocks cross-tenant settings updates for tenant admins", async () => {
+    const response = await fetch(`${BASE_URL}/tenants/${tenantTwoId}/settings`, {
+      method: "PATCH",
+      headers: {
+        Cookie: `auth_session=${tokens.t1admin}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        organizationName: "Blocked",
+        domains: [
+          {
+            domain: "tenant-two.example.com",
+            providerType: "entra",
+          },
+        ],
+        authConfigs: [
+          {
+            providerType: "entra",
+            clientId: "blocked-client",
+            tenantHint: "common",
+          },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("allows super admin to create an additional tenant", async () => {
+    const response = await fetch(`${BASE_URL}/tenants/`, {
+      method: "POST",
+      headers: {
+        Cookie: `auth_session=${tokens.super}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tenantId: "users-tenant-3",
+        organizationName: "Users Tenant Three",
+        domains: [
+          {
+            domain: "tenant-three.example.com",
+            providerType: "google",
+          },
+        ],
+        authConfigs: [
+          {
+            providerType: "google",
+            clientId: "google-client-3",
+            clientSecret: "secret-three",
+            tenantHint: null,
+          },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as any;
+    expect(data.tenant.id).toBe("users-tenant-3");
+    expect(data.authConfigs[0].hasSecret).toBe(true);
+    trackTestTenants("users-tenant-3");
   });
 
   it("allows tenant admin to update a user's role in their tenant", async () => {

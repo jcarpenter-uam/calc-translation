@@ -10,6 +10,7 @@ import { metricRoutes } from "./api/metricRoutes";
 import { userRoutes } from "./api/userRoutes";
 import { tenantRoutes } from "./api/tenantRoutes";
 import { bugReportRoutes } from "./api/bugReportRoutes";
+import { serverLogRoutes } from "./api/serverLogRoutes";
 
 const requestStartTimes = new WeakMap<Request, number>();
 
@@ -58,6 +59,7 @@ export function buildApp() {
             .use(meetingRoutes)
             .use(userRoutes)
             .use(bugReportRoutes)
+            .use(serverLogRoutes)
             .use(tenantRoutes),
         ),
     );

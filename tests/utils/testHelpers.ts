@@ -1,6 +1,7 @@
 import { db } from "../../core/database";
 import { users } from "../../models/userModel";
 import { meetings } from "../../models/meetingModel";
+import { bugReports } from "../../models/bugReportModel";
 import {
   tenants,
   tenantDomains,
@@ -42,7 +43,9 @@ export const WS_URL = `ws://localhost:${PORT}/ws`;
 
 // Load test audio once per process.
 export const AUDIO_FILE = "./tests/samples/sample.raw";
-export const audioData = fs.readFileSync(AUDIO_FILE);
+export const audioData = fs.existsSync(AUDIO_FILE)
+  ? fs.readFileSync(AUDIO_FILE)
+  : Buffer.alloc(0);
 
 const createdTestUsers: string[] = [];
 const createdTestTenants: string[] = [];
@@ -114,6 +117,10 @@ export async function cleanupTestData() {
   try {
     if (createdTestUsers.length > 0 && createdTestTenants.length > 0) {
       await db
+        .delete(bugReports)
+        .where(inArray(bugReports.userId, createdTestUsers));
+
+      await db
         .delete(meetings)
         .where(inArray(meetings.host_id, createdTestUsers));
 
@@ -121,6 +128,10 @@ export async function cleanupTestData() {
         .delete(meetings)
         .where(inArray(meetings.tenant_id, createdTestTenants));
     } else if (createdTestUsers.length > 0) {
+      await db
+        .delete(bugReports)
+        .where(inArray(bugReports.userId, createdTestUsers));
+
       await db
         .delete(meetings)
         .where(inArray(meetings.host_id, createdTestUsers));

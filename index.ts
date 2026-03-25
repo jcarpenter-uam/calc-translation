@@ -9,6 +9,7 @@ import { requireWsAuth, requireAuth } from "./middlewares/authMiddleware";
 import { metricRoutes } from "./api/metricRoutes";
 import { userRoutes } from "./api/userRoutes";
 import { tenantRoutes } from "./api/tenantRoutes";
+import { bugReportRoutes } from "./api/bugReportRoutes";
 
 const requestStartTimes = new WeakMap<Request, number>();
 
@@ -56,6 +57,7 @@ export function buildApp() {
             .use(requireAuth)
             .use(meetingRoutes)
             .use(userRoutes)
+            .use(bugReportRoutes)
             .use(tenantRoutes),
         ),
     );

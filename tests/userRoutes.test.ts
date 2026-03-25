@@ -251,72 +251,105 @@ describe("User Routes", () => {
     expect(response.status).toBe(403);
   });
 
-  it("allows tenant admin to edit users in their tenant", async () => {
+  it("allows tenant admin to update a user's role in their tenant", async () => {
     const response = await fetch(
       `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_b`,
       {
-      method: "PATCH",
-      headers: {
-        Cookie: `auth_session=${tokens.t1admin}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: "Updated Tenant One Member",
-        languageCode: "it",
-      }),
+        method: "PATCH",
+        headers: {
+          Cookie: `auth_session=${tokens.t1admin}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role: "tenant_admin",
+        }),
       },
     );
 
     expect(response.status).toBe(200);
     const data = (await response.json()) as any;
-    expect(data.user.name).toBe("Updated Tenant One Member");
-    expect(data.user.languageCode).toBe("it");
+    expect(data.user.role).toBe("tenant_admin");
+    expect(data.user.name).toBe("Tenant One Member B");
+    expect(data.user.email).toBe("users_t1_member_b@test.com");
+    expect(data.user.languageCode).toBe("fr");
   });
 
   it("blocks cross-tenant user edits for tenant admins", async () => {
     const response = await fetch(
       `${BASE_URL}/tenants/${tenantTwoId}/users/users_t2_member`,
       {
-      method: "PATCH",
-      headers: {
-        Cookie: `auth_session=${tokens.t1admin}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ languageCode: "pt" }),
+        method: "PATCH",
+        headers: {
+          Cookie: `auth_session=${tokens.t1admin}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: "tenant_admin" }),
       },
     );
 
     expect(response.status).toBe(403);
   });
 
-  it("allows tenant admins to edit users via path tenant context", async () => {
+  it("rejects admin attempts to change a user's name", async () => {
     const response = await fetch(
       `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_a`,
       {
-      method: "PATCH",
-      headers: {
-        Cookie: `auth_session=${tokens.t1admin}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ languageCode: "en" }),
+        method: "PATCH",
+        headers: {
+          Cookie: `auth_session=${tokens.t1admin}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "Renamed By Admin" }),
       },
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(422);
+  });
+
+  it("rejects admin attempts to change a user's email", async () => {
+    const response = await fetch(
+      `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_a`,
+      {
+        method: "PATCH",
+        headers: {
+          Cookie: `auth_session=${tokens.t1admin}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: "renamed@test.com" }),
+      },
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  it("rejects admin attempts to change a user's language", async () => {
+    const response = await fetch(
+      `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_a`,
+      {
+        method: "PATCH",
+        headers: {
+          Cookie: `auth_session=${tokens.t1admin}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ languageCode: "en" }),
+      },
+    );
+
+    expect(response.status).toBe(422);
   });
 
   it("allows super admin to edit users in another tenant", async () => {
     const response = await fetch(
       `${BASE_URL}/tenants/${tenantTwoId}/users/users_t2_member`,
       {
-      method: "PATCH",
-      headers: {
-        Cookie: `auth_session=${tokens.super}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        role: "super_admin",
-      }),
+        method: "PATCH",
+        headers: {
+          Cookie: `auth_session=${tokens.super}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role: "super_admin",
+        }),
       },
     );
 
@@ -329,12 +362,12 @@ describe("User Routes", () => {
     const response = await fetch(
       `${BASE_URL}/tenants/${tenantOneId}/users/users_t1_member_a`,
       {
-      method: "PATCH",
-      headers: {
-        Cookie: `auth_session=${tokens.t1admin}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ role: "super_admin" }),
+        method: "PATCH",
+        headers: {
+          Cookie: `auth_session=${tokens.t1admin}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: "super_admin" }),
       },
     );
 

@@ -229,21 +229,9 @@ export const updateTenantUser = async ({ params, body, user, tenantId, set }: an
     }
 
     const updatePayload: {
-      name?: string | null;
-      email?: string | null;
-      languageCode?: string | null;
       role?: "user" | "tenant_admin" | "super_admin";
     } = {};
 
-    if (body.name !== undefined) {
-      updatePayload.name = body.name;
-    }
-    if (body.email !== undefined) {
-      updatePayload.email = body.email;
-    }
-    if (body.languageCode !== undefined) {
-      updatePayload.languageCode = body.languageCode;
-    }
     if (body.role !== undefined) {
       if (
         user.role === "tenant_admin" &&

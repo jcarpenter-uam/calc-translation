@@ -36,16 +36,6 @@ export const tenantRoutes = new Elysia({ prefix: "/tenants" })
       id: t.String(),
     }),
     body: t.Object({
-      name: t.Optional(t.Nullable(t.String())),
-      email: t.Optional(t.Nullable(t.String({ format: "email" }))),
-      languageCode: t.Optional(
-        t.Nullable(
-          t.String({
-            minLength: 2,
-            maxLength: 10,
-          }),
-        ),
-      ),
       role: t.Optional(
         t.Union([
           t.Literal("user"),

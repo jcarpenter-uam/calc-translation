@@ -5,10 +5,10 @@ import {
 } from "../utils/authProviders";
 import { logger } from "../core/logger";
 import { db } from "../core/database";
-import { tenantAuthConfigs, tenantDomains } from "../models/tenantModel";
+import { tenantAuthConfigs, tenantDomains, tenants } from "../models/tenantModel";
 import { users } from "../models/userModel";
 import { userTenants } from "../models/userTenantModel";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { decrypt } from "../utils/fernet";
 import { env } from "../core/config";
 import {
@@ -29,6 +29,23 @@ interface OAuthUserProfile {
   locale?: string;
   preferredLanguage?: string;
 }
+
+type LoginChoiceOption = {
+  tenantId: string;
+  tenantName: string | null;
+  providerType: "google" | "entra";
+};
+
+type LoginRedirectResult = {
+  mode: "redirect";
+  url: string;
+};
+
+type LoginSelectProviderResult = {
+  mode: "select_provider";
+  email: string;
+  options: LoginChoiceOption[];
+};
 
 /**
  * Resolves a safe post-login redirect URL from a user-provided value.
@@ -150,6 +167,81 @@ async function getTenantAuthProvider(
   throw new Error(`Unsupported provider: "${providerType}"`);
 }
 
+async function buildProviderRedirect({
+  email,
+  tenantId,
+  providerType,
+  returnTo,
+  oauth_state,
+  oauth_code_verifier,
+  oauth_tenant_id,
+  oauth_return_to,
+}: any): Promise<LoginRedirectResult> {
+  const safeReturnTo = resolveSafeReturnTo(returnTo) || getDefaultReturnTo();
+  const normalizedProvider = providerType.toLowerCase();
+  const authProvider = await getTenantAuthProvider(tenantId, providerType);
+  const state = generateState();
+  const codeVerifier = generateCodeVerifier();
+  let url: URL;
+
+  if (normalizedProvider === "google") {
+    url = authProvider.createAuthorizationURL(state, codeVerifier, [
+      "openid",
+      "profile",
+      "email",
+      "https://www.googleapis.com/auth/calendar.readonly",
+    ]);
+  } else if (normalizedProvider === "entra") {
+    url = authProvider.createAuthorizationURL(state, codeVerifier, [
+      "openid",
+      "profile",
+      "email",
+      "Calendars.Read",
+      "User.Read",
+    ]);
+  } else {
+    throw new Error(`Unsupported provider configured for domain: ${normalizedProvider}`);
+  }
+
+  url.searchParams.set("login_hint", email);
+
+  const cookieOpts = {
+    path: "/",
+    secure: env.NODE_ENV === "production",
+    httpOnly: true,
+    maxAge: 60 * 10,
+  };
+
+  oauth_state.set({ value: state, ...cookieOpts });
+  oauth_code_verifier.set({ value: codeVerifier, ...cookieOpts });
+  oauth_tenant_id.set({ value: tenantId, ...cookieOpts });
+  oauth_return_to.set({ value: safeReturnTo, ...cookieOpts });
+
+  return {
+    mode: "redirect",
+    url: url.href,
+  };
+}
+
+async function resolveLoginChoices(domain: string) {
+  const rows = await db
+    .select({
+      tenantId: tenantDomains.tenantId,
+      tenantName: tenants.organizationName,
+      providerType: tenantDomains.providerType,
+    })
+    .from(tenantDomains)
+    .leftJoin(tenants, eq(tenantDomains.tenantId, tenants.tenantId))
+    .where(eq(tenantDomains.domain, domain))
+    .orderBy(asc(tenants.organizationName), asc(tenantDomains.providerType));
+
+  return rows.filter(
+    (row): row is LoginChoiceOption =>
+      Boolean(row.tenantId) &&
+      (row.providerType === "google" || row.providerType === "entra"),
+  );
+}
+
 /**
  * Starts SSO login by resolving tenant domain routing and redirecting to OAuth.
  */
@@ -184,12 +276,9 @@ export const unifiedLogin = async ({
       domain,
     });
 
-    const [domainRecord] = await db
-      .select()
-      .from(tenantDomains)
-      .where(eq(tenantDomains.domain, domain));
+    const domainRecords = await resolveLoginChoices(domain);
 
-    if (!domainRecord) {
+    if (domainRecords.length === 0) {
       logger.warn("SSO login attempted for unconfigured domain.", {
         domain,
         email: maskEmail(normalizedEmail),
@@ -198,84 +287,106 @@ export const unifiedLogin = async ({
       return { error: "SSO is not configured for this domain." };
     }
 
+    if (domainRecords.length > 1) {
+      logger.info("Multiple auth providers matched login domain.", {
+        domain,
+        email: maskEmail(normalizedEmail),
+        options: domainRecords.map((record) => ({
+          tenantId: record.tenantId,
+          provider: record.providerType,
+        })),
+      });
+      return {
+        mode: "select_provider",
+        email: normalizedEmail,
+        options: domainRecords,
+      } as LoginSelectProviderResult;
+    }
+
+    const domainRecord = domainRecords[0];
+    if (!domainRecord) {
+      set.status = 400;
+      return { error: "SSO tenant mapping is incomplete for this domain" };
+    }
     logger.debug("Resolved domain auth routing.", {
       domain,
       tenantId: domainRecord.tenantId,
       provider: domainRecord.providerType,
     });
 
-    const { tenantId, providerType } = domainRecord;
-    if (!tenantId) {
-      logger.warn("Domain record has no tenant id.", { domain });
-      set.status = 400;
-      return { error: "SSO tenant mapping is incomplete for this domain" };
-    }
-
-    if (!providerType) {
-      logger.warn("Domain record has no provider type.", {
-        domain,
-        tenantId,
-      });
-      set.status = 400;
-      return { error: "Unsupported provider configured for this domain" };
-    }
-
-    const safeReturnTo = resolveSafeReturnTo(returnTo) || getDefaultReturnTo();
-    const normalizedProvider = providerType.toLowerCase();
-
-    const authProvider = await getTenantAuthProvider(tenantId, providerType);
-
-    const state = generateState();
-    const codeVerifier = generateCodeVerifier();
-    let url: URL;
-
-    if (normalizedProvider === "google") {
-      url = authProvider.createAuthorizationURL(state, codeVerifier, [
-        "openid",
-        "profile",
-        "email",
-        "https://www.googleapis.com/auth/calendar.readonly",
-      ]);
-    } else if (normalizedProvider === "entra") {
-      url = authProvider.createAuthorizationURL(state, codeVerifier, [
-        "openid",
-        "profile",
-        "email",
-        "Calendars.Read",
-        "User.Read",
-      ]);
-    } else {
-      logger.warn("Unsupported provider configured for domain.", {
-        domain,
-        provider: normalizedProvider,
-      });
-      set.status = 400;
-      return { error: "Unsupported provider configured for this domain" };
-    }
-
-    url.searchParams.set("login_hint", rawEmail);
-
-    const cookieOpts = {
-      path: "/",
-      secure: env.NODE_ENV === "production",
-      httpOnly: true,
-      maxAge: 60 * 10,
-    };
-
-    oauth_state.set({ value: state, ...cookieOpts });
-    oauth_code_verifier.set({ value: codeVerifier, ...cookieOpts });
-    oauth_tenant_id.set({ value: tenantId, ...cookieOpts });
-    oauth_return_to.set({ value: safeReturnTo, ...cookieOpts });
-
-    logger.debug("Redirecting user to identity provider.", {
-      provider: normalizedProvider,
-      tenantId,
-      email: maskEmail(normalizedEmail),
+    return await buildProviderRedirect({
+      email: normalizedEmail,
+      tenantId: domainRecord.tenantId,
+      providerType: domainRecord.providerType,
+      returnTo,
+      oauth_state,
+      oauth_code_verifier,
+      oauth_tenant_id,
+      oauth_return_to,
     });
-    return Response.redirect(url.href, 302);
   } catch (err) {
     logger.error("Unified login flow failed.", {
       email: maskEmail(rawEmail),
+      err,
+    });
+    set.status = 500;
+    return { error: "Internal Server Error" };
+  }
+};
+
+/**
+ * Starts SSO login after the user chooses a provider.
+ */
+export const chooseLoginProvider = async ({
+  body,
+  cookie: {
+    oauth_state,
+    oauth_code_verifier,
+    oauth_tenant_id,
+    oauth_return_to,
+  },
+  set,
+}: any) => {
+  const rawEmail = String(body?.email ?? "");
+  const tenantId = String(body?.tenantId ?? "").trim();
+  const providerType = String(body?.providerType ?? "").trim().toLowerCase();
+  const returnTo = body?.returnTo;
+
+  try {
+    const normalizedEmail = rawEmail.trim().toLowerCase();
+    const domain = normalizedEmail.split("@")[1];
+
+    if (!domain || !tenantId || (providerType !== "google" && providerType !== "entra")) {
+      set.status = 400;
+      return { error: "Valid email, tenant, and provider are required" };
+    }
+
+    const domainRecords = await resolveLoginChoices(domain);
+    const match = domainRecords.find(
+      (record) =>
+        record.tenantId === tenantId && record.providerType === providerType,
+    );
+
+    if (!match) {
+      set.status = 400;
+      return { error: "Selected provider is not configured for this domain" };
+    }
+
+    return await buildProviderRedirect({
+      email: normalizedEmail,
+      tenantId,
+      providerType,
+      returnTo,
+      oauth_state,
+      oauth_code_verifier,
+      oauth_tenant_id,
+      oauth_return_to,
+    });
+  } catch (err) {
+    logger.error("Provider choice login flow failed.", {
+      email: maskEmail(rawEmail),
+      tenantId,
+      providerType,
       err,
     });
     set.status = 500;

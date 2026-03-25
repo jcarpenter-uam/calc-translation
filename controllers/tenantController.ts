@@ -67,11 +67,16 @@ function validateTenantSettingsInput(
         authConfigs: [],
       };
     }
-    if (domainSet.has(entry.domain)) {
+    const domainProviderKey = `${entry.domain}:${entry.providerType}`;
+    if (domainSet.has(domainProviderKey)) {
       set.status = 400;
-      return { error: `Duplicate domain: ${entry.domain}`, domains: [], authConfigs: [] };
+      return {
+        error: `Duplicate domain/provider pair: ${entry.domain} (${entry.providerType})`,
+        domains: [],
+        authConfigs: [],
+      };
     }
-    domainSet.add(entry.domain);
+    domainSet.add(domainProviderKey);
   }
 
   const providerSet = new Set<string>();

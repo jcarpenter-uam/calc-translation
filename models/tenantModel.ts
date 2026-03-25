@@ -12,13 +12,24 @@ export const tenants = pgTable("tenants", {
 /**
  * Domain-to-tenant SSO routing table schema.
  */
-export const tenantDomains = pgTable("tenant_domains", {
-  domain: text("domain").primaryKey(),
-  tenantId: text("tenant_id").references(() => tenants.tenantId, {
-    onDelete: "cascade",
+export const tenantDomains = pgTable(
+  "tenant_domains",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    domain: text("domain").notNull(),
+    tenantId: text("tenant_id").references(() => tenants.tenantId, {
+      onDelete: "cascade",
+    }),
+    providerType: text("provider_type").notNull(),
+  },
+  (table) => ({
+    uqTenantDomainProvider: unique("uq_tenant_domain_provider").on(
+      table.tenantId,
+      table.domain,
+      table.providerType,
+    ),
   }),
-  providerType: text("provider_type"),
-});
+);
 
 /**
  * Per-tenant OAuth provider configuration schema.

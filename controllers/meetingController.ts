@@ -2,12 +2,52 @@ import { websocketController } from "./websocketController";
 import { logger } from "../core/logger";
 import { generateWsTicket } from "../utils/security";
 import { db } from "../core/database";
+import { env } from "../core/config";
 import { meetings } from "../models/meetingModel";
 import { userTenants } from "../models/userTenantModel";
 import { users } from "../models/userModel";
 import { eq, and, sql, desc, or, ilike, inArray, asc, isNull } from "drizzle-orm";
 
 const MAX_INVITEES = 100;
+const MAX_ONE_WAY_LANGUAGES = 5;
+
+function getUniqueMeetingLanguages(languages: unknown): string[] {
+  if (!Array.isArray(languages)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      languages
+        .map((value) => String(value).trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
+}
+
+function buildNativeViewerJoinUrl(readableId: string) {
+  const appOrigin = new URL(env.BASE_URL).origin;
+  const joinUrl = new URL("/", appOrigin);
+  joinUrl.searchParams.set("join", readableId);
+  return joinUrl.toString();
+}
+
+function normalizeJoinUrl(joinUrl: unknown) {
+  if (typeof joinUrl !== "string") {
+    return null;
+  }
+
+  const trimmedJoinUrl = joinUrl.trim();
+  if (!trimmedJoinUrl) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmedJoinUrl).toString();
+  } catch {
+    return null;
+  }
+}
 
 function canAccessMeetingRecord(
   meeting: { host_id: string | null; attendees: string[] | null; tenant_id: string | null },
@@ -275,7 +315,28 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
   logger.debug("Attempting to create meeting.", { userId, tenantId });
 
   try {
+    const method = body?.method || "one_way";
+    const languages = getUniqueMeetingLanguages(body?.languages);
+    const integration = body?.integration === "zoom" ? "zoom" : "native";
+
+    if (method === "one_way" && languages.length > MAX_ONE_WAY_LANGUAGES) {
+      set.status = 400;
+      return {
+        error: `One-way meetings can include at most ${MAX_ONE_WAY_LANGUAGES} spoken languages`,
+      };
+    }
+
     const readableId = generateReadableId();
+    const zoomJoinUrl = normalizeJoinUrl(body?.join_url);
+
+    if (integration === "zoom" && !zoomJoinUrl) {
+      set.status = 400;
+      return { error: "Zoom meetings require a valid meeting URL" };
+    }
+
+    const joinUrl = integration === "zoom"
+      ? zoomJoinUrl
+      : buildNativeViewerJoinUrl(readableId);
 
     const [newMeeting] = await db
       .insert(meetings)
@@ -284,10 +345,11 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
         topic: body?.topic || "Untitled Meeting",
         host_id: user.id,
         tenant_id: tenantId,
+        join_url: joinUrl,
         attendees: [],
-        languages: body?.languages || [],
-        integration: body?.integration,
-        method: body?.method || "one_way",
+        languages,
+        integration,
+        method,
         scheduled_time: body?.scheduled_time
           ? new Date(body.scheduled_time)
           : null,
@@ -313,6 +375,7 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
       message: "Meeting created successfully",
       meetingId: newMeeting.id,
       readableId: newMeeting.readable_id,
+      joinUrl,
     };
   } catch (err) {
     logger.error("Failed to create meeting.", { userId, tenantId, err });
@@ -417,7 +480,7 @@ export const createQuickMeeting = async ({ body, user, tenantId, set }: any) => 
 };
 
 /**
- * Joins a user to a meeting and starts transcription workers when needed.
+ * Joins a user to a meeting and issues websocket access for the live room.
  */
 export const joinMeeting = async ({
   params: { id },
@@ -471,7 +534,7 @@ export const joinMeeting = async ({
     };
 
     const method = dbMeeting.method || "one_way";
-    let currentLanguages = dbMeeting.languages || [];
+    let currentLanguages = getUniqueMeetingLanguages(dbMeeting.languages);
     const userLanguage = user.languageCode;
 
     if (
@@ -479,61 +542,15 @@ export const joinMeeting = async ({
       userLanguage &&
       !currentLanguages.includes(userLanguage)
     ) {
-      currentLanguages.push(userLanguage);
-      dbUpdatePayload.languages = currentLanguages;
-    }
-
-    if (!isAudioRunning && isHost) {
-      activeMeeting = websocketController.getMeeting(internalId);
-
-      if (method === "two_way" && currentLanguages.length >= 2) {
-        const [languageA, languageB] = currentLanguages;
-        if (!languageA || !languageB) {
-          logger.warn(
-            "Skipping two-way session startup due to incomplete language configuration.",
-            { meetingId: internalId, userId },
-          );
-          set.status = 400;
-          return { error: "Meeting language configuration is incomplete" };
-        }
-
-        const session = websocketController.addTranscriptionSession(
-          internalId,
-          "two_way",
-          {
-            enableSpeakerDiarization: true,
-            translation: {
-              type: "two_way",
-              language_a: languageA,
-              language_b: languageB,
-            },
-          },
-        );
-        await session?.connect();
-      } else {
-        for (const lang of currentLanguages) {
-          const session = websocketController.addTranscriptionSession(
-            internalId,
-            lang,
-            {
-              enableSpeakerDiarization: true,
-              translation: { type: "one_way", target_language: lang },
-            },
-          );
-          await session?.connect();
-        }
+      if (currentLanguages.length >= MAX_ONE_WAY_LANGUAGES) {
+        set.status = 400;
+        return {
+          error: `One-way meetings can include at most ${MAX_ONE_WAY_LANGUAGES} spoken languages`,
+        };
       }
 
-      logger.info("Host started meeting.", {
-        meetingId: internalId,
-        hostId: userId,
-      });
-      dbUpdatePayload.started_at = new Date();
-
-      websocketController.broadcastToMeeting(
-        internalId,
-        JSON.stringify({ type: "status", event: "meeting_started" }),
-      );
+      currentLanguages.push(userLanguage);
+      dbUpdatePayload.languages = currentLanguages;
     }
 
     // Start a new one-way worker when an active meeting gains a new language.
@@ -553,6 +570,10 @@ export const joinMeeting = async ({
       );
 
       await newSession?.connect();
+      if (!websocketController.isHostSendingAudio(internalId)) {
+        newSession?.pause();
+      }
+
       logger.info(
         "Started dynamic one-way session.",
         {

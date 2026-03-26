@@ -21,7 +21,7 @@ export const websocketRoute = new Elysia().ws("/ws", {
     ws.send(JSON.stringify({ status: "Connected and authenticated" }));
   },
 
-  message(ws, message) {
+  async message(ws, message) {
     const user = (ws.data as any).wsUser;
 
     // Route raw bytes directly as microphone audio.
@@ -79,6 +79,11 @@ export const websocketRoute = new Elysia().ws("/ws", {
           ws,
         );
 
+        await websocketController.prepareHostAudio(
+          payload.meetingId,
+          secureParticipantId,
+        );
+
         logger.debug(
           "WebSocket user subscribed to meeting.",
           {
@@ -104,6 +109,16 @@ export const websocketRoute = new Elysia().ws("/ws", {
             connectedCount: snapshot.connectedCount,
           }),
         );
+        return;
+      }
+
+      if (payload.action === "audio_started") {
+        websocketController.setHostAudioState(ws.id, true);
+        return;
+      }
+
+      if (payload.action === "audio_stopped") {
+        websocketController.setHostAudioState(ws.id, false);
       }
     }
   },

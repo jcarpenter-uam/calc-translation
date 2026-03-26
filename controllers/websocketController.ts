@@ -30,6 +30,23 @@ interface Meeting {
   participants: Map<string, Participant>;
   audioSessions: Map<string, TranscriptionSession>;
   hostTimeout?: ReturnType<typeof setTimeout>;
+  hostAudioIdleTimeout?: ReturnType<typeof setTimeout>;
+  isHostSendingAudio: boolean;
+}
+
+function getUniqueMeetingLanguages(languages: unknown): string[] {
+  if (!Array.isArray(languages)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      languages
+        .filter((language): language is string => typeof language === "string")
+        .map((language) => language.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 /**
@@ -54,6 +71,7 @@ export class WebsocketController {
         hostId: hostId || null,
         participants: new Map(),
         audioSessions: new Map(),
+        isHostSendingAudio: false,
       });
     } else if (hostId) {
       const meeting = this.meetings.get(meetingId)!;
@@ -159,9 +177,7 @@ export class WebsocketController {
         clearTimeout(meeting.hostTimeout);
         meeting.hostTimeout = undefined;
 
-        meeting.audioSessions.forEach((session) => session.resume());
-
-        logger.info("Host reconnected and sessions resumed.", {
+        logger.info("Host reconnected to meeting websocket.", {
           userId: participantId,
           userEmail,
           meetingId,
@@ -172,7 +188,7 @@ export class WebsocketController {
           JSON.stringify({
             type: "status",
             event: "host_reconnected",
-            message: "Host reconnected. Resuming audio...",
+            message: "Host reconnected. Audio will resume when microphone streaming starts.",
           }),
         );
       }
@@ -260,6 +276,16 @@ export class WebsocketController {
 
     const meeting = this.meetings.get(meetingId);
     if (meeting) {
+      const sender = Array.from(meeting.participants.values()).find(
+        (participant) => participant.socket.id === wsId,
+      );
+
+      if (sender?.id === meeting.hostId && !meeting.isHostSendingAudio) {
+        this.resumeHostAudio(meetingId, false);
+      } else if (sender?.id === meeting.hostId) {
+        this.refreshHostAudioIdleTimeout(meetingId);
+      }
+
       meeting.audioSessions.forEach((session) => {
         try {
           session.sendAudio(audioChunk);
@@ -335,7 +361,7 @@ export class WebsocketController {
             meetingId,
           });
 
-          meeting.audioSessions.forEach((session) => session.pause());
+          this.pauseHostAudio(meetingId, false);
 
           this.broadcastToMeeting(
             meetingId,
@@ -399,6 +425,10 @@ export class WebsocketController {
         );
       }
 
+      if (meeting.hostAudioIdleTimeout) {
+        clearTimeout(meeting.hostAudioIdleTimeout);
+      }
+
       const disconnectMsg = JSON.stringify({
         type: "status",
         message: `Meeting ${id} ended.`,
@@ -445,6 +475,213 @@ export class WebsocketController {
     this.meetings
       .get(meetingId)
       ?.participants.forEach((p) => p.socket.send(data));
+  }
+
+  isHostSendingAudio(meetingId: string) {
+    return this.meetings.get(meetingId)?.isHostSendingAudio ?? false;
+  }
+
+  async prepareHostAudio(meetingId: string, participantId: string) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting || meeting.hostId !== participantId) {
+      return;
+    }
+
+    if (meeting.audioSessions.size > 0) {
+      this.pauseHostAudio(meetingId, false);
+      return;
+    }
+
+    const [dbMeeting] = await db
+      .select()
+      .from(meetings)
+      .where(eq(meetings.id, meetingId));
+
+    if (!dbMeeting) {
+      logger.warn("Unable to prepare host audio for missing meeting record.", {
+        meetingId,
+        participantId,
+      });
+      return;
+    }
+
+    const method = dbMeeting.method || "one_way";
+    const languages = getUniqueMeetingLanguages(dbMeeting.languages);
+
+    if (method === "two_way") {
+      const [languageA, languageB] = languages;
+      if (!languageA || !languageB) {
+        logger.warn("Skipping paused two-way session startup due to missing languages.", {
+          meetingId,
+          participantId,
+        });
+        return;
+      }
+
+      const session = this.addTranscriptionSession(meetingId, "two_way", {
+        enableSpeakerDiarization: true,
+        translation: {
+          type: "two_way",
+          language_a: languageA,
+          language_b: languageB,
+        },
+      });
+
+      await session?.connect();
+      session?.pause();
+    } else {
+      for (const language of languages) {
+        const session = this.addTranscriptionSession(meetingId, language, {
+          enableSpeakerDiarization: true,
+          translation: {
+            type: "one_way",
+            target_language: language,
+          },
+        });
+
+        await session?.connect();
+        session?.pause();
+      }
+    }
+
+    if (meeting.audioSessions.size === 0) {
+      logger.warn("Prepared host audio request found no languages to activate.", {
+        meetingId,
+        participantId,
+        method,
+      });
+      return;
+    }
+
+    meeting.isHostSendingAudio = false;
+
+    await db
+      .update(meetings)
+      .set({ started_at: dbMeeting.started_at || new Date() })
+      .where(eq(meetings.id, meetingId));
+
+    logger.info("Prepared paused transcription sessions for host.", {
+      meetingId,
+      participantId,
+      method,
+      languageCount: languages.length,
+    });
+
+    this.broadcastToMeeting(
+      meetingId,
+      JSON.stringify({
+        type: "status",
+        event: "meeting_started",
+        message: "Meeting started. Transcription sessions are standing by.",
+      }),
+    );
+  }
+
+  setHostAudioState(wsId: string, isSendingAudio: boolean) {
+    const meetingId = this.socketToMeeting.get(wsId);
+    if (!meetingId) {
+      logger.debug("Ignoring host audio state update for unmapped socket.", {
+        socketId: wsId,
+      });
+      return;
+    }
+
+    const meeting = this.meetings.get(meetingId);
+    const sender = meeting
+      ? Array.from(meeting.participants.values()).find(
+          (participant) => participant.socket.id === wsId,
+        )
+      : null;
+
+    if (!meeting || sender?.id !== meeting.hostId) {
+      logger.debug("Ignoring non-host audio state update.", {
+        meetingId,
+        socketId: wsId,
+      });
+      return;
+    }
+
+    if (isSendingAudio) {
+      this.resumeHostAudio(meetingId, true);
+      return;
+    }
+
+    this.pauseHostAudio(meetingId, true);
+  }
+
+  private refreshHostAudioIdleTimeout(meetingId: string) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting) {
+      return;
+    }
+
+    if (meeting.hostAudioIdleTimeout) {
+      clearTimeout(meeting.hostAudioIdleTimeout);
+    }
+
+    meeting.hostAudioIdleTimeout = setTimeout(() => {
+      this.pauseHostAudio(meetingId, true);
+    }, 5000);
+  }
+
+  private resumeHostAudio(meetingId: string, announce: boolean) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting || meeting.isHostSendingAudio) {
+      if (meeting?.isHostSendingAudio) {
+        this.refreshHostAudioIdleTimeout(meetingId);
+      }
+      return;
+    }
+
+    meeting.audioSessions.forEach((session) => session.resume());
+    meeting.isHostSendingAudio = true;
+    this.refreshHostAudioIdleTimeout(meetingId);
+
+    logger.info("Host audio resumed for meeting.", { meetingId });
+
+    if (announce) {
+      this.broadcastToMeeting(
+        meetingId,
+        JSON.stringify({
+          type: "status",
+          event: "host_audio_started",
+          message: "Host microphone is live.",
+        }),
+      );
+    }
+  }
+
+  private pauseHostAudio(meetingId: string, announce: boolean) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting) {
+      return;
+    }
+
+    if (meeting.hostAudioIdleTimeout) {
+      clearTimeout(meeting.hostAudioIdleTimeout);
+      meeting.hostAudioIdleTimeout = undefined;
+    }
+
+    meeting.audioSessions.forEach((session) => session.pause());
+    const wasSendingAudio = meeting.isHostSendingAudio;
+    meeting.isHostSendingAudio = false;
+
+    if (!wasSendingAudio) {
+      return;
+    }
+
+    logger.info("Host audio paused for meeting.", { meetingId });
+
+    if (announce) {
+      this.broadcastToMeeting(
+        meetingId,
+        JSON.stringify({
+          type: "status",
+          event: "host_audio_stopped",
+          message: "Host microphone is idle.",
+        }),
+      );
+    }
   }
 
   /**

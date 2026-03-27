@@ -79,6 +79,7 @@ export async function createTestUser(
   id: string,
   name: string,
   languageCode: string,
+  role: "user" | "tenant_admin" | "super_admin" = "user",
 ): Promise<TestUser> {
   // Seed the shared tenant to satisfy foreign-key constraints.
   await db
@@ -93,10 +94,10 @@ export async function createTestUser(
 
   await db
     .insert(users)
-    .values({ id, name, email: `${id}@test.com`, languageCode })
+    .values({ id, name, email: `${id}@test.com`, languageCode, role })
     .onConflictDoUpdate({
       target: users.id,
-      set: { languageCode },
+      set: { languageCode, role },
     });
 
   trackTestUsers(id);
@@ -195,6 +196,21 @@ export async function apiFetch<T = any>(
   });
   if (!res.ok) throw new Error(`API Error [${path}]: ${await res.text()}`);
   return (await res.json()) as T;
+}
+
+/**
+ * Executes an authenticated HTTP GET request.
+ */
+export async function apiGet(
+  path: string,
+  token: string,
+): Promise<Response> {
+  return fetch(`${BASE_URL}${path}`, {
+    method: "GET",
+    headers: {
+      Cookie: `auth_session=${token}`,
+    },
+  });
 }
 
 /**

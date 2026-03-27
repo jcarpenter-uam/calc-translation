@@ -28,6 +28,10 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1, "JWT_SECRET must be defined in your .env file"),
 
   SONIOX_API_KEY: z.string({ message: "SONIOX_API_KEY must be a string" }),
+
+  REDIS_URL: z.string().url({ message: "REDIS_URL must be a valid URL" }).optional(),
+
+  TRANSCRIPT_OUTPUT_DIR: z.string().default("transcripts"),
 });
 
 const _env = envSchema.safeParse(Bun.env);

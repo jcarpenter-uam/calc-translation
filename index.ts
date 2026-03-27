@@ -11,6 +11,7 @@ import { userRoutes } from "./api/userRoutes";
 import { tenantRoutes } from "./api/tenantRoutes";
 import { bugReportRoutes } from "./api/bugReportRoutes";
 import { serverLogRoutes } from "./api/serverLogRoutes";
+import { meetingTranscriptCacheService } from "./services/meetingTranscriptCacheService";
 
 const requestStartTimes = new WeakMap<Request, number>();
 
@@ -90,11 +91,13 @@ export async function startServer(port = env.PORT) {
  */
 export async function stopServer() {
   if (!app) {
+    await meetingTranscriptCacheService.shutdown();
     return;
   }
 
   app.stop();
   app = null;
+  await meetingTranscriptCacheService.shutdown();
 }
 
 if (import.meta.main) {

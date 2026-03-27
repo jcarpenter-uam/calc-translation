@@ -4,7 +4,9 @@ import {
   transcriptionService,
   type TranscriptionSession,
   type TranscriptionConfig,
+  type TranscriptionEvent,
 } from "../services/transcriptionService";
+import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
 import { eq } from "drizzle-orm";
@@ -32,6 +34,7 @@ interface Meeting {
   hostTimeout?: ReturnType<typeof setTimeout>;
   hostAudioIdleTimeout?: ReturnType<typeof setTimeout>;
   isHostSendingAudio: boolean;
+  isEnding?: boolean;
 }
 
 function getUniqueMeetingLanguages(languages: unknown): string[] {
@@ -95,7 +98,9 @@ export class WebsocketController {
   ) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting) {
-      logger.warn("Attempted to add session to missing meeting.", { meetingId });
+      logger.warn("Attempted to add session to missing meeting.", {
+        meetingId,
+      });
       return null;
     }
 
@@ -115,15 +120,8 @@ export class WebsocketController {
     const session = transcriptionService.createSession(
       meetingId,
       config,
-      (text, language, isFinal) => {
-        const payload = JSON.stringify({
-          type: "transcription",
-          meetingId,
-          language, // Tag the payload so the frontend knows who to show this to
-          text,
-          isFinal,
-        });
-        this.broadcastToMeeting(meetingId, payload);
+      (event) => {
+        void this.handleTranscriptionEvent(meetingId, event);
       },
     );
 
@@ -158,11 +156,7 @@ export class WebsocketController {
    * @param participantId - The unique ID of the joining user.
    * @param ws - The active Elysia WebSocket instance.
    */
-  joinMeeting(
-    meetingId: string,
-    participantId: string,
-    ws: ElysiaWS,
-  ) {
+  joinMeeting(meetingId: string, participantId: string, ws: ElysiaWS) {
     this.initMeeting(meetingId);
 
     const meeting = this.meetings.get(meetingId);
@@ -188,7 +182,8 @@ export class WebsocketController {
           JSON.stringify({
             type: "status",
             event: "host_reconnected",
-            message: "Host reconnected. Audio will resume when microphone streaming starts.",
+            message:
+              "Host reconnected. Audio will resume when microphone streaming starts.",
           }),
         );
       }
@@ -224,6 +219,41 @@ export class WebsocketController {
             isConnected: true,
           },
           connectedCount: meeting.participants.size,
+        }),
+      );
+    }
+  }
+
+  /**
+   * Replays cached finalized transcript history to a newly subscribed socket.
+   */
+  async sendTranscriptHistoryToSocket(meetingId: string, ws: ElysiaWS) {
+    const languageCode = (ws.data as any)?.wsUser?.languageCode;
+    if (!languageCode) {
+      return;
+    }
+
+    const history = await meetingTranscriptCacheService.getLanguageHistory(
+      meetingId,
+      languageCode,
+    );
+
+    for (const utterance of history) {
+      ws.send(
+        JSON.stringify({
+          type: "transcription",
+          meetingId,
+          language: utterance.language,
+          text: utterance.text,
+          transcriptionText: null,
+          translationText: utterance.text,
+          isFinal: true,
+          isHistory: true,
+          utteranceId: utterance.id,
+          startedAtMs: utterance.startedAtMs,
+          endedAtMs: utterance.endedAtMs,
+          speaker: utterance.speaker,
+          sourceLanguage: null,
         }),
       );
     }
@@ -325,14 +355,11 @@ export class WebsocketController {
         });
 
         if (disconnectedParticipantId) {
-          logger.debug(
-            "Disconnected user removed from meeting memory.",
-            {
-              userId: disconnectedParticipantId,
-              userEmail: disconnectedParticipantEmail,
-              meetingId,
-            },
-          );
+          logger.debug("Disconnected user removed from meeting memory.", {
+            userId: disconnectedParticipantId,
+            userEmail: disconnectedParticipantEmail,
+            meetingId,
+          });
 
           this.broadcastToMeeting(
             meetingId,
@@ -385,10 +412,13 @@ export class WebsocketController {
                 .set({ ended_at: new Date() })
                 .where(eq(meetings.id, meetingId));
             } catch (err) {
-              logger.error("Failed updating meeting status after host timeout.", {
-                meetingId,
-                err,
-              });
+              logger.error(
+                "Failed updating meeting status after host timeout.",
+                {
+                  meetingId,
+                  err,
+                },
+              );
             }
 
             this.deleteMeeting(meetingId);
@@ -404,29 +434,64 @@ export class WebsocketController {
    *
    * @param id - The internal database ID of the meeting to end.
    */
-  deleteMeeting(id: string) {
+  async deleteMeeting(id: string) {
     const meeting = this.meetings.get(id);
 
     if (meeting) {
-      logger.info(
-        "Tearing down meeting and finishing audio sessions.",
-        {
+      if (meeting.isEnding) {
+        logger.debug("Meeting teardown already in progress.", {
           meetingId: id,
-        },
-      );
+        });
+        return;
+      }
+
+      meeting.isEnding = true;
+
+      logger.info("Tearing down meeting and finishing audio sessions.", {
+        meetingId: id,
+      });
 
       if (meeting.hostTimeout) {
         clearTimeout(meeting.hostTimeout);
-        logger.debug(
-          "Canceling host reconnect timeout timer.",
-          {
-            meetingId: id,
-          },
-        );
+        logger.debug("Canceling host reconnect timeout timer.", {
+          meetingId: id,
+        });
       }
 
       if (meeting.hostAudioIdleTimeout) {
         clearTimeout(meeting.hostAudioIdleTimeout);
+      }
+
+      await Promise.all(
+        Array.from(meeting.audioSessions.entries()).map(
+          async ([languageKey, session]) => {
+            try {
+              await session.finish();
+            } catch (err) {
+              logger.error("Failed finishing audio session.", {
+                err,
+                meetingId: id,
+                languageKey,
+              });
+            }
+          },
+        ),
+      );
+
+      try {
+        const outputPaths =
+          await meetingTranscriptCacheService.flushMeetingToVtt(id);
+        if (outputPaths.length > 0) {
+          logger.info("Meeting transcript history flushed to disk.", {
+            meetingId: id,
+            outputPaths,
+          });
+        }
+      } catch (err) {
+        logger.error("Failed flushing meeting transcript history.", {
+          meetingId: id,
+          err,
+        });
       }
 
       const disconnectMsg = JSON.stringify({
@@ -442,18 +507,6 @@ export class WebsocketController {
             err,
           });
         }
-      });
-
-      meeting.audioSessions.forEach((session, languageKey) => {
-        session
-          .finish()
-          .catch((err) =>
-            logger.error("Failed finishing audio session.", {
-              err,
-              meetingId: id,
-              languageKey,
-            }),
-          );
       });
 
       this.meetings.delete(id);
@@ -475,6 +528,18 @@ export class WebsocketController {
     this.meetings
       .get(meetingId)
       ?.participants.forEach((p) => p.socket.send(data));
+  }
+
+  private sendTranscriptToLanguageParticipants(
+    meetingId: string,
+    language: string,
+    data: string,
+  ) {
+    this.meetings.get(meetingId)?.participants.forEach((participant) => {
+      if (participant.languageCode === language) {
+        participant.socket.send(data);
+      }
+    });
   }
 
   isHostSendingAudio(meetingId: string) {
@@ -511,10 +576,13 @@ export class WebsocketController {
     if (method === "two_way") {
       const [languageA, languageB] = languages;
       if (!languageA || !languageB) {
-        logger.warn("Skipping paused two-way session startup due to missing languages.", {
-          meetingId,
-          participantId,
-        });
+        logger.warn(
+          "Skipping paused two-way session startup due to missing languages.",
+          {
+            meetingId,
+            participantId,
+          },
+        );
         return;
       }
 
@@ -545,11 +613,14 @@ export class WebsocketController {
     }
 
     if (meeting.audioSessions.size === 0) {
-      logger.warn("Prepared host audio request found no languages to activate.", {
-        meetingId,
-        participantId,
-        method,
-      });
+      logger.warn(
+        "Prepared host audio request found no languages to activate.",
+        {
+          meetingId,
+          participantId,
+          method,
+        },
+      );
       return;
     }
 
@@ -691,6 +762,83 @@ export class WebsocketController {
    */
   private broadcastGlobal(data: any) {
     this.globalSubscribers.forEach((ws) => ws.send(data));
+  }
+
+  private async handleTranscriptionEvent(
+    meetingId: string,
+    event: TranscriptionEvent,
+  ) {
+    logger.debug("Transcript utterance received.", {
+      meetingId,
+      language: event.targetLanguage,
+      isFinal: event.isFinal,
+      text: event.text,
+      transcriptionText: event.transcriptionText,
+      translationText: event.translationText,
+      sourceLanguage: event.sourceLanguage,
+      startedAtMs: event.startedAtMs,
+      endedAtMs: event.endedAtMs,
+      speaker: event.speaker,
+    });
+
+    if (event.isFinal && event.text) {
+      try {
+        const cachedUtterance =
+          await meetingTranscriptCacheService.appendFinalUtterance({
+            meetingId,
+            language: event.targetLanguage,
+            text: event.text,
+            startedAtMs: event.startedAtMs,
+            endedAtMs: event.endedAtMs,
+            speaker: event.speaker,
+          });
+
+        this.sendTranscriptToLanguageParticipants(
+          meetingId,
+          event.targetLanguage,
+          JSON.stringify({
+            type: "transcription",
+            meetingId,
+            language: event.targetLanguage,
+            text: event.text,
+            transcriptionText: event.transcriptionText,
+            translationText: event.translationText,
+            isFinal: true,
+            utteranceId: cachedUtterance.id,
+            startedAtMs: event.startedAtMs,
+            endedAtMs: event.endedAtMs,
+            speaker: event.speaker,
+            sourceLanguage: event.sourceLanguage,
+          }),
+        );
+
+        return;
+      } catch (err) {
+        logger.error("Failed caching finalized transcript utterance.", {
+          meetingId,
+          language: event.targetLanguage,
+          err,
+        });
+      }
+    }
+
+    this.sendTranscriptToLanguageParticipants(
+      meetingId,
+      event.targetLanguage,
+      JSON.stringify({
+        type: "transcription",
+        meetingId,
+        language: event.targetLanguage,
+        text: event.text,
+        transcriptionText: event.transcriptionText,
+        translationText: event.translationText,
+        isFinal: event.isFinal,
+        startedAtMs: event.startedAtMs,
+        endedAtMs: event.endedAtMs,
+        speaker: event.speaker,
+        sourceLanguage: event.sourceLanguage,
+      }),
+    );
   }
 }
 

@@ -4,6 +4,7 @@ import { generateWsTicket } from "../utils/security";
 import { db } from "../core/database";
 import { env } from "../core/config";
 import { meetings } from "../models/meetingModel";
+import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 import { userTenants } from "../models/userTenantModel";
 import { users } from "../models/userModel";
 import { eq, and, sql, desc, or, ilike, inArray, asc, isNull } from "drizzle-orm";
@@ -61,6 +62,14 @@ function canAccessMeetingRecord(
   const isSuperAdmin = user.role === "super_admin";
 
   return isHost || isAttendee || isTenantAdmin || isSuperAdmin;
+}
+
+function canDownloadMeetingTranscript(
+  meeting: { host_id: string | null; attendees: string[] | null },
+  user: { id: string },
+) {
+  const currentAttendees = meeting.attendees || [];
+  return meeting.host_id === user.id || currentAttendees.includes(user.id);
 }
 
 /**
@@ -239,6 +248,82 @@ export const getMeetingParticipants = async ({ params: { id }, user, tenantId, s
     });
     set.status = 500;
     return { error: "Failed to fetch meeting participants" };
+  }
+};
+
+/**
+ * Downloads an archived per-language VTT transcript for a meeting participant or host.
+ */
+export const downloadMeetingTranscript = async ({
+  params: { id, language },
+  user,
+  set,
+}: any) => {
+  const userId = user?.id || "unknown_user";
+
+  try {
+    const [meeting] = await db
+      .select({
+        id: meetings.id,
+        readable_id: meetings.readable_id,
+        host_id: meetings.host_id,
+        attendees: meetings.attendees,
+      })
+      .from(meetings)
+      .where(eq(meetings.id, id));
+
+    if (!meeting) {
+      set.status = 404;
+      return { error: "Meeting not found" };
+    }
+
+    if (!canDownloadMeetingTranscript(meeting, user)) {
+      logger.warn("Transcript download access denied.", {
+        userId,
+        meetingId: id,
+        language,
+      });
+      set.status = 403;
+      return { error: "Not authorized to download this transcript" };
+    }
+
+    const transcriptPath = meetingTranscriptCacheService.getTranscriptOutputPath(
+      id,
+      language,
+    );
+    const transcriptFile = Bun.file(transcriptPath);
+
+    if (!(await transcriptFile.exists())) {
+      set.status = 404;
+      return { error: "Transcript not found" };
+    }
+
+    const safeReadableId = (meeting.readable_id || meeting.id || "meeting").replace(
+      /[^a-zA-Z0-9_-]/g,
+      "_",
+    );
+    const safeLanguage = String(language).replace(/[^a-zA-Z0-9_-]/g, "_") || "unknown";
+
+    set.headers["content-type"] = "text/vtt; charset=utf-8";
+    set.headers["content-disposition"] =
+      `attachment; filename="${safeReadableId}-${safeLanguage}.vtt"`;
+
+    logger.info("Transcript download served.", {
+      userId,
+      meetingId: id,
+      language,
+    });
+
+    return transcriptFile;
+  } catch (err) {
+    logger.error("Failed to download meeting transcript.", {
+      userId,
+      meetingId: id,
+      language,
+      err,
+    });
+    set.status = 500;
+    return { error: "Failed to download transcript" };
   }
 };
 
@@ -653,7 +738,7 @@ export const endMeeting = async ({ params: { id }, user, set }: any) => {
       return { error: "Not authorized to end this meeting" };
     }
 
-    websocketController.deleteMeeting(id);
+    await websocketController.deleteMeeting(id);
 
     logger.info("Meeting ended successfully.", { userId, meetingId: id });
 

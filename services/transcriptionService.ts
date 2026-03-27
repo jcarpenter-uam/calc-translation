@@ -14,6 +14,57 @@ export interface TranscriptionConfig {
 }
 
 /**
+ * Normalized transcription event passed from Soniox to the websocket layer.
+ */
+export interface TranscriptionEvent {
+  text: string;
+  targetLanguage: string;
+  transcriptionText: string | null;
+  translationText: string | null;
+  isFinal: boolean;
+  startedAtMs: number | null;
+  endedAtMs: number | null;
+  speaker: string | null;
+  sourceLanguage: string | null;
+}
+
+type SonioxToken = {
+  text?: string;
+  is_final?: boolean;
+  start_ms?: number;
+  end_ms?: number;
+  speaker?: string;
+  translation_status?: "none" | "original" | "translation";
+  source_language?: string;
+};
+
+function joinTokenText(tokens: SonioxToken[]) {
+  return tokens.map((token) => token.text || "").join("").trim();
+}
+
+function splitTranscriptTexts(tokens: SonioxToken[]) {
+  const translationTokens = tokens.filter(
+    (token) => token.translation_status === "translation",
+  );
+  const transcriptionTokens = tokens.filter(
+    (token) => token.translation_status !== "translation",
+  );
+
+  const translationText = joinTokenText(translationTokens);
+  const transcriptionText = joinTokenText(transcriptionTokens);
+
+  return {
+    translationText: translationText || null,
+    transcriptionText: transcriptionText || null,
+    displayText: translationText || transcriptionText,
+    sourceLanguage:
+      translationTokens.find((token) => token.source_language)?.source_language ||
+      transcriptionTokens.find((token) => token.source_language)?.source_language ||
+      null,
+  };
+}
+
+/**
  * An abstracted interface for a real-time transcription session.
  */
 export interface TranscriptionSession {
@@ -36,11 +87,7 @@ class SonioxTranscriptionService {
   createSession(
     meetingId: string,
     config: TranscriptionConfig,
-    onTranscriptionReady: (
-      text: string,
-      targetLanguage: string,
-      isFinal: boolean,
-    ) => void,
+    onTranscriptionReady: (event: TranscriptionEvent) => void,
   ): TranscriptionSession {
     const targetLanguage =
       config.translation?.type === "one_way"
@@ -90,35 +137,33 @@ class SonioxTranscriptionService {
       });
     });
 
-    let activeSentenceFinalTokens = "";
-
     session.on("result", (result: any) => {
       utteranceBuffer.addResult(result);
 
       if (!result || !result.tokens) return;
 
-      const finalTokens = result.tokens
-        .filter((t: any) => t.is_final)
-        .map((t: any) => t.text)
-        .join("");
-      activeSentenceFinalTokens += finalTokens;
+      const { displayText, transcriptionText, translationText, sourceLanguage } =
+        splitTranscriptTexts(result.tokens as SonioxToken[]);
 
-      const nonFinalTokens = result.tokens
-        .filter((t: any) => !t.is_final)
-        .map((t: any) => t.text)
-        .join("");
-
-      const currentText = activeSentenceFinalTokens + nonFinalTokens;
-      if (currentText) {
-        onTranscriptionReady(currentText, targetLanguage, false);
+      if (displayText) {
+        onTranscriptionReady({
+          text: displayText,
+          targetLanguage,
+          transcriptionText,
+          translationText,
+          isFinal: false,
+          startedAtMs: null,
+          endedAtMs: null,
+          speaker: null,
+          sourceLanguage,
+        });
       }
     });
 
     session.on("endpoint", () => {
       const utterance = utteranceBuffer.markEndpoint();
       if (utterance) {
-        onTranscriptionReady(utterance.text, targetLanguage, true);
-        activeSentenceFinalTokens = "";
+        onTranscriptionReady(this.buildFinalEvent(utterance, targetLanguage));
       }
     });
 
@@ -128,7 +173,7 @@ class SonioxTranscriptionService {
       );
       const utterance = utteranceBuffer.markEndpoint();
       if (utterance) {
-        onTranscriptionReady(utterance.text, targetLanguage, true);
+        onTranscriptionReady(this.buildFinalEvent(utterance, targetLanguage));
       }
     });
 
@@ -152,9 +197,60 @@ class SonioxTranscriptionService {
       },
     };
   }
+
+  private buildFinalEvent(utterance: any, targetLanguage: string): TranscriptionEvent {
+    const tokens = Array.isArray(utterance?.tokens) ? utterance.tokens : [];
+    const { displayText, transcriptionText, translationText, sourceLanguage } =
+      splitTranscriptTexts(tokens as SonioxToken[]);
+    const firstTokenWithStart = tokens.find((token: any) => token?.start_ms != null);
+    const lastTokenWithEnd = [...tokens]
+      .reverse()
+      .find((token: any) => token?.end_ms != null);
+
+    return {
+      text: displayText,
+      targetLanguage,
+      transcriptionText,
+      translationText,
+      isFinal: true,
+      startedAtMs: this.normalizeMs(
+        utterance?.start_ms ?? utterance?.startMs ?? firstTokenWithStart?.start_ms,
+      ),
+      endedAtMs: this.normalizeMs(
+        utterance?.end_ms ?? utterance?.endMs ?? lastTokenWithEnd?.end_ms,
+      ),
+      speaker: this.normalizeSpeaker(
+        utterance?.speaker ?? utterance?.speaker_label ?? firstTokenWithStart?.speaker,
+      ),
+      sourceLanguage,
+    };
+  }
+
+  private normalizeMs(value: unknown) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+  }
+
+  private normalizeSpeaker(value: unknown) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed || null;
+    }
+
+    return null;
+  }
 }
 
 /**
  * Shared transcription service instance.
  */
 export const transcriptionService = new SonioxTranscriptionService();
+export { splitTranscriptTexts };

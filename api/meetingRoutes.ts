@@ -3,6 +3,7 @@ import {
   getMeetingsList,
   getMeetingDetails,
   getMeetingParticipants,
+  downloadMeetingTranscript,
   createMeeting,
   createQuickMeeting,
   listMeetingInvitees,
@@ -21,6 +22,7 @@ export const meetingRoutes = new Elysia({ prefix: "/meeting" })
       limit: t.Optional(t.Numeric()),
     }),
   })
+  .get("/:id/transcript/:language", downloadMeetingTranscript)
   .get("/:id/participants", getMeetingParticipants)
   .get("/:id", getMeetingDetails)
   .post("/create", createMeeting, {

@@ -12,3 +12,6 @@ drizzle/
 
 # test audio files
 tests/samples/
+
+# transcripts
+transcripts/

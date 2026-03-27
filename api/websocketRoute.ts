@@ -79,6 +79,11 @@ export const websocketRoute = new Elysia().ws("/ws", {
           ws,
         );
 
+        await websocketController.sendTranscriptHistoryToSocket(
+          payload.meetingId,
+          ws,
+        );
+
         await websocketController.prepareHostAudio(
           payload.meetingId,
           secureParticipantId,

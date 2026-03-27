@@ -27,7 +27,8 @@ export function decrypt(ciphertext: string): string {
     const token = new fernet.Token({
       secret: secret,
       token: ciphertext,
-      // Keep TTL disabled to match Python Fernet's base decrypt behavior.
+      // Secrets are configuration data, not expiring session tokens, so decryption keeps Fernet's
+      // TTL check disabled to mirror the existing Python behavior.
       ttl: 0,
     });
 

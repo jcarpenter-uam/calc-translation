@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "../core/database";
 import { logger } from "../core/logger";
 import { bugReports } from "../models/bugReportModel";
+import { isSuperAdmin } from "../utils/accessPolicy";
 
 type BugReportLogEntry = {
   timestamp: string;
@@ -32,6 +33,9 @@ type BugReportRecord = {
   clientLogs: string;
 };
 
+/**
+ * Parses the stored JSON log payload back into typed bug-report entries.
+ */
 function parseClientLogs(rawValue: string): BugReportLogEntry[] {
   try {
     const parsedValue = JSON.parse(rawValue) as unknown;
@@ -53,6 +57,9 @@ function parseClientLogs(rawValue: string): BugReportLogEntry[] {
   }
 }
 
+/**
+ * Converts a database bug-report row into the API shape returned to clients.
+ */
 function serializeBugReport(record: BugReportRecord) {
   return {
     id: record.id,
@@ -139,7 +146,7 @@ export const createBugReport = async ({ body, set, tenantId, user }: any) => {
 export const listBugReports = async ({ query, set, user }: any) => {
   const userId = user?.id || "unknown_user";
 
-  if (user?.role !== "super_admin") {
+  if (!isSuperAdmin(user)) {
     set.status = 403;
     return { error: "Forbidden - Super admin access required" };
   }
@@ -177,12 +184,12 @@ export const listBugReports = async ({ query, set, user }: any) => {
 };
 
 /**
- * Updates the current status of a bug report.
+ * Updates the current status of a bug report for super-admin triage.
  */
 export const updateBugReportStatus = async ({ body, params, set, user }: any) => {
   const userId = user?.id || "unknown_user";
 
-  if (user?.role !== "super_admin") {
+  if (!isSuperAdmin(user)) {
     set.status = 403;
     return { error: "Forbidden - Super admin access required" };
   }

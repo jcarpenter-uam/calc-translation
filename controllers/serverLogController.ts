@@ -1,17 +1,24 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { logger } from "../core/logger";
+import { isSuperAdmin } from "../utils/accessPolicy";
 
 type ServerLogPayload = {
   fileName: string | null;
   content: string;
 };
 
+/**
+ * Returns the most recent lines from a log file payload.
+ */
 function tailLines(content: string, limit: number) {
   const lines = content.split(/\r?\n/);
   return lines.slice(Math.max(0, lines.length - limit)).join("\n");
 }
 
+/**
+ * Loads the newest matching rotated log file and trims it to the requested line count.
+ */
 async function readLatestLog(prefix: string, lines: number): Promise<ServerLogPayload> {
   const logsDir = path.resolve(process.cwd(), "logs");
   const entries = await readdir(logsDir, { withFileTypes: true });
@@ -44,7 +51,7 @@ async function readLatestLog(prefix: string, lines: number): Promise<ServerLogPa
 export const getServerLogs = async ({ query, set, user }: any) => {
   const userId = user?.id || "unknown_user";
 
-  if (user?.role !== "super_admin") {
+  if (!isSuperAdmin(user)) {
     set.status = 403;
     return { error: "Forbidden - Super admin access required" };
   }

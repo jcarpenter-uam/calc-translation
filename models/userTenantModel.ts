@@ -3,7 +3,7 @@ import { users } from "./userModel";
 import { tenants } from "./tenantModel";
 
 /**
- * User-to-tenant membership mapping table.
+ * User-to-tenant membership mapping table for scoped access checks.
  */
 export const userTenants = pgTable(
   "user_tenants",

@@ -46,10 +46,10 @@ export function buildApp() {
 
       logger.debug(message);
     })
-    // Mount the isolated WebSocket routes
+    // WebSocket auth is isolated so API session cookies cannot be used on the socket route.
     .guard({}, (wsApp) => wsApp.use(requireWsAuth).use(websocketRoute))
 
-    // Mount the API routes
+    // Metrics stay outside the authenticated API guard so infrastructure can scrape them.
     .group("/api", (api) =>
       api
         .use(authRoutes)

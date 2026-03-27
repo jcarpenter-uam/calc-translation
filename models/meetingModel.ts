@@ -10,7 +10,7 @@ import { users } from "./userModel";
 import { tenants } from "./tenantModel";
 
 /**
- * Meetings table schema.
+ * Meetings table schema for scheduled and ad hoc translation sessions.
  */
 export const meetings = pgTable("meetings", {
   id: uuid("id").defaultRandom().primaryKey(),

@@ -5,27 +5,35 @@ import { db } from "../core/database";
 import { env } from "../core/config";
 import { meetings } from "../models/meetingModel";
 import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
+import {
+  buildJoinMeetingPlan,
+  getJoinLanguageLimitMessage,
+  getMeetingByReadableId,
+  normalizeReadableMeetingId,
+  persistJoinMeetingPlan,
+} from "../services/meetingJoinService";
 import { userTenants } from "../models/userTenantModel";
 import { users } from "../models/userModel";
-import { eq, and, sql, desc, or, ilike, inArray, asc, isNull } from "drizzle-orm";
+import { eq, and, desc, or, ilike, inArray, asc, isNull, sql } from "drizzle-orm";
+import {
+  addOneWayMeetingLanguage,
+  buildOneWayTranscriptionConfig,
+  getUniqueMeetingLanguages,
+  MAX_ONE_WAY_LANGUAGES,
+} from "../utils/meetingPolicy";
+import { parseBoundedInteger } from "../utils/pagination";
+import {
+  buildMeetingListVisibilityWhereClause,
+  canAccessMeetingRecord,
+  canDownloadMeetingTranscript,
+} from "../utils/accessPolicy";
+import { requireTenantContext } from "../utils/sessionPolicy";
 
 const MAX_INVITEES = 100;
-const MAX_ONE_WAY_LANGUAGES = 5;
 
-function getUniqueMeetingLanguages(languages: unknown): string[] {
-  if (!Array.isArray(languages)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      languages
-        .map((value) => String(value).trim())
-        .filter((value) => value.length > 0),
-    ),
-  );
-}
-
+/**
+ * Builds the native app join URL for meetings that are hosted inside this product.
+ */
 function buildNativeViewerJoinUrl(readableId: string) {
   const appOrigin = new URL(env.BASE_URL).origin;
   const joinUrl = new URL("/", appOrigin);
@@ -33,6 +41,9 @@ function buildNativeViewerJoinUrl(readableId: string) {
   return joinUrl.toString();
 }
 
+/**
+ * Accepts only valid absolute join URLs so integrations never persist malformed links.
+ */
 function normalizeJoinUrl(joinUrl: unknown) {
   if (typeof joinUrl !== "string") {
     return null;
@@ -50,28 +61,6 @@ function normalizeJoinUrl(joinUrl: unknown) {
   }
 }
 
-function canAccessMeetingRecord(
-  meeting: { host_id: string | null; attendees: string[] | null; tenant_id: string | null },
-  user: { id: string; role: string },
-  tenantId: string | null,
-) {
-  const currentAttendees = meeting.attendees || [];
-  const isHost = meeting.host_id === user.id;
-  const isAttendee = currentAttendees.includes(user.id);
-  const isTenantAdmin = user.role === "tenant_admin" && meeting.tenant_id === tenantId;
-  const isSuperAdmin = user.role === "super_admin";
-
-  return isHost || isAttendee || isTenantAdmin || isSuperAdmin;
-}
-
-function canDownloadMeetingTranscript(
-  meeting: { host_id: string | null; attendees: string[] | null },
-  user: { id: string },
-) {
-  const currentAttendees = meeting.attendees || [];
-  return meeting.host_id === user.id || currentAttendees.includes(user.id);
-}
-
 /**
  * Returns meetings visible to the requesting user under RBAC policy.
  */
@@ -83,8 +72,18 @@ export const getMeetingsList = async ({ user, tenantId, set }: any) => {
     tenantId,
   });
 
+  const scopedTenantId = requireTenantContext(tenantId, set);
+  if (!scopedTenantId) {
+    return { error: "Missing tenant context" };
+  }
+
   try {
-    let query = db
+    const visibilityFilter = buildMeetingListVisibilityWhereClause(
+      user,
+      scopedTenantId,
+    );
+
+    const query = db
       .select({
         id: meetings.id,
         readable_id: meetings.readable_id,
@@ -93,23 +92,8 @@ export const getMeetingsList = async ({ user, tenantId, set }: any) => {
         started_at: meetings.started_at,
         ended_at: meetings.ended_at,
       })
-      .from(meetings);
-
-    if (user.role === "super_admin") {
-      query = query as any;
-    } else if (user.role === "tenant_admin") {
-      query = query.where(eq(meetings.tenant_id, tenantId)) as any;
-    } else {
-      query = query.where(
-        and(
-          eq(meetings.tenant_id, tenantId),
-          or(
-            eq(meetings.host_id, user.id),
-            sql`${meetings.attendees} @> ${JSON.stringify([user.id])}::jsonb`,
-          ),
-        ),
-      ) as any;
-    }
+      .from(meetings)
+      .where(visibilityFilter as any);
 
     const meetingList = await query.orderBy(desc(meetings.scheduled_time));
 
@@ -349,20 +333,21 @@ function generateReadableId() {
 export const listMeetingInvitees = async ({ query, user, tenantId, set }: any) => {
   const requesterId = user?.id || "unknown_user";
 
-  if (!tenantId) {
-    set.status = 400;
+  const scopedTenantId = requireTenantContext(tenantId, set);
+  if (!scopedTenantId) {
     return { error: "Missing tenant context" };
   }
 
   try {
     const q = typeof query?.q === "string" ? query.q.trim() : "";
-    const rawLimit = Number(query?.limit ?? 20);
-    const limit = Number.isFinite(rawLimit)
-      ? Math.min(Math.max(Math.floor(rawLimit), 1), 100)
-      : 20;
+    const limit = parseBoundedInteger(query?.limit, {
+      defaultValue: 20,
+      min: 1,
+      max: 100,
+    });
 
     const filters = [
-      eq(userTenants.tenantId, tenantId),
+      eq(userTenants.tenantId, scopedTenantId),
       isNull(users.deletedAt),
       sql`${users.id} <> ${user.id}`,
     ];
@@ -408,6 +393,11 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
   const userId = user?.id || "unknown_user";
   logger.debug("Attempting to create meeting.", { userId, tenantId });
 
+  const scopedTenantId = requireTenantContext(tenantId, set);
+  if (!scopedTenantId) {
+    return { error: "Missing tenant context" };
+  }
+
   try {
     const method = body?.method || "one_way";
     const languages = getUniqueMeetingLanguages(body?.languages);
@@ -438,7 +428,7 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
         readable_id: readableId,
         topic: body?.topic || "Untitled Meeting",
         host_id: user.id,
-        tenant_id: tenantId,
+        tenant_id: scopedTenantId,
         join_url: joinUrl,
         attendees: [],
         languages,
@@ -485,8 +475,8 @@ export const createQuickMeeting = async ({ body, user, tenantId, set }: any) => 
   const userId = user?.id || "unknown_user";
   logger.debug("Attempting to quick-create meeting.", { userId, tenantId });
 
-  if (!tenantId) {
-    set.status = 400;
+  const scopedTenantId = requireTenantContext(tenantId, set);
+  if (!scopedTenantId) {
     return { error: "Missing tenant context" };
   }
 
@@ -521,11 +511,11 @@ export const createQuickMeeting = async ({ body, user, tenantId, set }: any) => 
         .from(userTenants)
         .innerJoin(users, eq(userTenants.userId, users.id))
         .where(
-          and(
-            eq(userTenants.tenantId, tenantId),
-            inArray(userTenants.userId, attendeeIds),
-            isNull(users.deletedAt),
-          ),
+            and(
+              eq(userTenants.tenantId, scopedTenantId),
+              inArray(userTenants.userId, attendeeIds),
+              isNull(users.deletedAt),
+            ),
         );
 
       const allowedIds = new Set(scopedMembers.map((row) => row.userId));
@@ -544,7 +534,7 @@ export const createQuickMeeting = async ({ body, user, tenantId, set }: any) => 
         readable_id: readableId,
         topic: title,
         host_id: user.id,
-        tenant_id: tenantId,
+        tenant_id: scopedTenantId,
         attendees: attendeeIds,
         languages: [],
         method: "one_way",
@@ -583,7 +573,7 @@ export const joinMeeting = async ({
   set,
 }: any) => {
   const userId = user?.id || "unknown_user";
-  const cleanReadableId = id.replace(/[\s-]/g, "");
+  const cleanReadableId = normalizeReadableMeetingId(id);
 
   logger.debug("Attempting to join meeting.", {
     userId,
@@ -592,10 +582,7 @@ export const joinMeeting = async ({
   });
 
   try {
-    const [dbMeeting] = await db
-      .select()
-      .from(meetings)
-      .where(eq(meetings.readable_id, cleanReadableId));
+    const dbMeeting = await getMeetingByReadableId(cleanReadableId);
 
     if (!dbMeeting) {
       logger.warn(
@@ -607,87 +594,67 @@ export const joinMeeting = async ({
     }
 
     const internalId = dbMeeting.id;
-    const isHost = dbMeeting.host_id === user.id;
 
     websocketController.initMeeting(internalId, dbMeeting.host_id ?? undefined);
 
-    let activeMeeting = websocketController.getMeeting(internalId);
+    const activeMeeting = websocketController.getMeeting(internalId);
+    const joinPlan = buildJoinMeetingPlan(
+      dbMeeting,
+      user,
+      activeMeeting
+        ? {
+            isHostSendingAudio: activeMeeting.isHostSendingAudio,
+            audioSessionCount: activeMeeting.audioSessions.size,
+          }
+        : null,
+    );
 
-    const isAudioRunning = activeMeeting?.isHostSendingAudio ?? false;
-    const hasMeetingStarted = Boolean(dbMeeting.started_at) || Boolean(activeMeeting?.audioSessions.size);
-
-    const currentAttendees = dbMeeting.attendees || [];
-
-    if (!currentAttendees.includes(user.id)) {
-      currentAttendees.push(user.id);
+    if (joinPlan.languageLimitExceeded) {
+      set.status = 400;
+      return { error: getJoinLanguageLimitMessage() };
     }
 
-    const dbUpdatePayload: any = {
-      attendees: currentAttendees,
-    };
-
-    const method = dbMeeting.method || "one_way";
-    let currentLanguages = getUniqueMeetingLanguages(dbMeeting.languages);
-    const userLanguage = user.languageCode;
-
-    if (
-      method === "one_way" &&
-      userLanguage &&
-      !currentLanguages.includes(userLanguage)
-    ) {
-      if (currentLanguages.length >= MAX_ONE_WAY_LANGUAGES) {
-        set.status = 400;
-        return {
-          error: `One-way meetings can include at most ${MAX_ONE_WAY_LANGUAGES} spoken languages`,
-        };
-      }
-
-      currentLanguages.push(userLanguage);
-      dbUpdatePayload.languages = currentLanguages;
-    }
-
-    // Start a new one-way worker when an active meeting gains a new language.
-    if (method === "one_way" && userLanguage && dbUpdatePayload.languages) {
-      if (isAudioRunning) {
+    // If the host is already live, add the new language session immediately so late joiners start
+    // receiving transcript output without waiting for a restart.
+    if (joinPlan.method === "one_way" && joinPlan.userLanguage && joinPlan.addedLanguage) {
+      if (activeMeeting?.isHostSendingAudio) {
         const newSession = websocketController.addTranscriptionSession(
           internalId,
-          userLanguage,
-          {
-            enableSpeakerDiarization: true,
-            translation: { type: "one_way", target_language: userLanguage },
-          },
+          joinPlan.userLanguage,
+          buildOneWayTranscriptionConfig(joinPlan.userLanguage),
         );
 
         await newSession?.session.connect();
       }
 
       logger.info(
-        isAudioRunning
+        activeMeeting?.isHostSendingAudio
           ? "Started dynamic one-way session while host audio was live."
           : "Registered dynamic one-way session for future audio start.",
         {
           meetingId: internalId,
-          language: userLanguage,
+          language: joinPlan.userLanguage,
           triggeredBy: userId,
         },
       );
     }
 
-    await db
-      .update(meetings)
-      .set(dbUpdatePayload)
-      .where(eq(meetings.id, internalId));
+    await persistJoinMeetingPlan(internalId, joinPlan.updatePayload);
 
-    const wsTicket = await generateWsTicket(user.id, tenantId || "");
-    const isActiveNow = hasMeetingStarted || isHost;
+    const ticketTenantId = requireTenantContext(tenantId, set);
+    if (!ticketTenantId) {
+      return { error: "Missing tenant context" };
+    }
+
+    const wsTicket = await generateWsTicket(user.id, ticketTenantId);
 
     logger.info(
       "User joined meeting.",
       {
         meetingId: internalId,
         userId,
-        isActive: isActiveNow,
-        isHost,
+        isActive: joinPlan.isActiveNow,
+        isHost: joinPlan.isHost,
       },
     );
 
@@ -696,8 +663,8 @@ export const joinMeeting = async ({
       meetingId: internalId,
       readableId: cleanReadableId,
       token: wsTicket,
-      isActive: isActiveNow,
-      isHost: isHost,
+      isActive: joinPlan.isActiveNow,
+      isHost: joinPlan.isHost,
     };
   } catch (err) {
     logger.error(

@@ -8,6 +8,9 @@ type LogLevel = "debug" | "info" | "warn" | "error";
 
 const resolvedLogLevel = Bun.env.LOG_LEVEL as LogLevel;
 
+/**
+ * Human-readable console formatter used during local development and interactive debugging.
+ */
 const consoleFormat = winston.format.combine(
   winston.format.errors({ stack: true }),
   winston.format.colorize(),
@@ -18,12 +21,18 @@ const consoleFormat = winston.format.combine(
   }),
 );
 
+/**
+ * Structured JSON formatter used by rotating log files.
+ */
 const fileFormat = winston.format.combine(
   winston.format.errors({ stack: true }),
   winston.format.timestamp(),
   winston.format.json(),
 );
 
+/**
+ * Combined console and rotating-file transports shared by the application logger.
+ */
 const transports: winston.transport[] = [
   new winston.transports.Console({
     format: consoleFormat,

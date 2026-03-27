@@ -2,6 +2,7 @@ import { db } from "../../core/database";
 import { users } from "../../models/userModel";
 import { meetings } from "../../models/meetingModel";
 import { bugReports } from "../../models/bugReportModel";
+import { userTenants } from "../../models/userTenantModel";
 import {
   tenants,
   tenantDomains,
@@ -102,6 +103,11 @@ export async function createTestUser(
 
   trackTestUsers(id);
 
+  await db
+    .insert(userTenants)
+    .values({ userId: id, tenantId: "test-tenant" })
+    .onConflictDoNothing();
+
   const token = await generateApiSessionToken(id, "test-tenant");
   return { id, token, languageCode };
 }
@@ -143,6 +149,8 @@ export async function cleanupTestData() {
     }
 
     if (createdTestUsers.length > 0) {
+      await db.delete(userTenants).where(inArray(userTenants.userId, createdTestUsers));
+
       await db.delete(users).where(inArray(users.id, createdTestUsers));
     }
 

@@ -6,9 +6,13 @@ import { meetings } from "../models/meetingModel";
 import { users } from "../models/userModel";
 import { userTenants } from "../models/userTenantModel";
 import { encrypt } from "../utils/fernet";
+import { parsePaginationWindow, paginateRows } from "../utils/pagination";
+import { SUPPORTED_AUTH_PROVIDERS } from "../utils/authProviders";
+import { isSuperAdmin, isTenantAdmin } from "../utils/accessPolicy";
+import { requireTenantContext } from "../utils/sessionPolicy";
 
 const TENANT_ADMIN_EDITABLE_ROLES = new Set(["user", "tenant_admin"]);
-const SUPPORTED_PROVIDER_TYPES = new Set(["google", "entra"]);
+const SUPPORTED_PROVIDER_TYPES = new Set<string>(SUPPORTED_AUTH_PROVIDERS);
 
 type TenantSettingsInput = {
   organizationName?: string | null;
@@ -24,14 +28,23 @@ type TenantSettingsInput = {
   }>;
 };
 
+/**
+ * Normalizes provider identifiers so domain and auth config records compare reliably.
+ */
 function normalizeProviderType(value: string) {
   return value.trim().toLowerCase();
 }
 
+/**
+ * Normalizes tenant domains before validation and persistence.
+ */
 function normalizeDomain(value: string) {
   return value.trim().toLowerCase();
 }
 
+/**
+ * Validates tenant settings and returns normalized domain/provider records.
+ */
 function validateTenantSettingsInput(
   body: TenantSettingsInput,
   set: { status?: number },
@@ -115,6 +128,9 @@ function validateTenantSettingsInput(
   };
 }
 
+/**
+ * Loads the tenant settings payload expected by the admin UI.
+ */
 async function getTenantSettingsPayload(scopedTenantId: string) {
   const [tenant] = await db
     .select({
@@ -153,6 +169,9 @@ async function getTenantSettingsPayload(scopedTenantId: string) {
   };
 }
 
+/**
+ * Loads editable settings for every tenant in super-admin overview mode.
+ */
 async function getAllTenantSettingsPayloads() {
   const tenantRows = await db
     .select({ id: tenants.tenantId })
@@ -164,6 +183,9 @@ async function getAllTenantSettingsPayloads() {
   );
 }
 
+/**
+ * Replaces tenant settings in one transaction while preserving existing secrets when omitted.
+ */
 async function persistTenantSettings(
   scopedTenantId: string,
   body: TenantSettingsInput,
@@ -211,6 +233,8 @@ async function persistTenantSettings(
     if (authConfigs.length > 0) {
       await tx.insert(tenantAuthConfigs).values(
         authConfigs.map((entry) => {
+          // The UI may intentionally omit secrets on edit, so keep the stored value unless a
+          // replacement secret is provided explicitly.
           const nextSecret = entry.clientSecret || existingConfigMap.get(entry.providerType);
           if (!nextSecret) {
             throw new Error(`Missing client secret for provider ${entry.providerType}`);
@@ -247,13 +271,13 @@ async function resolveScopedTenantId({
   targetTenantId: string;
   set: { status?: number };
 }) {
-  if (!sessionTenantId) {
-    set.status = 400;
+  const scopedSessionTenantId = requireTenantContext(sessionTenantId, set);
+  if (!scopedSessionTenantId) {
     return { error: "Missing tenant context", tenantId: null };
   }
 
-  if (user.role === "tenant_admin") {
-    if (targetTenantId !== sessionTenantId) {
+  if (isTenantAdmin(user)) {
+    if (targetTenantId !== scopedSessionTenantId) {
       set.status = 403;
       return {
         error: "Tenant admins can only manage users in their own tenant",
@@ -261,10 +285,10 @@ async function resolveScopedTenantId({
       };
     }
 
-    return { error: null, tenantId: sessionTenantId };
+    return { error: null, tenantId: scopedSessionTenantId };
   }
 
-  if (user.role !== "super_admin") {
+  if (!isSuperAdmin(user)) {
     set.status = 403;
     return { error: "Forbidden - Insufficient permissions", tenantId: null };
   }
@@ -288,14 +312,14 @@ async function resolveScopedTenantId({
 export const listTenants = async ({ user, tenantId, set }: any) => {
   const requesterId = user?.id || "unknown_user";
 
-  if (!tenantId) {
-    set.status = 400;
+  const scopedTenantId = requireTenantContext(tenantId, set);
+  if (!scopedTenantId) {
     return { error: "Missing tenant context" };
   }
 
   try {
     const scopedTenants =
-      user.role === "super_admin"
+      isSuperAdmin(user)
         ? await db
             .select({
               id: tenants.tenantId,
@@ -309,7 +333,7 @@ export const listTenants = async ({ user, tenantId, set }: any) => {
               name: tenants.organizationName,
             })
             .from(tenants)
-            .where(eq(tenants.tenantId, tenantId));
+            .where(eq(tenants.tenantId, scopedTenantId));
 
     return { tenants: scopedTenants };
   } catch (err) {
@@ -329,12 +353,12 @@ export const listTenants = async ({ user, tenantId, set }: any) => {
 export const listAllTenantUsers = async ({ query, user, tenantId, set }: any) => {
   const requesterId = user?.id || "unknown_user";
 
-  if (!tenantId) {
-    set.status = 400;
+  const scopedTenantId = requireTenantContext(tenantId, set);
+  if (!scopedTenantId) {
     return { error: "Missing tenant context" };
   }
 
-  if (user?.role !== "super_admin") {
+  if (!isSuperAdmin(user)) {
     set.status = 403;
     return { error: "Forbidden - Insufficient permissions" };
   }
@@ -342,14 +366,10 @@ export const listAllTenantUsers = async ({ query, user, tenantId, set }: any) =>
   try {
     const q = typeof query?.q === "string" ? query.q.trim() : "";
     const role = typeof query?.role === "string" ? query.role : null;
-    const rawLimit = Number(query?.limit ?? 100);
-    const rawOffset = Number(query?.offset ?? 0);
-    const limit = Number.isFinite(rawLimit)
-      ? Math.min(Math.max(Math.floor(rawLimit), 1), 500)
-      : 100;
-    const offset = Number.isFinite(rawOffset)
-      ? Math.max(Math.floor(rawOffset), 0)
-      : 0;
+    const { limit, offset } = parsePaginationWindow(query, {
+      defaultLimit: 100,
+      maxLimit: 500,
+    });
 
     const filters = [isNull(users.deletedAt)];
 
@@ -386,8 +406,7 @@ export const listAllTenantUsers = async ({ query, user, tenantId, set }: any) =>
       .limit(limit + 1)
       .offset(offset);
 
-    const hasMore = rows.length > limit;
-    const tenantUsers = hasMore ? rows.slice(0, limit) : rows;
+    const { items: tenantUsers, hasMore } = paginateRows(rows, limit);
 
     logger.debug("All-tenant user list retrieved.", {
       requesterId,
@@ -461,12 +480,12 @@ export const getTenantSettings = async ({ params, user, tenantId, set }: any) =>
 export const getAllTenantSettings = async ({ user, tenantId, set }: any) => {
   const requesterId = user?.id || "unknown_user";
 
-  if (!tenantId) {
-    set.status = 400;
+  const scopedTenantId = requireTenantContext(tenantId, set);
+  if (!scopedTenantId) {
     return { error: "Missing tenant context" };
   }
 
-  if (user?.role !== "super_admin") {
+  if (!isSuperAdmin(user)) {
     set.status = 403;
     return { error: "Forbidden - Insufficient permissions" };
   }
@@ -537,7 +556,7 @@ export const updateTenantSettings = async ({ params, body, user, tenantId, set }
 export const createTenant = async ({ body, user, set }: any) => {
   const requesterId = user?.id || "unknown_user";
 
-  if (user?.role !== "super_admin") {
+  if (!isSuperAdmin(user)) {
     set.status = 403;
     return { error: "Forbidden - Insufficient permissions" };
   }
@@ -598,8 +617,8 @@ export const createTenant = async ({ body, user, set }: any) => {
 export const deleteTenant = async ({ params, user, tenantId, set }: any) => {
   const requesterId = user?.id || "unknown_user";
 
-  if (!tenantId) {
-    set.status = 400;
+  const scopedTenantId = requireTenantContext(tenantId, set);
+  if (!scopedTenantId) {
     return { error: "Missing tenant context" };
   }
 
@@ -634,7 +653,7 @@ export const deleteTenant = async ({ params, user, tenantId, set }: any) => {
   } catch (err) {
     logger.error("Failed to delete tenant.", {
       requesterId,
-      tenantId,
+      tenantId: scopedTenantId,
       targetTenantId: params?.tenantId,
       err,
     });
@@ -664,14 +683,10 @@ export const listTenantUsers = async ({ params, query, user, tenantId, set }: an
 
     const q = typeof query?.q === "string" ? query.q.trim() : "";
     const role = typeof query?.role === "string" ? query.role : null;
-    const rawLimit = Number(query?.limit ?? 50);
-    const rawOffset = Number(query?.offset ?? 0);
-    const limit = Number.isFinite(rawLimit)
-      ? Math.min(Math.max(Math.floor(rawLimit), 1), 200)
-      : 50;
-    const offset = Number.isFinite(rawOffset)
-      ? Math.max(Math.floor(rawOffset), 0)
-      : 0;
+    const { limit, offset } = parsePaginationWindow(query, {
+      defaultLimit: 50,
+      maxLimit: 200,
+    });
 
     const filters = [
       eq(userTenants.tenantId, scopedTenantId),
@@ -706,8 +721,7 @@ export const listTenantUsers = async ({ params, query, user, tenantId, set }: an
       .limit(limit + 1)
       .offset(offset);
 
-    const hasMore = rows.length > limit;
-    const tenantUsers = hasMore ? rows.slice(0, limit) : rows;
+    const { items: tenantUsers, hasMore } = paginateRows(rows, limit);
 
     logger.debug("Tenant user list retrieved.", {
       requesterId,
@@ -740,7 +754,7 @@ export const listTenantUsers = async ({ params, query, user, tenantId, set }: an
 };
 
 /**
- * Updates another user in the requester's tenant.
+ * Updates another user's global role after confirming the target belongs to the scoped tenant.
  */
 export const updateTenantUser = async ({ params, body, user, tenantId, set }: any) => {
   const requesterId = user?.id || "unknown_user";
@@ -779,10 +793,7 @@ export const updateTenantUser = async ({ params, body, user, tenantId, set }: an
     } = {};
 
     if (body.role !== undefined) {
-      if (
-        user.role === "tenant_admin" &&
-        !TENANT_ADMIN_EDITABLE_ROLES.has(body.role)
-      ) {
+      if (isTenantAdmin(user) && !TENANT_ADMIN_EDITABLE_ROLES.has(body.role)) {
         set.status = 403;
         return { error: "Tenant admins cannot assign super_admin role" };
       }
@@ -834,7 +845,7 @@ export const updateTenantUser = async ({ params, body, user, tenantId, set }: an
 };
 
 /**
- * Soft deletes a user in the current tenant.
+ * Soft deletes a user account after confirming the target belongs to the scoped tenant.
  */
 export const deleteTenantUser = async ({ params, user, tenantId, set }: any) => {
   const requesterId = user?.id || "unknown_user";
@@ -873,6 +884,8 @@ export const deleteTenantUser = async ({ params, user, tenantId, set }: any) => 
       return { error: "User not found in this tenant" };
     }
 
+    // User records are global today, so this deactivates the account everywhere once the
+    // tenant-scope membership check passes.
     const [deletedUser] = await db
       .update(users)
       .set({ deletedAt: new Date() })

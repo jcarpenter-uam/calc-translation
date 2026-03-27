@@ -2,6 +2,9 @@ import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./userModel";
 import { tenants } from "./tenantModel";
 
+/**
+ * Allowed bug-report workflow states persisted in the database.
+ */
 export const bugReportStatusEnum = ["open", "resolved"] as const;
 
 /**

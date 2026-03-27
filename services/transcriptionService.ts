@@ -38,6 +38,9 @@ export type TranscriptionSessionState =
   | "disconnected"
   | "error";
 
+/**
+ * Lifecycle signal emitted when the underlying Soniox transport changes state.
+ */
 export interface TranscriptionSessionLifecycleEvent {
   type: "connected" | "disconnected" | "finished" | "error";
   meetingId: string;
@@ -57,10 +60,16 @@ type SonioxToken = {
   source_language?: string;
 };
 
+/**
+ * Reassembles the text returned by Soniox token streams.
+ */
 function joinTokenText(tokens: SonioxToken[]) {
   return tokens.map((token) => token.text || "").join("").trim();
 }
 
+/**
+ * Splits mixed Soniox token streams into display, transcription, and translation text.
+ */
 function splitTranscriptTexts(tokens: SonioxToken[]) {
   const translationTokens = tokens.filter(
     (token) => token.translation_status === "translation",
@@ -83,6 +92,9 @@ function splitTranscriptTexts(tokens: SonioxToken[]) {
   };
 }
 
+/**
+ * Normalizes Soniox speaker labels into stable client-facing strings.
+ */
 function normalizeSpeakerLabel(value: unknown) {
   if (typeof value !== "string") {
     return null;
@@ -289,6 +301,9 @@ class SonioxTranscriptionService {
     };
   }
 
+  /**
+   * Converts Soniox millisecond fields into finite numeric timestamps when available.
+   */
   private normalizeMs(value: unknown) {
     if (typeof value === "number" && Number.isFinite(value)) {
       return value;
@@ -302,6 +317,9 @@ class SonioxTranscriptionService {
     return null;
   }
 
+  /**
+   * Normalizes speaker labels emitted by Soniox and fallback token metadata.
+   */
   private normalizeSpeaker(value: unknown) {
     return normalizeSpeakerLabel(value);
   }

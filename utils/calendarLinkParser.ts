@@ -4,6 +4,9 @@ export type SupportedCalendarPlatform =
   | "zoom"
   | "app";
 
+/**
+ * Canonical meeting-link shape returned after parsing calendar event text.
+ */
 export interface ParsedMeetingLink {
   platform: SupportedCalendarPlatform;
   joinUrl: string;
@@ -29,6 +32,7 @@ export function extractUrlsFromText(text: string | null | undefined): string[] {
 
 /**
  * Resolves the first supported meeting link from a list of URLs.
+ * External providers take precedence before checking app-hosted join links.
  */
 export function findSupportedMeetingLink(
   urls: string[],

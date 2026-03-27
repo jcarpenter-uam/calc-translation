@@ -14,7 +14,7 @@ import {
 import { requireRole } from "../middlewares/authMiddleware";
 
 /**
- * Tenant-scoped admin routes for tenant discovery and user management.
+ * Tenant-admin and super-admin routes for tenant settings and membership management.
  */
 export const tenantRoutes = new Elysia({ prefix: "/tenants" })
   .use(requireRole(["tenant_admin", "super_admin"]))

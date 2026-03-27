@@ -1,38 +1,11 @@
 import { Elysia } from "elysia";
 import { verifyToken } from "../utils/security";
-import { db } from "../core/database";
-import { users } from "../models/userModel";
-import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "../core/logger";
+import { hasAllowedRole } from "../utils/accessPolicy";
+import { resolveSessionContext } from "../utils/sessionPolicy";
 
 /**
- * Helper to fetch user from DB based on decoded JWT payload
- */
-async function getAuthenticatedUser(payload: any) {
-  if (!payload || !payload.userId) {
-    logger.debug("Authentication payload is empty or missing userId.");
-    return null;
-  }
-
-  logger.debug("Fetching user record from token payload.", {
-    userId: payload.userId,
-  });
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(and(eq(users.id, payload.userId), isNull(users.deletedAt)));
-
-  if (!user) {
-    logger.warn("Token references missing user record.", {
-      userId: payload.userId,
-    });
-  }
-
-  return user || null;
-}
-
-/**
- * API Middleware: Validates the HttpOnly 'auth_session' cookie.
+ * Validates the HttpOnly API session cookie and rejects WebSocket tickets on HTTP routes.
  */
 export const requireAuth = (app: Elysia) =>
   app
@@ -53,11 +26,11 @@ export const requireAuth = (app: Elysia) =>
         return { user: null, tenantId: null };
       }
 
-      const user = await getAuthenticatedUser(payload);
+      const { user, tenantId } = await resolveSessionContext(payload);
 
       return {
         user,
-        tenantId: (payload as any)?.tenantId || null,
+        tenantId,
       };
     })
     .onBeforeHandle(({ user, set, request }) => {
@@ -77,7 +50,7 @@ export const requireAuth = (app: Elysia) =>
     });
 
 /**
- * WebSocket Middleware: Validates the '?ticket=' query parameter.
+ * Validates the WebSocket ticket query parameter and rejects normal API sessions.
  */
 export const requireWsAuth = (app: Elysia) =>
   app
@@ -90,7 +63,8 @@ export const requireWsAuth = (app: Elysia) =>
 
       const payload = ticket ? await verifyToken(ticket) : null;
 
-      // Strict Check: Only allow tokens explicitly marked for WebSockets
+      // WebSocket routes only accept short-lived tickets so API session cookies cannot be reused
+      // as socket credentials.
       if (!payload || payload.purpose !== "websocket_ticket") {
         logger.warn("WebSocket auth rejected ticket.", {
           reason: !payload ? "missing_payload" : "wrong_token_purpose",
@@ -98,10 +72,10 @@ export const requireWsAuth = (app: Elysia) =>
         return { wsUser: null, wsTenantId: null };
       }
 
-      const user = await getAuthenticatedUser(payload);
+      const { user, tenantId } = await resolveSessionContext(payload);
       return {
         wsUser: user,
-        wsTenantId: (payload as any)?.tenantId || null,
+        wsTenantId: tenantId,
       };
     })
     .onBeforeHandle(({ wsUser, set }) => {
@@ -122,7 +96,8 @@ export const requireWsAuth = (app: Elysia) =>
  */
 export const requireRole = (allowedRoles: string[]) => (app: Elysia) =>
   app.onBeforeHandle(({ user, set }: any) => {
-    if (!user || !allowedRoles.includes(user.role)) {
+    const isAllowed = hasAllowedRole(user, allowedRoles);
+    if (!isAllowed) {
       logger.warn("Access to restricted route denied by role policy.", {
         userId: user?.id,
         userRole: user?.role,

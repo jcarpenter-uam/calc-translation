@@ -13,6 +13,10 @@ import { meetingTranscriptCacheService } from "../services/meetingTranscriptCach
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
 import { eq } from "drizzle-orm";
+import {
+  buildMeetingSessionPlan,
+  type MeetingSessionPlan,
+} from "../utils/meetingPolicy";
 
 /**
  * Represents a single user connected via WebSocket.
@@ -51,26 +55,6 @@ interface MeetingAudioSession {
   isReconnecting: boolean;
 }
 
-type MeetingSessionPlan = {
-  languageKey: string;
-  config: TranscriptionConfig;
-};
-
-function getUniqueMeetingLanguages(languages: unknown): string[] {
-  if (!Array.isArray(languages)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      languages
-        .filter((language): language is string => typeof language === "string")
-        .map((language) => language.trim())
-        .filter(Boolean),
-    ),
-  );
-}
-
 /**
  * Manages WebSocket connections, routes raw audio to transcription services,
  * and broadcasts text results back to connected clients.
@@ -88,14 +72,14 @@ export class WebsocketController {
   initMeeting(meetingId: string, hostId?: string) {
     if (!this.meetings.has(meetingId)) {
       logger.debug("Initializing meeting container in memory.", { meetingId });
-        this.meetings.set(meetingId, {
-          id: meetingId,
-          hostId: hostId || null,
-          participants: new Map(),
-          audioSessions: new Map(),
-          pendingHostAudioChunks: [],
-          isHostSendingAudio: false,
-        });
+      this.meetings.set(meetingId, {
+        id: meetingId,
+        hostId: hostId || null,
+        participants: new Map(),
+        audioSessions: new Map(),
+        pendingHostAudioChunks: [],
+        isHostSendingAudio: false,
+      });
     } else if (hostId) {
       const meeting = this.meetings.get(meetingId)!;
       if (!meeting.hostId) {
@@ -414,7 +398,8 @@ export class WebsocketController {
           );
         }
 
-        // Host reconnection logic
+        // A brief grace period lets the host refresh or reconnect without dropping live sessions
+        // immediately for every participant.
         if (
           disconnectedParticipantId &&
           disconnectedParticipantId === meeting.hostId
@@ -575,6 +560,9 @@ export class WebsocketController {
       ?.participants.forEach((p) => p.socket.send(data));
   }
 
+  /**
+   * Sends transcript events only to participants who subscribed in the target language.
+   */
   private sendTranscriptToLanguageParticipants(
     meetingId: string,
     language: string,
@@ -587,10 +575,16 @@ export class WebsocketController {
     });
   }
 
+  /**
+   * Reports whether the host microphone is currently feeding audio into the meeting.
+   */
   isHostSendingAudio(meetingId: string) {
     return this.meetings.get(meetingId)?.isHostSendingAudio ?? false;
   }
 
+  /**
+   * Marks the host as present in the room before live audio begins.
+   */
   async prepareHostAudio(meetingId: string, participantId: string) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting || meeting.hostId !== participantId) {
@@ -605,6 +599,9 @@ export class WebsocketController {
     });
   }
 
+  /**
+   * Handles explicit host microphone start/stop signals from the WebSocket client.
+   */
   setHostAudioState(wsId: string, isSendingAudio: boolean) {
     const meetingId = this.socketToMeeting.get(wsId);
     if (!meetingId) {
@@ -637,6 +634,9 @@ export class WebsocketController {
     this.pauseHostAudio(meetingId, true);
   }
 
+  /**
+   * Pauses host audio automatically after a short period without new microphone chunks.
+   */
   private refreshHostAudioIdleTimeout(meetingId: string) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting) {
@@ -652,6 +652,9 @@ export class WebsocketController {
     }, 5000);
   }
 
+  /**
+   * Starts or resumes all meeting audio sessions when the host microphone becomes active.
+   */
   private async resumeHostAudio(
     meetingId: string,
     announce: boolean,
@@ -677,6 +680,8 @@ export class WebsocketController {
         return;
       }
 
+      // Sessions may connect before the host actually starts talking, so keep the desired audio
+      // state separate from the current transport state and reapply it after reconnects.
       activeMeeting.audioSessions.forEach((sessionEntry) => {
         sessionEntry.shouldResume = true;
         sessionEntry.session.resume();
@@ -717,6 +722,9 @@ export class WebsocketController {
     }
   }
 
+  /**
+   * Pauses all active audio sessions without tearing them down.
+   */
   private pauseHostAudio(meetingId: string, announce: boolean) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting) {
@@ -763,6 +771,9 @@ export class WebsocketController {
     this.globalSubscribers.forEach((ws) => ws.send(data));
   }
 
+  /**
+   * Normalizes Soniox events, caches finalized utterances, and fans them out to listeners.
+   */
   private async handleTranscriptionEvent(
     meetingId: string,
     event: TranscriptionEvent,
@@ -840,6 +851,9 @@ export class WebsocketController {
     );
   }
 
+  /**
+   * Ensures every language/session required by the persisted meeting record is connected.
+   */
   private async ensureMeetingAudioSessionsStarted(meetingId: string) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting) {
@@ -858,7 +872,7 @@ export class WebsocketController {
       return false;
     }
 
-    const sessionPlan = this.buildMeetingSessionPlan(dbMeeting.method, dbMeeting.languages);
+    const sessionPlan = buildMeetingSessionPlan(dbMeeting.method, dbMeeting.languages);
     if (sessionPlan.length === 0) {
       logger.warn("No Soniox session plan available for meeting.", {
         meetingId,
@@ -874,20 +888,20 @@ export class WebsocketController {
 
     await Promise.all(
       missingSessions.map(async ({ languageKey, config }) => {
-      const existing = meeting.audioSessions.get(languageKey);
-      if (existing) {
-        meeting.audioSessions.delete(languageKey);
-      }
+        const existing = meeting.audioSessions.get(languageKey);
+        if (existing) {
+          meeting.audioSessions.delete(languageKey);
+        }
 
-      const sessionEntry = this.addTranscriptionSession(
-        meetingId,
-        languageKey,
-        config,
-      );
-      await sessionEntry?.session.connect();
-      if (sessionEntry) {
-        sessionEntry.state = sessionEntry.session.getState();
-      }
+        const sessionEntry = this.addTranscriptionSession(
+          meetingId,
+          languageKey,
+          config,
+        );
+        await sessionEntry?.session.connect();
+        if (sessionEntry) {
+          sessionEntry.state = sessionEntry.session.getState();
+        }
       }),
     );
 
@@ -913,10 +927,16 @@ export class WebsocketController {
     return false;
   }
 
+  /**
+   * Flags lifecycle states that require a fresh Soniox session before audio can continue.
+   */
   private shouldReplaceSession(state: TranscriptionSessionState) {
     return state === "disconnected" || state === "error" || state === "finished";
   }
 
+  /**
+   * Reconnects Soniox sessions that fail while the meeting still expects live audio.
+   */
   private async handleSessionLifecycleEvent(
     languageKey: string,
     event: TranscriptionSessionLifecycleEvent,
@@ -998,43 +1018,9 @@ export class WebsocketController {
     }
   }
 
-  private buildMeetingSessionPlan(method: string | null, languages: unknown): MeetingSessionPlan[] {
-    const resolvedMethod = method || "one_way";
-    const uniqueLanguages = getUniqueMeetingLanguages(languages);
-
-    if (resolvedMethod === "two_way") {
-      const [languageA, languageB] = uniqueLanguages;
-      if (!languageA || !languageB) {
-        return [];
-      }
-
-      return [
-        {
-          languageKey: "two_way",
-          config: {
-            enableSpeakerDiarization: true,
-            translation: {
-              type: "two_way",
-              language_a: languageA,
-              language_b: languageB,
-            },
-          },
-        },
-      ];
-    }
-
-    return uniqueLanguages.map((language) => ({
-      languageKey: language,
-      config: {
-        enableSpeakerDiarization: true,
-        translation: {
-          type: "one_way",
-          target_language: language,
-        },
-      },
-    }));
-  }
-
+  /**
+   * Buffers a small amount of host audio while sessions are still connecting.
+   */
   private queuePendingHostAudio(meeting: Meeting, audioChunk: Buffer) {
     if (meeting.pendingHostAudioChunks.length >= 20) {
       meeting.pendingHostAudioChunks.shift();
@@ -1043,6 +1029,9 @@ export class WebsocketController {
     meeting.pendingHostAudioChunks.push(Buffer.from(audioChunk));
   }
 
+  /**
+   * Replays buffered host audio once the meeting sessions are ready.
+   */
   private flushPendingHostAudio(meetingId: string) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting || meeting.pendingHostAudioChunks.length === 0) {
@@ -1055,6 +1044,9 @@ export class WebsocketController {
     }
   }
 
+  /**
+   * Broadcasts raw audio chunks to every active Soniox session for the meeting.
+   */
   private dispatchAudioChunkToMeeting(meetingId: string, audioChunk: Buffer) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting) {

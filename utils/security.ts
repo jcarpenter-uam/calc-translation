@@ -2,12 +2,13 @@ import { SignJWT, jwtVerify } from "jose";
 import { env } from "../core/config";
 import { logger } from "../core/logger";
 
-// Ensure you have a strong secret in your .env file
+/**
+ * Shared signing secret for API sessions and short-lived WebSocket tickets.
+ */
 const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
 
 /**
- * Generates a standard JWT for API authentication.
- * You can store this in an HTTP-only cookie.
+ * Generates the primary API session token stored in the auth cookie.
  */
 export async function generateApiSessionToken(
   userId: string,
@@ -16,7 +17,7 @@ export async function generateApiSessionToken(
   return await new SignJWT({ userId, tenantId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d") // 1 week expiration for the main session
+    .setExpirationTime("7d")
     .sign(JWT_SECRET);
 }
 
@@ -30,7 +31,7 @@ export async function generateWsTicket(
   return await new SignJWT({ userId, tenantId, purpose: "websocket_ticket" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("30s") // Extremely short-lived; just long enough to connect
+    .setExpirationTime("30s")
     .sign(JWT_SECRET);
 }
 
@@ -43,7 +44,7 @@ export async function verifyToken(token: string) {
     return payload;
   } catch (error) {
     logger.debug("Token verification failed.", { error });
-    return null; // Token is invalid or expired
+    return null;
   }
 }
 
@@ -55,9 +56,10 @@ export function setSessionCookie(cookieRef: any, token: string) {
     value: token,
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "lax", // Protects against CSRF while allowing standard navigation
+    // `lax` protects normal navigation flows while still reducing CSRF risk.
+    sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days (matches the API session token)
+    maxAge: 60 * 60 * 24 * 7,
   });
 }
 
@@ -71,6 +73,6 @@ export function clearSessionCookie(cookieRef: any) {
     secure: env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 0, // Immediately expire the cookie
+    maxAge: 0,
   });
 }

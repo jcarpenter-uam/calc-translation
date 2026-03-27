@@ -12,7 +12,7 @@ import {
 } from "../controllers/meetingController";
 
 /**
- * Meeting routes for listing, creating, joining, and ending meetings.
+ * Meeting routes for discovery, invitation, join, and transcript access flows.
  */
 export const meetingRoutes = new Elysia({ prefix: "/meeting" })
   .get("/list", getMeetingsList)

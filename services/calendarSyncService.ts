@@ -10,6 +10,9 @@ import {
 
 type CalendarProvider = "google" | "entra";
 
+/**
+ * Input required to sync one user's external calendar into tenant-scoped meeting records.
+ */
 interface SyncCalendarEventsInput {
   provider: CalendarProvider;
   accessToken: string;
@@ -17,6 +20,9 @@ interface SyncCalendarEventsInput {
   tenantId: string;
 }
 
+/**
+ * Provider-agnostic calendar event shape used before filtering supported meeting links.
+ */
 interface NormalizedCalendarEvent {
   providerEventId: string;
   icalUid: string | null;
@@ -141,6 +147,8 @@ export async function syncCalendarEventsForUser({
       });
   }
 
+  // Provider events that disappeared from the current sync window are removed so the local cache
+  // reflects only still-visible meetings.
   const retainedProviderEventIds = new Set(records.map((record) => record.providerEventId));
   const existing = await db
     .select({ providerEventId: calendarEvents.providerEventId })
@@ -255,6 +263,9 @@ async function fetchGoogleCalendarEvents(
     });
 }
 
+/**
+ * Microsoft Graph event fields used by the sync pipeline.
+ */
 interface EntraCalendarApiEvent {
   id?: string;
   iCalUId?: string;

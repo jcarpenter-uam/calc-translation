@@ -2,6 +2,9 @@ import { generateState, generateCodeVerifier } from "arctic";
 import {
   createGoogleProvider,
   createEntraProvider,
+  getProviderScopes,
+  isSupportedAuthProvider,
+  type SupportedAuthProvider,
 } from "../utils/authProviders";
 import { logger } from "../core/logger";
 import { db } from "../core/database";
@@ -30,10 +33,13 @@ interface OAuthUserProfile {
   preferredLanguage?: string;
 }
 
+/**
+ * A tenant/provider option presented when one email domain maps to multiple SSO setups.
+ */
 type LoginChoiceOption = {
   tenantId: string;
   tenantName: string | null;
-  providerType: "google" | "entra";
+  providerType: SupportedAuthProvider;
 };
 
 type LoginRedirectResult = {
@@ -45,6 +51,20 @@ type LoginSelectProviderResult = {
   mode: "select_provider";
   email: string;
   options: LoginChoiceOption[];
+};
+
+type ProviderRedirectCookieRefs = {
+  oauth_state: { set: (value: Record<string, unknown>) => void };
+  oauth_code_verifier: { set: (value: Record<string, unknown>) => void };
+  oauth_tenant_id: { set: (value: Record<string, unknown>) => void };
+  oauth_return_to: { set: (value: Record<string, unknown>) => void };
+};
+
+type BuildProviderRedirectInput = ProviderRedirectCookieRefs & {
+  email: string;
+  tenantId: string;
+  providerType: SupportedAuthProvider;
+  returnTo: unknown;
 };
 
 /**
@@ -153,7 +173,9 @@ async function getTenantAuthProvider(
       decryptedSecret,
       callbackBaseUrl,
     );
-  } else if (normalizedProvider === "entra") {
+  }
+
+  if (normalizedProvider === "entra") {
     const entraTenantId = config.tenantHint || "common";
     return createEntraProvider(
       entraTenantId,
@@ -176,32 +198,16 @@ async function buildProviderRedirect({
   oauth_code_verifier,
   oauth_tenant_id,
   oauth_return_to,
-}: any): Promise<LoginRedirectResult> {
+}: BuildProviderRedirectInput): Promise<LoginRedirectResult> {
   const safeReturnTo = resolveSafeReturnTo(returnTo) || getDefaultReturnTo();
-  const normalizedProvider = providerType.toLowerCase();
   const authProvider = await getTenantAuthProvider(tenantId, providerType);
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
-  let url: URL;
-
-  if (normalizedProvider === "google") {
-    url = authProvider.createAuthorizationURL(state, codeVerifier, [
-      "openid",
-      "profile",
-      "email",
-      "https://www.googleapis.com/auth/calendar.readonly",
-    ]);
-  } else if (normalizedProvider === "entra") {
-    url = authProvider.createAuthorizationURL(state, codeVerifier, [
-      "openid",
-      "profile",
-      "email",
-      "Calendars.Read",
-      "User.Read",
-    ]);
-  } else {
-    throw new Error(`Unsupported provider configured for domain: ${normalizedProvider}`);
-  }
+  const url = authProvider.createAuthorizationURL(
+    state,
+    codeVerifier,
+    getProviderScopes(providerType),
+  );
 
   url.searchParams.set("login_hint", email);
 
@@ -212,6 +218,8 @@ async function buildProviderRedirect({
     maxAge: 60 * 10,
   };
 
+  // These cookies bridge the browser round-trip to the identity provider so the callback can
+  // validate state and restore the correct tenant/session context.
   oauth_state.set({ value: state, ...cookieOpts });
   oauth_code_verifier.set({ value: codeVerifier, ...cookieOpts });
   oauth_tenant_id.set({ value: tenantId, ...cookieOpts });
@@ -223,6 +231,9 @@ async function buildProviderRedirect({
   };
 }
 
+/**
+ * Resolves all tenant/provider combinations configured for an email domain.
+ */
 async function resolveLoginChoices(domain: string) {
   const rows = await db
     .select({
@@ -238,7 +249,7 @@ async function resolveLoginChoices(domain: string) {
   return rows.filter(
     (row): row is LoginChoiceOption =>
       Boolean(row.tenantId) &&
-      (row.providerType === "google" || row.providerType === "entra"),
+      typeof row.providerType === "string" && isSupportedAuthProvider(row.providerType),
   );
 }
 
@@ -356,7 +367,7 @@ export const chooseLoginProvider = async ({
     const normalizedEmail = rawEmail.trim().toLowerCase();
     const domain = normalizedEmail.split("@")[1];
 
-    if (!domain || !tenantId || (providerType !== "google" && providerType !== "entra")) {
+    if (!domain || !tenantId || !isSupportedAuthProvider(providerType)) {
       set.status = 400;
       return { error: "Valid email, tenant, and provider are required" };
     }
@@ -558,6 +569,8 @@ export const providerCallback = async ({
       })
       .onConflictDoNothing();
 
+    // Login succeeds even if background calendar import fails; the sync is a convenience step,
+    // not part of authentication correctness.
     if (tokens?.accessToken) {
       try {
         await syncCalendarEventsForUser({

@@ -6,7 +6,7 @@ import { logger } from "../core/logger";
  * WebSocket route for authenticated meeting subscriptions and audio streaming.
  */
 export const websocketRoute = new Elysia().ws("/ws", {
-  // Accept binary audio frames without schema coercion.
+  // Audio frames arrive as raw binary, so schema validation needs to stay permissive here.
   body: t.Any(),
 
   open(ws) {
@@ -24,7 +24,7 @@ export const websocketRoute = new Elysia().ws("/ws", {
   async message(ws, message) {
     const user = (ws.data as any).wsUser;
 
-    // Route raw bytes directly as microphone audio.
+    // Host microphone chunks are forwarded without JSON parsing to keep the audio path minimal.
     if (
       Buffer.isBuffer(message) ||
       message instanceof Uint8Array ||
@@ -40,7 +40,7 @@ export const websocketRoute = new Elysia().ws("/ws", {
       return;
     }
 
-    // Handle edge-case binary frames parsed as plain objects.
+    // Some runtimes surface binary payloads as plain objects instead of Buffers.
     if (
       typeof message === "object" &&
       message !== null &&

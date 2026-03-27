@@ -2,7 +2,40 @@ import { Google, MicrosoftEntraId } from "arctic";
 import { env } from "../core/config";
 
 /**
- * Creates a Google OAuth provider for a tenant.
+ * Supported external SSO providers.
+ */
+export type SupportedAuthProvider = "google" | "entra";
+
+/**
+ * Canonical list of supported external SSO providers.
+ */
+export const SUPPORTED_AUTH_PROVIDERS = ["google", "entra"] as const;
+
+/**
+ * Checks whether a provider string maps to a supported SSO provider.
+ */
+export function isSupportedAuthProvider(value: string): value is SupportedAuthProvider {
+  return (SUPPORTED_AUTH_PROVIDERS as readonly string[]).includes(value);
+}
+
+/**
+ * Returns the OAuth scopes needed for the selected provider.
+ */
+export function getProviderScopes(provider: SupportedAuthProvider) {
+  if (provider === "google") {
+    return [
+      "openid",
+      "profile",
+      "email",
+      "https://www.googleapis.com/auth/calendar.readonly",
+    ];
+  }
+
+  return ["openid", "profile", "email", "Calendars.Read", "User.Read"];
+}
+
+/**
+ * Creates a Google OAuth provider using the tenant-specific callback URL.
  */
 export const createGoogleProvider = (
   clientId: string,
@@ -15,7 +48,7 @@ export const createGoogleProvider = (
 };
 
 /**
- * Creates a Microsoft Entra OAuth provider for a tenant.
+ * Creates a Microsoft Entra OAuth provider using the tenant-specific callback URL.
  */
 export const createEntraProvider = (
   entraTenantId: string,

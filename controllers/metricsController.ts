@@ -1,6 +1,7 @@
 import client from "prom-client";
 
 const collectDefaultMetrics = client.collectDefaultMetrics;
+// Default process/runtime metrics are exported once when this module is loaded.
 collectDefaultMetrics({ prefix: "calc_translation_" });
 
 /**

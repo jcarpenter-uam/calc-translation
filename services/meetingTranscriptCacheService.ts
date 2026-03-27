@@ -167,6 +167,9 @@ class MeetingTranscriptCacheService {
     }
   }
 
+  /**
+   * Loads every cached language history for a meeting from Redis or memory fallback.
+   */
   private async getMeetingHistories(meetingId: string) {
     const redis = await this.getRedisClient();
     if (!redis) {
@@ -183,10 +186,16 @@ class MeetingTranscriptCacheService {
     return histories;
   }
 
+  /**
+   * Returns in-memory fallback transcript history for one meeting language.
+   */
   private getMemoryLanguageHistory(meetingId: string, language: string) {
     return [...(this.memoryStore.get(meetingId)?.get(language) || [])];
   }
 
+  /**
+   * Appends a finalized utterance to the in-memory fallback cache.
+   */
   private appendToMemory(entry: CachedMeetingUtterance) {
     const meetingHistory = this.memoryStore.get(entry.meetingId) || new Map();
     const utterances = meetingHistory.get(entry.language) || [];
@@ -195,6 +204,9 @@ class MeetingTranscriptCacheService {
     this.memoryStore.set(entry.meetingId, meetingHistory);
   }
 
+  /**
+   * Lazily connects to Redis and permanently falls back to memory if Redis is unavailable.
+   */
   private async getRedisClient() {
     if (!env.REDIS_URL || this.redisDisabled) {
       return null;
@@ -232,6 +244,9 @@ class MeetingTranscriptCacheService {
     return this.redis;
   }
 
+  /**
+   * Parses cached transcript entries while discarding malformed payloads.
+   */
   private parseCachedUtterance(
     value: string,
     meetingId: string,
@@ -249,6 +264,9 @@ class MeetingTranscriptCacheService {
     }
   }
 
+  /**
+   * Converts cached utterances into a VTT transcript document.
+   */
   private toVtt(utterances: CachedMeetingUtterance[]) {
     const lines = ["WEBVTT", ""];
 
@@ -268,6 +286,9 @@ class MeetingTranscriptCacheService {
     return `${lines.join("\n")}\n`;
   }
 
+  /**
+   * Formats millisecond offsets into WebVTT timestamps.
+   */
   private formatTimestamp(totalMs: number) {
     const safeMs = Math.max(0, Math.floor(totalMs));
     const hours = Math.floor(safeMs / 3600000);
@@ -281,18 +302,30 @@ class MeetingTranscriptCacheService {
       .concat(`.${String(milliseconds).padStart(3, "0")}`);
   }
 
+  /**
+   * Redis list key for finalized utterances in one meeting/language stream.
+   */
   private historyKey(meetingId: string, language: string) {
     return `meeting_transcript:${meetingId}:${language}`;
   }
 
+  /**
+   * Redis set key storing the languages seen for one meeting.
+   */
   private languagesKey(meetingId: string) {
     return `meeting_transcript_languages:${meetingId}`;
   }
 
+  /**
+   * Redis pub/sub channel used for live transcript fan-out.
+   */
   private channelKey(meetingId: string, language: string) {
     return `meeting_transcript_pubsub:${meetingId}:${language}`;
   }
 
+  /**
+   * Sanitizes language identifiers before they become transcript filenames.
+   */
   private sanitizeLanguage(language: string) {
     return language.replace(/[^a-zA-Z0-9_-]/g, "_") || "unknown";
   }

@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import Redis from "ioredis";
 import { env } from "../core/config";
@@ -123,6 +123,24 @@ class MeetingTranscriptCacheService {
    */
   getTranscriptOutputPath(meetingId: string, language: string) {
     return join(this.outputRoot, meetingId, `${this.sanitizeLanguage(language)}.vtt`);
+  }
+
+  /**
+   * Lists transcript languages that have already been flushed to disk.
+   */
+  async listTranscriptLanguages(meetingId: string) {
+    try {
+      const meetingDirectory = join(this.outputRoot, meetingId);
+      const entries = await readdir(meetingDirectory, { withFileTypes: true });
+
+      return entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".vtt"))
+        .map((entry) => entry.name.replace(/\.vtt$/i, ""))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right));
+    } catch {
+      return [] as string[];
+    }
   }
 
   /**

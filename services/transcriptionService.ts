@@ -28,6 +28,25 @@ export interface TranscriptionEvent {
   sourceLanguage: string | null;
 }
 
+export type TranscriptionSessionState =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "paused"
+  | "finishing"
+  | "finished"
+  | "disconnected"
+  | "error";
+
+export interface TranscriptionSessionLifecycleEvent {
+  type: "connected" | "disconnected" | "finished" | "error";
+  meetingId: string;
+  targetLanguage: string;
+  state: TranscriptionSessionState;
+  error?: unknown;
+  reason?: string;
+}
+
 type SonioxToken = {
   text?: string;
   is_final?: boolean;
@@ -86,6 +105,7 @@ export interface TranscriptionSession {
   pause: () => void;
   resume: () => void;
   finish: () => Promise<void>;
+  getState: () => TranscriptionSessionState;
 }
 
 /**
@@ -101,6 +121,7 @@ class SonioxTranscriptionService {
     meetingId: string,
     config: TranscriptionConfig,
     onTranscriptionReady: (event: TranscriptionEvent) => void,
+    onLifecycleEvent?: (event: TranscriptionSessionLifecycleEvent) => void,
   ): TranscriptionSession {
     const targetLanguage =
       config.translation?.type === "one_way"
@@ -135,19 +156,40 @@ class SonioxTranscriptionService {
     }
 
     const session = this.client.realtime.stt(sttConfig);
+    let state: TranscriptionSessionState = "idle";
+
+    const emitLifecycleEvent = (
+      event: Omit<TranscriptionSessionLifecycleEvent, "meetingId" | "targetLanguage" | "state">,
+    ) => {
+      onLifecycleEvent?.({
+        ...event,
+        meetingId,
+        targetLanguage,
+        state,
+      });
+    };
 
     const utteranceBuffer = new RealtimeUtteranceBuffer();
 
     session.on("error", (error: any) => {
+      state = "error";
       logger.error("Soniox session error.", { meetingId, targetLanguage, error });
+      emitLifecycleEvent({ type: "error", error });
+    });
+
+    session.on("connected", () => {
+      state = "connected";
+      emitLifecycleEvent({ type: "connected" });
     });
 
     session.on("disconnected", (reason?: string) => {
+      state = "disconnected";
       logger.warn("Soniox session disconnected.", {
         meetingId,
         targetLanguage,
         reason,
       });
+      emitLifecycleEvent({ type: "disconnected", reason });
     });
 
     session.on("result", (result: any) => {
@@ -181,6 +223,7 @@ class SonioxTranscriptionService {
     });
 
     session.on("finished", () => {
+      state = "finished";
       logger.debug(
         `Soniox session stream finished flushing for meeting ${meetingId} (${targetLanguage})`,
       );
@@ -188,26 +231,33 @@ class SonioxTranscriptionService {
       if (utterance) {
         onTranscriptionReady(this.buildFinalEvent(utterance, targetLanguage));
       }
+
+      emitLifecycleEvent({ type: "finished" });
     });
 
     return {
       connect: async () => {
+        state = "connecting";
         logger.info("Connecting Soniox session.", { meetingId, targetLanguage });
         await session.connect();
       },
       sendAudio: (chunk: Buffer) => session.sendAudio(chunk),
       pause: () => {
+        state = "paused";
         logger.debug("Pausing Soniox session.", { meetingId, targetLanguage });
         session.pause();
       },
       resume: () => {
+        state = "connected";
         logger.debug("Resuming Soniox session.", { meetingId, targetLanguage });
         session.resume();
       },
       finish: async () => {
+        state = "finishing";
         logger.info("Finishing Soniox session.", { meetingId, targetLanguage });
         await session.finish();
       },
+      getState: () => state,
     };
   }
 

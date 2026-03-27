@@ -5,8 +5,8 @@ import {
   apiFetch,
   createMeeting,
   endMeeting,
+  streamAudio,
   WS_URL,
-  audioData,
 } from "./utils/testHelpers";
 
 /**
@@ -122,7 +122,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     // Give the WebSockets a brief moment to connect
     await new Promise((r) => setTimeout(r, 500));
 
-    // --- PHASE 3: HOST JOINS & TRIGGERS START ---
+    // --- PHASE 3: HOST JOINS THE ROOM ---
     const hostJoinRes = await apiFetch(
       `/meeting/join/${meetingReadableId}`,
       host.token,
@@ -145,16 +145,13 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
       };
     });
 
-    // Wait a brief moment to ensure WebSocket events propagate
-    await new Promise((r) => setTimeout(r, 500));
-    expect(attendeesInWaitingRoom).toBe(5); // Verify all attendees received the start event
-
-    // --- PHASE 4: SEND AUDIO & MEASURE TTFT ---
+    // --- PHASE 4: SEND AUDIO, START MEETING, & MEASURE TTFT ---
     audioDispatchTime = performance.now();
-    hostWs.send(audioData);
+    await streamAudio(hostWs, 3000);
 
     // Wait for all 5 attendees to receive their translated text
     const results = await Promise.all(ttftPromises);
+    expect(attendeesInWaitingRoom).toBe(5);
 
     // --- PHASE 5: ASSERTIONS & LOGGING ---
     console.log(`\n--- TTFT Results for Scenario A (Bulk Spawn) ---`);
@@ -227,9 +224,8 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
         attendee.token,
       );
 
-      // Because the host is already in, they skip the waiting room and the backend
-      // dynamically spawns a new Soniox worker for their language immediately.
-      expect(joinRes.isActive).toBe(true);
+      // The host is in the room, but the meeting is still inactive until audio starts.
+      expect(joinRes.isActive).toBe(false);
 
       const ttftPromise = new Promise<{ ttft: number; language: string }>(
         (resolve) => {
@@ -268,7 +264,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
 
     // --- PHASE 4: SEND AUDIO & MEASURE TTFT ---
     audioDispatchTime = performance.now();
-    hostWs.send(audioData);
+    await streamAudio(hostWs, 3000);
 
     const results = await Promise.all(ttftPromises);
 
@@ -365,9 +361,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     // Give early attendees time to establish WS connections
     await new Promise((r) => setTimeout(r, 500));
 
-    // --- PHASE 3: HOST JOINS & TRIGGERS START ---
-    // The host joins, instantly booting up Soniox workers for "en" and whatever
-    // languages the early attendees brought with them.
+    // --- PHASE 3: HOST JOINS THE ROOM ---
     const hostJoinRes = await apiFetch(
       `/meeting/join/${meetingReadableId}`,
       host.token,
@@ -390,10 +384,6 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
       };
     });
 
-    // Wait for the early attendees to receive the start event over the WebSocket
-    await new Promise((r) => setTimeout(r, 500));
-    expect(attendeesInWaitingRoom).toBe(2);
-
     // --- PHASE 4: LATE ATTENDEES JOIN (DYNAMIC SCALING) ---
     for (const attendee of lateAttendees) {
       const joinRes = await apiFetch(
@@ -401,8 +391,8 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
         attendee.token,
       );
 
-      // Assert that the meeting is fully active for them
-      expect(joinRes.isActive).toBe(true);
+      // The host is connected, but the meeting does not become active until audio starts.
+      expect(joinRes.isActive).toBe(false);
 
       const ttftPromise = new Promise<{ ttft: number; language: string }>(
         (resolve) => {
@@ -439,12 +429,13 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     // Give the dynamically spawned Soniox workers a moment to finish their handshake
     await new Promise((r) => setTimeout(r, 1000));
 
-    // --- PHASE 5: SEND AUDIO & MEASURE TTFT ---
+    // --- PHASE 5: SEND AUDIO, START MEETING, & MEASURE TTFT ---
     audioDispatchTime = performance.now();
-    hostWs.send(audioData);
+    await streamAudio(hostWs, 3000);
 
     // Wait for all 5 attendees (both early and late) to get their transcriptions
     const results = await Promise.all(ttftPromises);
+    expect(attendeesInWaitingRoom).toBe(2);
 
     // --- PHASE 6: ASSERTIONS & LOGGING ---
     console.log(`\n--- TTFT Results for Scenario C (Hybrid Spawn) ---`);

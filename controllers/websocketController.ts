@@ -1,10 +1,13 @@
 import type { ElysiaWS } from "elysia/ws";
+import { basename, extname } from "node:path";
 import { logger } from "../core/logger";
 import {
   transcriptionService,
   type TranscriptionSession,
   type TranscriptionConfig,
   type TranscriptionEvent,
+  type TranscriptionSessionLifecycleEvent,
+  type TranscriptionSessionState,
 } from "../services/transcriptionService";
 import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 import { db } from "../core/database";
@@ -30,12 +33,28 @@ interface Meeting {
   id: string;
   hostId: string | null;
   participants: Map<string, Participant>;
-  audioSessions: Map<string, TranscriptionSession>;
+  audioSessions: Map<string, MeetingAudioSession>;
+  pendingHostAudioChunks: Buffer[];
   hostTimeout?: ReturnType<typeof setTimeout>;
   hostAudioIdleTimeout?: ReturnType<typeof setTimeout>;
   isHostSendingAudio: boolean;
+  isStartingAudio?: boolean;
   isEnding?: boolean;
 }
+
+interface MeetingAudioSession {
+  languageKey: string;
+  config: TranscriptionConfig;
+  session: TranscriptionSession;
+  state: TranscriptionSessionState;
+  shouldResume: boolean;
+  isReconnecting: boolean;
+}
+
+type MeetingSessionPlan = {
+  languageKey: string;
+  config: TranscriptionConfig;
+};
 
 function getUniqueMeetingLanguages(languages: unknown): string[] {
   if (!Array.isArray(languages)) {
@@ -69,13 +88,14 @@ export class WebsocketController {
   initMeeting(meetingId: string, hostId?: string) {
     if (!this.meetings.has(meetingId)) {
       logger.debug("Initializing meeting container in memory.", { meetingId });
-      this.meetings.set(meetingId, {
-        id: meetingId,
-        hostId: hostId || null,
-        participants: new Map(),
-        audioSessions: new Map(),
-        isHostSendingAudio: false,
-      });
+        this.meetings.set(meetingId, {
+          id: meetingId,
+          hostId: hostId || null,
+          participants: new Map(),
+          audioSessions: new Map(),
+          pendingHostAudioChunks: [],
+          isHostSendingAudio: false,
+        });
     } else if (hostId) {
       const meeting = this.meetings.get(meetingId)!;
       if (!meeting.hostId) {
@@ -123,10 +143,22 @@ export class WebsocketController {
       (event) => {
         void this.handleTranscriptionEvent(meetingId, event);
       },
+      (event) => {
+        void this.handleSessionLifecycleEvent(languageKey, event);
+      },
     );
 
-    meeting.audioSessions.set(languageKey, session);
-    return session;
+    const entry: MeetingAudioSession = {
+      languageKey,
+      config,
+      session,
+      state: session.getState(),
+      shouldResume: meeting.isHostSendingAudio,
+      isReconnecting: false,
+    };
+
+    meeting.audioSessions.set(languageKey, entry);
+    return entry;
   }
 
   /**
@@ -311,21 +343,26 @@ export class WebsocketController {
       );
 
       if (sender?.id === meeting.hostId && !meeting.isHostSendingAudio) {
-        this.resumeHostAudio(meetingId, false);
+        if (meeting.isStartingAudio) {
+          this.queuePendingHostAudio(meeting, audioChunk);
+          return;
+        }
+
+        this.queuePendingHostAudio(meeting, audioChunk);
+
+        void this.resumeHostAudio(meetingId, false, true)
+          .catch((err) => {
+            logger.error("Failed starting host audio from incoming chunk.", {
+              meetingId,
+              err,
+            });
+          });
+        return;
       } else if (sender?.id === meeting.hostId) {
         this.refreshHostAudioIdleTimeout(meetingId);
       }
 
-      meeting.audioSessions.forEach((session) => {
-        try {
-          session.sendAudio(audioChunk);
-        } catch (err) {
-          logger.error("Error sending audio to transcription service.", {
-            meetingId,
-            err,
-          });
-        }
-      });
+      this.dispatchAudioChunkToMeeting(meetingId, audioChunk);
     }
   }
 
@@ -464,9 +501,9 @@ export class WebsocketController {
 
       await Promise.all(
         Array.from(meeting.audioSessions.entries()).map(
-          async ([languageKey, session]) => {
+          async ([languageKey, sessionEntry]) => {
             try {
-              await session.finish();
+              await sessionEntry.session.finish();
             } catch (err) {
               logger.error("Failed finishing audio session.", {
                 err,
@@ -478,9 +515,13 @@ export class WebsocketController {
         ),
       );
 
+      meeting.audioSessions.clear();
+      meeting.pendingHostAudioChunks.length = 0;
+
+      let outputPaths: string[] = [];
+
       try {
-        const outputPaths =
-          await meetingTranscriptCacheService.flushMeetingToVtt(id);
+        outputPaths = await meetingTranscriptCacheService.flushMeetingToVtt(id);
         if (outputPaths.length > 0) {
           logger.info("Meeting transcript history flushed to disk.", {
             meetingId: id,
@@ -496,7 +537,11 @@ export class WebsocketController {
 
       const disconnectMsg = JSON.stringify({
         type: "status",
+        event: "meeting_ended",
         message: `Meeting ${id} ended.`,
+        transcriptLanguages: outputPaths
+          .map((outputPath) => basename(outputPath, extname(outputPath)))
+          .filter(Boolean),
       });
 
       meeting.participants.forEach((p) => {
@@ -552,100 +597,12 @@ export class WebsocketController {
       return;
     }
 
-    if (meeting.audioSessions.size > 0) {
-      this.pauseHostAudio(meetingId, false);
-      return;
-    }
-
-    const [dbMeeting] = await db
-      .select()
-      .from(meetings)
-      .where(eq(meetings.id, meetingId));
-
-    if (!dbMeeting) {
-      logger.warn("Unable to prepare host audio for missing meeting record.", {
-        meetingId,
-        participantId,
-      });
-      return;
-    }
-
-    const method = dbMeeting.method || "one_way";
-    const languages = getUniqueMeetingLanguages(dbMeeting.languages);
-
-    if (method === "two_way") {
-      const [languageA, languageB] = languages;
-      if (!languageA || !languageB) {
-        logger.warn(
-          "Skipping paused two-way session startup due to missing languages.",
-          {
-            meetingId,
-            participantId,
-          },
-        );
-        return;
-      }
-
-      const session = this.addTranscriptionSession(meetingId, "two_way", {
-        enableSpeakerDiarization: true,
-        translation: {
-          type: "two_way",
-          language_a: languageA,
-          language_b: languageB,
-        },
-      });
-
-      await session?.connect();
-      session?.pause();
-    } else {
-      for (const language of languages) {
-        const session = this.addTranscriptionSession(meetingId, language, {
-          enableSpeakerDiarization: true,
-          translation: {
-            type: "one_way",
-            target_language: language,
-          },
-        });
-
-        await session?.connect();
-        session?.pause();
-      }
-    }
-
-    if (meeting.audioSessions.size === 0) {
-      logger.warn(
-        "Prepared host audio request found no languages to activate.",
-        {
-          meetingId,
-          participantId,
-          method,
-        },
-      );
-      return;
-    }
-
     meeting.isHostSendingAudio = false;
 
-    await db
-      .update(meetings)
-      .set({ started_at: dbMeeting.started_at || new Date() })
-      .where(eq(meetings.id, meetingId));
-
-    logger.info("Prepared paused transcription sessions for host.", {
+    logger.info("Host prepared live room without starting transcription yet.", {
       meetingId,
       participantId,
-      method,
-      languageCount: languages.length,
     });
-
-    this.broadcastToMeeting(
-      meetingId,
-      JSON.stringify({
-        type: "status",
-        event: "meeting_started",
-        message: "Meeting started. Transcription sessions are standing by.",
-      }),
-    );
   }
 
   setHostAudioState(wsId: string, isSendingAudio: boolean) {
@@ -673,7 +630,7 @@ export class WebsocketController {
     }
 
     if (isSendingAudio) {
-      this.resumeHostAudio(meetingId, true);
+      void this.resumeHostAudio(meetingId, true, true);
       return;
     }
 
@@ -695,30 +652,68 @@ export class WebsocketController {
     }, 5000);
   }
 
-  private resumeHostAudio(meetingId: string, announce: boolean) {
+  private async resumeHostAudio(
+    meetingId: string,
+    announce: boolean,
+    ensureSessions: boolean,
+  ) {
     const meeting = this.meetings.get(meetingId);
-    if (!meeting || meeting.isHostSendingAudio) {
+    if (!meeting || meeting.isHostSendingAudio || meeting.isStartingAudio) {
       if (meeting?.isHostSendingAudio) {
         this.refreshHostAudioIdleTimeout(meetingId);
       }
       return;
     }
 
-    meeting.audioSessions.forEach((session) => session.resume());
-    meeting.isHostSendingAudio = true;
-    this.refreshHostAudioIdleTimeout(meetingId);
+    meeting.isStartingAudio = true;
 
-    logger.info("Host audio resumed for meeting.", { meetingId });
+    try {
+      const didStartSessions = ensureSessions
+        ? await this.ensureMeetingAudioSessionsStarted(meetingId)
+        : false;
+      const activeMeeting = this.meetings.get(meetingId);
 
-    if (announce) {
-      this.broadcastToMeeting(
-        meetingId,
-        JSON.stringify({
-          type: "status",
-          event: "host_audio_started",
-          message: "Host microphone is live.",
-        }),
-      );
+      if (!activeMeeting?.audioSessions.size) {
+        return;
+      }
+
+      activeMeeting.audioSessions.forEach((sessionEntry) => {
+        sessionEntry.shouldResume = true;
+        sessionEntry.session.resume();
+        sessionEntry.state = sessionEntry.session.getState();
+      });
+      activeMeeting.isHostSendingAudio = true;
+      this.refreshHostAudioIdleTimeout(meetingId);
+      this.flushPendingHostAudio(meetingId);
+
+      logger.info("Host audio resumed for meeting.", { meetingId });
+
+      if (didStartSessions) {
+        this.broadcastToMeeting(
+          meetingId,
+          JSON.stringify({
+            type: "status",
+            event: "meeting_started",
+            message: "Meeting started. Host microphone is live.",
+          }),
+        );
+      }
+
+      if (announce) {
+        this.broadcastToMeeting(
+          meetingId,
+          JSON.stringify({
+            type: "status",
+            event: "host_audio_started",
+            message: "Host microphone is live.",
+          }),
+        );
+      }
+    } finally {
+      const activeMeeting = this.meetings.get(meetingId);
+      if (activeMeeting) {
+        activeMeeting.isStartingAudio = false;
+      }
     }
   }
 
@@ -733,7 +728,11 @@ export class WebsocketController {
       meeting.hostAudioIdleTimeout = undefined;
     }
 
-    meeting.audioSessions.forEach((session) => session.pause());
+    meeting.audioSessions.forEach((sessionEntry) => {
+      sessionEntry.shouldResume = false;
+      sessionEntry.session.pause();
+      sessionEntry.state = sessionEntry.session.getState();
+    });
     const wasSendingAudio = meeting.isHostSendingAudio;
     meeting.isHostSendingAudio = false;
 
@@ -839,6 +838,239 @@ export class WebsocketController {
         sourceLanguage: event.sourceLanguage,
       }),
     );
+  }
+
+  private async ensureMeetingAudioSessionsStarted(meetingId: string) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting) {
+      return false;
+    }
+
+    const [dbMeeting] = await db
+      .select()
+      .from(meetings)
+      .where(eq(meetings.id, meetingId));
+
+    if (!dbMeeting) {
+      logger.warn("Unable to start host audio for missing meeting record.", {
+        meetingId,
+      });
+      return false;
+    }
+
+    const sessionPlan = this.buildMeetingSessionPlan(dbMeeting.method, dbMeeting.languages);
+    if (sessionPlan.length === 0) {
+      logger.warn("No Soniox session plan available for meeting.", {
+        meetingId,
+        method: dbMeeting.method,
+      });
+      return false;
+    }
+
+    const missingSessions = sessionPlan.filter(({ languageKey }) => {
+      const existing = meeting.audioSessions.get(languageKey);
+      return !existing || this.shouldReplaceSession(existing.state);
+    });
+
+    await Promise.all(
+      missingSessions.map(async ({ languageKey, config }) => {
+      const existing = meeting.audioSessions.get(languageKey);
+      if (existing) {
+        meeting.audioSessions.delete(languageKey);
+      }
+
+      const sessionEntry = this.addTranscriptionSession(
+        meetingId,
+        languageKey,
+        config,
+      );
+      await sessionEntry?.session.connect();
+      if (sessionEntry) {
+        sessionEntry.state = sessionEntry.session.getState();
+      }
+      }),
+    );
+
+    if (meeting.audioSessions.size === 0) {
+      return false;
+    }
+
+    if (!dbMeeting.started_at) {
+      await db
+        .update(meetings)
+        .set({ started_at: new Date() })
+        .where(eq(meetings.id, meetingId));
+
+      logger.info("Started transcription sessions for meeting.", {
+        meetingId,
+        method: dbMeeting.method,
+        languageCount: sessionPlan.length,
+      });
+
+      return true;
+    }
+
+    return false;
+  }
+
+  private shouldReplaceSession(state: TranscriptionSessionState) {
+    return state === "disconnected" || state === "error" || state === "finished";
+  }
+
+  private async handleSessionLifecycleEvent(
+    languageKey: string,
+    event: TranscriptionSessionLifecycleEvent,
+  ) {
+    const meeting = this.meetings.get(event.meetingId);
+    const sessionEntry = meeting?.audioSessions.get(languageKey);
+    if (!meeting || !sessionEntry) {
+      return;
+    }
+
+    sessionEntry.state = event.state;
+
+    if (meeting.isEnding) {
+      return;
+    }
+
+    if (event.type === "connected") {
+      sessionEntry.isReconnecting = false;
+      if (sessionEntry.shouldResume) {
+        sessionEntry.session.resume();
+        sessionEntry.state = sessionEntry.session.getState();
+      }
+      return;
+    }
+
+    if (
+      event.type !== "disconnected" &&
+      event.type !== "error" &&
+      event.type !== "finished"
+    ) {
+      return;
+    }
+
+    if (!sessionEntry.shouldResume || sessionEntry.isReconnecting) {
+      return;
+    }
+
+    sessionEntry.isReconnecting = true;
+    logger.warn("Recreating Soniox session after lifecycle failure.", {
+      meetingId: event.meetingId,
+      languageKey,
+      lifecycleEvent: event.type,
+    });
+
+    try {
+      const replacement = transcriptionService.createSession(
+        event.meetingId,
+        sessionEntry.config,
+        (transcriptionEvent) => {
+          void this.handleTranscriptionEvent(event.meetingId, transcriptionEvent);
+        },
+        (lifecycleEvent) => {
+          void this.handleSessionLifecycleEvent(languageKey, lifecycleEvent);
+        },
+      );
+
+      sessionEntry.session = replacement;
+      sessionEntry.state = replacement.getState();
+      await replacement.connect();
+
+      if (sessionEntry.shouldResume) {
+        replacement.resume();
+        sessionEntry.state = replacement.getState();
+      }
+
+      logger.info("Recreated Soniox session successfully.", {
+        meetingId: event.meetingId,
+        languageKey,
+      });
+    } catch (err) {
+      sessionEntry.state = sessionEntry.session.getState();
+      logger.error("Failed recreating Soniox session.", {
+        meetingId: event.meetingId,
+        languageKey,
+        err,
+      });
+    } finally {
+      sessionEntry.isReconnecting = false;
+    }
+  }
+
+  private buildMeetingSessionPlan(method: string | null, languages: unknown): MeetingSessionPlan[] {
+    const resolvedMethod = method || "one_way";
+    const uniqueLanguages = getUniqueMeetingLanguages(languages);
+
+    if (resolvedMethod === "two_way") {
+      const [languageA, languageB] = uniqueLanguages;
+      if (!languageA || !languageB) {
+        return [];
+      }
+
+      return [
+        {
+          languageKey: "two_way",
+          config: {
+            enableSpeakerDiarization: true,
+            translation: {
+              type: "two_way",
+              language_a: languageA,
+              language_b: languageB,
+            },
+          },
+        },
+      ];
+    }
+
+    return uniqueLanguages.map((language) => ({
+      languageKey: language,
+      config: {
+        enableSpeakerDiarization: true,
+        translation: {
+          type: "one_way",
+          target_language: language,
+        },
+      },
+    }));
+  }
+
+  private queuePendingHostAudio(meeting: Meeting, audioChunk: Buffer) {
+    if (meeting.pendingHostAudioChunks.length >= 20) {
+      meeting.pendingHostAudioChunks.shift();
+    }
+
+    meeting.pendingHostAudioChunks.push(Buffer.from(audioChunk));
+  }
+
+  private flushPendingHostAudio(meetingId: string) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting || meeting.pendingHostAudioChunks.length === 0) {
+      return;
+    }
+
+    const pendingChunks = meeting.pendingHostAudioChunks.splice(0);
+    for (const chunk of pendingChunks) {
+      this.dispatchAudioChunkToMeeting(meetingId, chunk);
+    }
+  }
+
+  private dispatchAudioChunkToMeeting(meetingId: string, audioChunk: Buffer) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting) {
+      return;
+    }
+
+    meeting.audioSessions.forEach((sessionEntry) => {
+      try {
+        sessionEntry.session.sendAudio(audioChunk);
+      } catch (err) {
+        logger.error("Error sending audio to transcription service.", {
+          meetingId,
+          err,
+        });
+      }
+    });
   }
 }
 

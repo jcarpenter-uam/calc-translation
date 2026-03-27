@@ -158,8 +158,17 @@ export const getMeetingDetails = async ({
       return { error: "Not authorized to view this meeting" };
     }
 
+    const transcriptLanguages = await meetingTranscriptCacheService.listTranscriptLanguages(
+      id,
+    );
+
     logger.debug("Meeting details retrieved.", { userId, meetingId: id });
-    return { meeting };
+    return {
+      meeting: {
+        ...meeting,
+        transcript_languages: transcriptLanguages,
+      },
+    };
   } catch (err) {
     logger.error("Error fetching meeting details.", {
       userId,
@@ -604,9 +613,8 @@ export const joinMeeting = async ({
 
     let activeMeeting = websocketController.getMeeting(internalId);
 
-    const isAudioRunning = activeMeeting
-      ? activeMeeting.audioSessions.size > 0
-      : false;
+    const isAudioRunning = activeMeeting?.isHostSendingAudio ?? false;
+    const hasMeetingStarted = Boolean(dbMeeting.started_at) || Boolean(activeMeeting?.audioSessions.size);
 
     const currentAttendees = dbMeeting.attendees || [];
 
@@ -639,28 +647,24 @@ export const joinMeeting = async ({
     }
 
     // Start a new one-way worker when an active meeting gains a new language.
-    if (
-      isAudioRunning &&
-      method === "one_way" &&
-      userLanguage &&
-      dbUpdatePayload.languages
-    ) {
-      const newSession = websocketController.addTranscriptionSession(
-        internalId,
-        userLanguage,
-        {
-          enableSpeakerDiarization: true,
-          translation: { type: "one_way", target_language: userLanguage },
-        },
-      );
+    if (method === "one_way" && userLanguage && dbUpdatePayload.languages) {
+      if (isAudioRunning) {
+        const newSession = websocketController.addTranscriptionSession(
+          internalId,
+          userLanguage,
+          {
+            enableSpeakerDiarization: true,
+            translation: { type: "one_way", target_language: userLanguage },
+          },
+        );
 
-      await newSession?.connect();
-      if (!websocketController.isHostSendingAudio(internalId)) {
-        newSession?.pause();
+        await newSession?.session.connect();
       }
 
       logger.info(
-        "Started dynamic one-way session.",
+        isAudioRunning
+          ? "Started dynamic one-way session while host audio was live."
+          : "Registered dynamic one-way session for future audio start.",
         {
           meetingId: internalId,
           language: userLanguage,
@@ -675,7 +679,7 @@ export const joinMeeting = async ({
       .where(eq(meetings.id, internalId));
 
     const wsTicket = await generateWsTicket(user.id, tenantId || "");
-    const isActiveNow = isAudioRunning || isHost;
+    const isActiveNow = hasMeetingStarted || isHost;
 
     logger.info(
       "User joined meeting.",

@@ -64,6 +64,19 @@ function splitTranscriptTexts(tokens: SonioxToken[]) {
   };
 }
 
+function normalizeSpeakerLabel(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return /^\d+$/.test(trimmed) ? `Speaker: ${trimmed}` : trimmed;
+}
+
 /**
  * An abstracted interface for a real-time transcription session.
  */
@@ -240,12 +253,7 @@ class SonioxTranscriptionService {
   }
 
   private normalizeSpeaker(value: unknown) {
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-      return trimmed || null;
-    }
-
-    return null;
+    return normalizeSpeakerLabel(value);
   }
 }
 
@@ -253,4 +261,4 @@ class SonioxTranscriptionService {
  * Shared transcription service instance.
  */
 export const transcriptionService = new SonioxTranscriptionService();
-export { splitTranscriptTexts };
+export { normalizeSpeakerLabel, splitTranscriptTexts };

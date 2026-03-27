@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { splitTranscriptTexts } from "../services/transcriptionService";
+import {
+  normalizeSpeakerLabel,
+  splitTranscriptTexts,
+} from "../services/transcriptionService";
 
 describe("Soniox transcript splitting", () => {
   it("separates original transcription from translated text", () => {
@@ -35,5 +38,22 @@ describe("Soniox transcript splitting", () => {
     expect(result.translationText).toBeNull();
     expect(result.displayText).toBe("Only transcription");
     expect(result.sourceLanguage).toBe("en");
+  });
+});
+
+describe("speaker normalization", () => {
+  it("formats Soniox diarization labels for display", () => {
+    expect(normalizeSpeakerLabel("1")).toBe("Speaker: 1");
+    expect(normalizeSpeakerLabel(" 42 ")).toBe("Speaker: 42");
+  });
+
+  it("preserves non-diarization speaker labels", () => {
+    expect(normalizeSpeakerLabel("Jane Doe")).toBe("Jane Doe");
+    expect(normalizeSpeakerLabel("Speaker 1")).toBe("Speaker 1");
+  });
+
+  it("returns null for empty or invalid values", () => {
+    expect(normalizeSpeakerLabel("   ")).toBeNull();
+    expect(normalizeSpeakerLabel(null)).toBeNull();
   });
 });

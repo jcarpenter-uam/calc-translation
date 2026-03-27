@@ -25,6 +25,37 @@ describe("Transcript language isolation integration", () => {
     );
   });
 
+  async function connectMeetingSocket(token: string, meetingId: string) {
+    const ws = new WebSocket(`${WS_URL}?ticket=${token}`);
+    activeSockets.push(ws);
+
+    const messages: any[] = [];
+    ws.onmessage = (event) => {
+      messages.push(JSON.parse(event.data.toString()));
+    };
+
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ action: "subscribe_meeting", meetingId }));
+        resolve();
+      };
+    });
+
+    await waitForEvent(
+      messages,
+      (message) =>
+        message.status === `Subscribed to ${meetingId}` ||
+        (message.type === "presence" && message.event === "snapshot"),
+      10000,
+    );
+
+    // Give the websocket route one extra tick to finish subscription side effects before the test
+    // injects transcript events.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    return { ws, messages };
+  }
+
   afterAll(async () => {
     for (const ws of activeSockets) {
       if (ws.readyState === 0 || ws.readyState === 1) {
@@ -52,29 +83,12 @@ describe("Transcript language isolation integration", () => {
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 
     const hostJoin = await apiFetch(`/meeting/join/${meeting.readableId}`, host.token);
-    const hostWs = new WebSocket(`${WS_URL}?ticket=${hostJoin.token}`);
-    activeSockets.push(hostWs);
-
-    const hostMessages: any[] = [];
-    hostWs.onmessage = (event) => {
-      hostMessages.push(JSON.parse(event.data.toString()));
-    };
-
-    await new Promise<void>((resolve) => {
-      hostWs.onopen = () => {
-        hostWs.send(
-          JSON.stringify({ action: "subscribe_meeting", meetingId: meeting.meetingId }),
-        );
-        resolve();
-      };
-    });
-
-    await waitForEvent(
-      hostMessages,
-      (message) => message.status === `Subscribed to ${meeting.meetingId}`,
-      10000,
+    const { messages: hostMessages } = await connectMeetingSocket(
+      hostJoin.token,
+      meeting.meetingId,
     );
 
+    // Inject finalized transcript events directly so the test focuses on websocket fan-out rules.
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
       text: "Hello everyone",
       targetLanguage: "en",
@@ -106,11 +120,11 @@ describe("Transcript language isolation integration", () => {
     );
 
     const hostTranscriptLanguages = hostMessages
-      .filter((message) => message.type === "transcription")
-      .map((message) => message.language);
+      .filter((message: any) => message.type === "transcription")
+      .map((message: any) => message.language);
 
     expect(hostTranscriptLanguages.length).toBeGreaterThan(0);
-    expect(hostTranscriptLanguages.every((language) => language === "en")).toBe(true);
+    expect(hostTranscriptLanguages.every((language: any) => language === "en")).toBe(true);
   }, 15000);
 
   it("only sends spanish transcripts to a live spanish attendee websocket", async () => {
@@ -121,33 +135,17 @@ describe("Transcript language isolation integration", () => {
     });
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 
-    await apiFetch(`/meeting/join/${meeting.readableId}`, host.token);
+    const hostJoin = await apiFetch(`/meeting/join/${meeting.readableId}`, host.token);
+    await connectMeetingSocket(hostJoin.token, meeting.meetingId);
+
     const attendeeJoin = await apiFetch(
       `/meeting/join/${meeting.readableId}`,
       attendeeEs.token,
     );
 
-    const attendeeWs = new WebSocket(`${WS_URL}?ticket=${attendeeJoin.token}`);
-    activeSockets.push(attendeeWs);
-
-    const attendeeMessages: any[] = [];
-    attendeeWs.onmessage = (event) => {
-      attendeeMessages.push(JSON.parse(event.data.toString()));
-    };
-
-    await new Promise<void>((resolve) => {
-      attendeeWs.onopen = () => {
-        attendeeWs.send(
-          JSON.stringify({ action: "subscribe_meeting", meetingId: meeting.meetingId }),
-        );
-        resolve();
-      };
-    });
-
-    await waitForEvent(
-      attendeeMessages,
-      (message) => message.status === `Subscribed to ${meeting.meetingId}`,
-      10000,
+    const { messages: attendeeMessages } = await connectMeetingSocket(
+      attendeeJoin.token,
+      meeting.meetingId,
     );
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
@@ -181,10 +179,10 @@ describe("Transcript language isolation integration", () => {
     );
 
     const attendeeTranscriptLanguages = attendeeMessages
-      .filter((message) => message.type === "transcription")
-      .map((message) => message.language);
+      .filter((message: any) => message.type === "transcription")
+      .map((message: any) => message.language);
 
     expect(attendeeTranscriptLanguages.length).toBeGreaterThan(0);
-    expect(attendeeTranscriptLanguages.every((language) => language === "es")).toBe(true);
+    expect(attendeeTranscriptLanguages.every((language: any) => language === "es")).toBe(true);
   }, 15000);
 });

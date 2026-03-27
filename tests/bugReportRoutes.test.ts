@@ -4,6 +4,7 @@ import { inArray } from "drizzle-orm";
 import { tenants } from "../models/tenantModel";
 import { users } from "../models/userModel";
 import { bugReports } from "../models/bugReportModel";
+import { userTenants } from "../models/userTenantModel";
 import { generateApiSessionToken } from "../utils/security";
 import {
   BASE_URL,
@@ -62,6 +63,15 @@ describe("Bug report routes", () => {
           languageCode: "en",
           role: "user" as any,
         },
+      ])
+      .onConflictDoNothing();
+
+    await db
+      .insert(userTenants)
+      .values([
+        { userId: superUserId, tenantId },
+        { userId: tenantAdminUserId, tenantId },
+        { userId: regularUserId, tenantId },
       ])
       .onConflictDoNothing();
 
@@ -155,6 +165,7 @@ describe("Bug report routes", () => {
       reports: Array<{ title: string; userId: string | null; status: string }>;
     };
 
+    // Listing defaults to the unresolved triage queue unless a status filter is supplied.
     expect(data.reports.length).toBeGreaterThan(0);
     expect(data.reports.some((report) => report.userId === regularUserId)).toBe(true);
     expect(

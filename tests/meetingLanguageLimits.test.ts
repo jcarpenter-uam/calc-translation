@@ -18,6 +18,7 @@ describe("Meeting language limits", () => {
   beforeAll(async () => {
     host = await createTestUser("host-language-limit", "Host User", "en");
 
+    // Use five distinct attendee languages so the last join exercises the policy cap exactly.
     const languages = ["es", "fr", "de", "it", "pt"];
     attendees = await Promise.all(
       languages.map((language, index) =>
@@ -69,6 +70,7 @@ describe("Meeting language limits", () => {
 
     createdMeetings.push({ id: createRes.meetingId, hostToken: host.token });
 
+    // Fill the meeting to the allowed maximum before attempting the final rejected join.
     for (const attendee of attendees.slice(0, 4)) {
       const response = await fetch(
         `${BASE_URL}/meeting/join/${createRes.readableId}`,

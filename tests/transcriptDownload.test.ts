@@ -27,6 +27,7 @@ describe("Transcript download access", () => {
   });
 
   afterAll(async () => {
+    // Transcript cache artifacts outlive DB rows, so clear both storage layers during teardown.
     for (const meetingId of createdMeetingIds) {
       await meetingTranscriptCacheService.removeTranscriptArtifacts(meetingId);
       await meetingTranscriptCacheService.clearMeetingHistory(meetingId);
@@ -42,6 +43,7 @@ describe("Transcript download access", () => {
     });
     createdMeetingIds.push(meeting.meetingId);
 
+    // Join once so the attendee is written onto the meeting record before transcript download.
     await fetch(
       `http://localhost:${process.env.PORT || 8000}/api/meeting/join/${meeting.readableId}`,
       {
@@ -52,6 +54,7 @@ describe("Transcript download access", () => {
       },
     );
 
+    // Seed archived transcript output directly instead of depending on a live websocket/audio run.
     await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId: meeting.meetingId,
       language: "en",

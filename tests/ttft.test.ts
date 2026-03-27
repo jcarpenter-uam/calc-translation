@@ -15,7 +15,7 @@ const CONCURRENCY_LEVELS = [1, 5, 10, 25, 50, 100];
 describe("Stress Test & TTFT Measurement", () => {
   let host: any;
 
-  /* Resource trackers for guaranteed cleanup */
+  // These stress cases create many live sockets, so cleanup stays explicit and local.
   const activeSockets: WebSocket[] = [];
   const createdMeetings: { id: string; hostToken: string }[] = [];
 
@@ -24,25 +24,21 @@ describe("Stress Test & TTFT Measurement", () => {
   });
 
   afterAll(async () => {
-    // 1. Force close any lingering WebSockets
     for (const ws of activeSockets) {
       if (ws.readyState === 1 || ws.readyState === 0) ws.close();
     }
 
-    // 2. End all remaining meetings via the API
     for (const meeting of createdMeetings) {
       try {
         await endMeeting(meeting.id, meeting.hostToken);
       } catch (err) {}
     }
 
-    // 3. Destroy all test users and their database records
     await cleanupTestUsers();
   });
 
-  // Dynamically generate a test block for each concurrency tier
+  // Generate the same workload shape for each concurrency tier so the TTFT numbers stay comparable.
   for (const level of CONCURRENCY_LEVELS) {
-    // Increased timeout heavily (120 seconds) for the higher concurrency levels
     it(`should start ${level} concurrent streams and measure TTFT`, async () => {
       console.log(`\n=================================================`);
       console.log(
@@ -72,7 +68,6 @@ describe("Stress Test & TTFT Measurement", () => {
         });
       }
 
-      // Ensure we successfully created the required number of meetings
       expect(meetings.length).toBe(level);
 
       // --- PHASE 2: CONNECT WS & MEASURE TTFT ---
@@ -106,7 +101,7 @@ describe("Stress Test & TTFT Measurement", () => {
             );
           }
 
-          // Test strictly expects all streams to successfully return a token
+            // This suite treats missing first tokens as a failure even if some streams succeeded.
           expect(ttfts.length).toBe(level);
           setTimeout(resolve, 1500);
         };
@@ -127,7 +122,7 @@ describe("Stress Test & TTFT Measurement", () => {
               }),
             );
 
-            // Wait slightly for the Soniox worker to spin up before hammering it with audio
+            // Give each upstream worker a moment to connect before audio starts.
             setTimeout(() => {
               let offset = 0;
               const chunkSize = 3200;
@@ -139,7 +134,7 @@ describe("Stress Test & TTFT Measurement", () => {
                   ws.send(audioData.subarray(offset, end));
                   offset += chunkSize;
                 } else {
-                  offset = 0; // Restart loop if needed to ensure token arrival
+                  offset = 0;
                 }
               }, 100);
               intervals.push(streamInterval);
@@ -169,7 +164,7 @@ describe("Stress Test & TTFT Measurement", () => {
           };
         });
 
-        // Safeguard: Timeout after 45 seconds if the Soniox streams lock up
+        // Finish with a clear failure signal instead of hanging forever if any stream stalls.
         setTimeout(() => {
           if (!isFinished) {
             console.log(
@@ -180,9 +175,7 @@ describe("Stress Test & TTFT Measurement", () => {
         }, 45000);
       });
 
-      // --- PHASE 3: INLINE CLEANUP ---
-      // Proactively tear down these specific meetings/sockets so they don't
-      // bloat memory and exhaust connections during the next concurrency tier.
+      // Tear down each batch before the next tier so the stress levels stay isolated.
       for (const meeting of meetings) {
         await endMeeting(meeting.id, host.token);
 
@@ -190,7 +183,6 @@ describe("Stress Test & TTFT Measurement", () => {
         if (mIdx > -1) createdMeetings.splice(mIdx, 1);
       }
 
-      // Close sockets and remove them from the global safety tracker
       for (let i = activeSockets.length - 1; i >= 0; i--) {
         const ws = activeSockets[i];
         if (!ws) {

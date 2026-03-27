@@ -3,6 +3,7 @@ import { db } from "../core/database";
 import { users } from "../models/userModel";
 import { meetings } from "../models/meetingModel";
 import { tenants } from "../models/tenantModel";
+import { userTenants } from "../models/userTenantModel";
 import { eq } from "drizzle-orm";
 import { generateApiSessionToken } from "../utils/security";
 import {
@@ -84,6 +85,17 @@ describe("Role-Based Access Control (RBAC)", () => {
       ])
       .onConflictDoNothing();
 
+    await db
+      .insert(userTenants)
+      .values([
+        { userId: "rbac_super", tenantId: "rbac-tenant-1" },
+        { userId: "rbac_t1_admin", tenantId: "rbac-tenant-1" },
+        { userId: "rbac_t2_admin", tenantId: "rbac-tenant-2" },
+        { userId: "rbac_user_1", tenantId: "rbac-tenant-1" },
+        { userId: "rbac_user_2", tenantId: "rbac-tenant-1" },
+      ])
+      .onConflictDoNothing();
+
     tokens.super = await generateApiSessionToken("rbac_super", "rbac-tenant-1");
     tokens.t1admin = await generateApiSessionToken(
       "rbac_t1_admin",
@@ -122,7 +134,8 @@ describe("Role-Based Access Control (RBAC)", () => {
     meetingIds.t1admin = t1AdminMeeting.meetingId;
     meetingIds.t2admin = t2AdminMeeting.meetingId;
 
-    // Add User 2 as an attendee to validate attendee-level access checks.
+    // Promote one regular user to attendee status so the suite covers explicit invite access as
+    // well as host/admin visibility.
     await db
       .update(meetings)
       .set({ attendees: ["rbac_user_2"] })
@@ -164,6 +177,7 @@ describe("Role-Based Access Control (RBAC)", () => {
     expect(t1Topics).toContain("T1 Admin Meeting");
     expect(t1Topics).not.toContain("T2 Admin Meeting");
 
+    // Detail access should enforce the same tenant boundary as the list endpoint.
     const crossTenantRes = await fetch(
       `${BASE_URL}/meeting/${meetingIds.t2admin}`,
       {

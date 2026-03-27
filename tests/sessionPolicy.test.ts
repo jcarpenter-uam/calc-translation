@@ -71,6 +71,7 @@ describe("sessionPolicy", () => {
   });
 
   it("rejects a regular user token whose tenant membership is missing", async () => {
+    // The user record exists, but the session should still fail because tenant scope is stale.
     const resolved = await resolveSessionContext({
       userId: "session_policy_other",
       tenantId,

@@ -23,6 +23,7 @@ describe("accessPolicy", () => {
   });
 
   it("allows meeting access for hosts, attendees, scoped tenant admins, and super admins", () => {
+    // Keep one canonical record shape here so role-based visibility stays easy to reason about.
     const meeting = {
       host_id: "host-1",
       attendees: ["attendee-1"],
@@ -58,6 +59,8 @@ describe("accessPolicy", () => {
   });
 
   it("builds a visibility clause only when tenant-scoped filtering is required", () => {
+    // Super admins intentionally bypass tenant filtering, while all other roles receive a where
+    // clause that scopes the list query.
     expect(
       buildMeetingListVisibilityWhereClause({ id: "super-1", role: "super_admin" }, "tenant-1"),
     ).toBeUndefined();

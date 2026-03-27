@@ -109,6 +109,8 @@ describe("User Routes", () => {
       ])
       .onConflictDoNothing();
 
+    // Seed both tenant-domain and auth-config data because these user/admin endpoints expose the
+    // same tenant settings payload used by the admin UI.
     await db
       .insert(tenantDomains)
       .values([
@@ -234,6 +236,7 @@ describe("User Routes", () => {
     });
     expect(tenantAdminRes.status).toBe(200);
     const tenantAdminData = (await tenantAdminRes.json()) as any;
+    // Tenant admins only get their own tenant as a valid scope selector.
     expect(tenantAdminData.tenants).toEqual([
       {
         id: tenantOneId,

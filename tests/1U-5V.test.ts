@@ -17,15 +17,15 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
   let host: any;
   let attendees: any[] = [];
 
-  /* Resource trackers for guaranteed cleanup */
+  // Track resources explicitly because these scenarios create multiple sockets and meetings.
   const activeSockets: WebSocket[] = [];
   const createdMeetings: { id: string; hostToken: string }[] = [];
 
   beforeAll(async () => {
-    // Seed the Host
     host = await createTestUser("host-1", "Host User", "en");
 
-    // Seed 5 attendees, giving some of them unique languages to test dynamic spawning
+    // Mix shared and unique languages so the meeting exercises both reused and dynamically added
+    // one-way transcription workers.
     const languages = ["en", "es", "fr", "de", "it"];
     for (let i = 0; i < 5; i++) {
       const language = languages[i] || "en";
@@ -36,19 +36,16 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
   });
 
   afterAll(async () => {
-    // 1. Force close any active WebSockets
     for (const ws of activeSockets) {
       if (ws.readyState === 1 || ws.readyState === 0) ws.close();
     }
 
-    // 2. End all meetings via the API to tear down Soniox sessions
     for (const meeting of createdMeetings) {
       try {
         await endMeeting(meeting.id, meeting.hostToken);
       } catch (err) {}
     }
 
-    // 3. Destroy all test users and their database records
     await cleanupTestUsers();
   });
 
@@ -75,7 +72,8 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     let attendeesInWaitingRoom = 0;
     const ttftPromises: Promise<{ ttft: number; language: string }>[] = [];
 
-    // Process HTTP joins sequentially so we know they are in the waiting room BEFORE the host joins
+    // Join sequentially so every attendee is parked in the waiting room before the host activates
+    // the room and starts audio.
     for (const attendee of attendees) {
       const joinRes = await apiFetch(
         `/meeting/join/${meetingReadableId}`,
@@ -119,7 +117,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
       ttftPromises.push(ttftPromise);
     }
 
-    // Give the WebSockets a brief moment to connect
+    // Give the waiting-room subscribers time to attach before the host starts the room.
     await new Promise((r) => setTimeout(r, 500));
 
     // --- PHASE 3: HOST JOINS THE ROOM ---
@@ -149,7 +147,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     audioDispatchTime = performance.now();
     await streamAudio(hostWs, 3000);
 
-    // Wait for all 5 attendees to receive their translated text
+    // Every attendee should receive tokens in their own language once the meeting becomes live.
     const results = await Promise.all(ttftPromises);
     expect(attendeesInWaitingRoom).toBe(5);
 
@@ -224,7 +222,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
         attendee.token,
       );
 
-      // The host is in the room, but the meeting is still inactive until audio starts.
+      // The host has joined, but attendees should still see the room as inactive until audio flows.
       expect(joinRes.isActive).toBe(false);
 
       const ttftPromise = new Promise<{ ttft: number; language: string }>(

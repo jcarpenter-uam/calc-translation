@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { websocketController } from "../controllers/websocketController";
 import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 
+/**
+ * Builds a lightweight websocket double that records outgoing messages by participant language.
+ */
 function createFakeSocket(id: string, languageCode: string | null) {
   const sentMessages: any[] = [];
 
@@ -51,6 +54,7 @@ describe("Transcript language isolation", () => {
       attendeeNoLanguage.socket,
     );
 
+    // Feed one finalized utterance per language so delivery can be asserted independently.
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {

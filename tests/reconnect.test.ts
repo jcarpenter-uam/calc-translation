@@ -17,7 +17,7 @@ describe("Host Reconnection and Timeout Logic", () => {
   let host: any;
   let attendee: any;
 
-  /* Resource trackers for guaranteed cleanup */
+  // These long-running websocket tests need explicit cleanup to avoid cross-test interference.
   const activeSockets: WebSocket[] = [];
   const createdMeetings: { id: string; hostToken: string }[] = [];
 
@@ -27,21 +27,18 @@ describe("Host Reconnection and Timeout Logic", () => {
   });
 
   afterAll(async () => {
-    // 1. Clean up active websockets
     for (const ws of activeSockets) {
       if (ws.readyState === 1 || ws.readyState === 0) ws.close();
     }
 
-    // 2. Clean up active meetings
     for (const meeting of createdMeetings) {
       try {
         await endMeeting(meeting.id, meeting.hostToken);
       } catch (err) {
         console.error(`Cleanup failed for meeting ${meeting.id}:`, err);
+        }
       }
-    }
 
-    // 3. Destroy all test users from the database
     await cleanupTestUsers();
   });
 
@@ -95,14 +92,14 @@ describe("Host Reconnection and Timeout Logic", () => {
     console.log("Streaming initial audio...");
     await streamAudio(hostWs, 3000); // Send 3 seconds of audio
 
-    // Verify attendee received live transcription tokens
+    // Prove the session is active before simulating a disconnect.
     await waitForEvent(attendeeMessages, (m) => m.type === "transcription");
 
     /* Simulate a Host Network Crash */
     attendeeMessages.length = 0; // Clear the log
     hostWs.close();
 
-    // Verify attendee got the disconnect warning
+    // The attendee should see the temporary disconnect instead of an ended meeting.
     await waitForEvent(
       attendeeMessages,
       (m) => m.type === "status" && m.event === "host_disconnected",
@@ -126,7 +123,7 @@ describe("Host Reconnection and Timeout Logic", () => {
       };
     });
 
-    // Verify attendee got the reconnect notification
+    // Rejoining as the same host should resume the room rather than rebuilding it from scratch.
     await waitForEvent(
       attendeeMessages,
       (m) => m.type === "status" && m.event === "host_reconnected",
@@ -135,7 +132,7 @@ describe("Host Reconnection and Timeout Logic", () => {
     /* Host sends new audio to prove stream is un-paused */
     await streamAudio(hostWs, 3000);
 
-    // Verify attendee gets fresh transcription tokens
+    // Fresh transcript events confirm the audio pipeline resumed after reconnect.
     await waitForEvent(attendeeMessages, (m) => m.type === "transcription");
 
     /* Proactively clean up to prevent bleeding into the next test */
@@ -168,13 +165,13 @@ describe("Host Reconnection and Timeout Logic", () => {
       };
     });
 
-    // Feed it a little audio so Soniox registers a real session before we crash it
+    // Start a real upstream session before disconnecting so the timeout path exercises live state.
     await streamAudio(hostWs, 2000);
 
     /* Host disconnects */
     hostWs.close();
 
-    /* Wait for timeout (Using 65 seconds to be safely past the 60s limit) */
+    // Wait slightly past the host grace period so the server marks the meeting ended.
     await new Promise((r) => setTimeout(r, 65000));
 
     /* Check Database to ensure ended_at is set */

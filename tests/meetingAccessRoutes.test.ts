@@ -40,6 +40,7 @@ describe("Meeting access routes", () => {
     });
     expect(detailBeforeJoin.status).toBe(403);
 
+    // Join should accept the user-facing formatted readable id, not just the normalized digits.
     const joinResponse = await fetch(
       `${BASE_URL}/meeting/join/${meeting.readableId.slice(0, 3)}-${meeting.readableId.slice(3)}`,
       {
@@ -63,6 +64,7 @@ describe("Meeting access routes", () => {
     });
     expect(detailAfterJoin.status).toBe(200);
 
+    // Joining doubles as invite acceptance, so both attendees and one-way languages should update.
     const [savedMeeting] = await db
       .select({ attendees: meetings.attendees, languages: meetings.languages })
       .from(meetings)
@@ -95,6 +97,7 @@ describe("Meeting access routes", () => {
       languages: ["en"],
     });
 
+    // Removing membership simulates a stale token after an admin revokes tenant access.
     await db
       .delete(userTenants)
       .where(
@@ -109,6 +112,7 @@ describe("Meeting access routes", () => {
     });
     expect(listResponse.status).toBe(401);
 
+    // The same stale token should fail consistently across list and join routes.
     const joinResponse = await fetch(`${BASE_URL}/meeting/join/${meeting.readableId}`, {
       method: "POST",
       headers: { Cookie: `auth_session=${staleMember.token}` },

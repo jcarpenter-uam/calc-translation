@@ -140,6 +140,7 @@ describe("Quick Meeting Routes", () => {
       "quick_attendee_b",
     ]);
 
+    // Participant listing should combine the persisted invitees with the host identity.
     const participantsResponse = await fetch(
       `${BASE_URL}/meeting/${data.meetingId}/participants`,
       {

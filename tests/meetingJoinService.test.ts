@@ -68,6 +68,8 @@ describe("meetingJoinService", () => {
       })
       .returning({ id: meetings.id });
 
+    // Reuse one persisted meeting so the tests cover both pure planning helpers and DB-backed
+    // lookups/persistence.
     meetingId = meeting!.id;
   });
 
@@ -119,6 +121,7 @@ describe("meetingJoinService", () => {
   });
 
   it("flags when a one-way meeting has reached its language cap", () => {
+    // This synthetic record keeps the cap test independent from prior persistence assertions.
     const joinPlan = buildJoinMeetingPlan(
       {
         id: "meeting-cap",

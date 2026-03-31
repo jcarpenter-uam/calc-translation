@@ -18,6 +18,8 @@ interface SyncCalendarEventsInput {
   accessToken: string;
   userId: string;
   tenantId: string;
+  timeMin?: Date;
+  timeMax?: Date;
 }
 
 /**
@@ -41,15 +43,17 @@ export async function syncCalendarEventsForUser({
   accessToken,
   userId,
   tenantId,
+  timeMin,
+  timeMax,
 }: SyncCalendarEventsInput) {
   const now = new Date();
-  const timeMin = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const timeMax = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const effectiveTimeMin = timeMin || new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const effectiveTimeMax = timeMax || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   const sourceEvents =
     provider === "google"
-      ? await fetchGoogleCalendarEvents(accessToken, timeMin, timeMax)
-      : await fetchEntraCalendarEvents(accessToken, timeMin, timeMax);
+      ? await fetchGoogleCalendarEvents(accessToken, effectiveTimeMin, effectiveTimeMax)
+      : await fetchEntraCalendarEvents(accessToken, effectiveTimeMin, effectiveTimeMax);
 
   const records: Array<{
     tenantId: string;
@@ -281,24 +285,22 @@ interface EntraCalendarApiEvent {
 }
 
 /**
- * Fetches Microsoft Graph calendar events from the user's default calendar.
+ * Fetches Microsoft Graph calendar instances from the user's default calendar.
  */
 async function fetchEntraCalendarEvents(
   accessToken: string,
   timeMin: Date,
   timeMax: Date,
 ): Promise<NormalizedCalendarEvent[]> {
-  const endpoint = new URL("https://graph.microsoft.com/v1.0/me/calendar/events");
+  const endpoint = new URL("https://graph.microsoft.com/v1.0/me/calendarView");
+  endpoint.searchParams.set("startDateTime", timeMin.toISOString());
+  endpoint.searchParams.set("endDateTime", timeMax.toISOString());
   endpoint.searchParams.set(
     "$select",
     "id,iCalUId,subject,bodyPreview,isCancelled,webLink,onlineMeeting,location,locations,start,end",
   );
   endpoint.searchParams.set("$top", "250");
   endpoint.searchParams.set("$orderby", "start/dateTime");
-  endpoint.searchParams.set(
-    "$filter",
-    `start/dateTime ge '${timeMin.toISOString()}' and end/dateTime le '${timeMax.toISOString()}'`,
-  );
 
   const allEvents: EntraCalendarApiEvent[] = [];
   let nextUrl: string | null = endpoint.toString();

@@ -1,18 +1,15 @@
 import { generateState, generateCodeVerifier } from "arctic";
 import {
-  createGoogleProvider,
-  createEntraProvider,
   getProviderScopes,
   isSupportedAuthProvider,
   type SupportedAuthProvider,
 } from "../utils/authProviders";
 import { logger } from "../core/logger";
 import { db } from "../core/database";
-import { tenantAuthConfigs, tenantDomains, tenants } from "../models/tenantModel";
+import { tenantDomains, tenants } from "../models/tenantModel";
 import { users } from "../models/userModel";
 import { userTenants } from "../models/userTenantModel";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { decrypt } from "../utils/fernet";
 import { env } from "../core/config";
 import {
   generateApiSessionToken,
@@ -20,6 +17,8 @@ import {
   clearSessionCookie,
 } from "../utils/security";
 import { syncCalendarEventsForUser } from "../services/calendarSyncService";
+import { getTenantAuthProvider } from "../services/tenantAuthService";
+import { persistUserOAuthGrant } from "../services/userOAuthGrantService";
 
 interface OAuthUserProfile {
   id?: string;
@@ -130,65 +129,6 @@ function maskEmail(email: string) {
   return `${localPart[0]}***${localPart[localPart.length - 1]}@${domain}`;
 }
 
-/**
- * Resolves and initializes an OAuth provider for a tenant.
- */
-async function getTenantAuthProvider(
-  tenantId: string,
-  providerType: string,
-  callbackBaseUrl?: string,
-) {
-  const normalizedProvider = providerType.toLowerCase();
-
-  logger.debug("Looking up auth config.", {
-    tenantId,
-    provider: normalizedProvider,
-  });
-
-  const [config] = await db
-    .select()
-    .from(tenantAuthConfigs)
-    .where(
-      and(
-        eq(tenantAuthConfigs.tenantId, tenantId),
-        eq(tenantAuthConfigs.providerType, providerType),
-      ),
-    );
-
-  if (!config) {
-    logger.warn("Auth config not found.", {
-      tenantId,
-      provider: providerType,
-    });
-    throw new Error(
-      `Auth config not found for tenant ${tenantId} and provider ${providerType}`,
-    );
-  }
-
-  const decryptedSecret = decrypt(config.clientSecretEncrypted);
-
-  if (normalizedProvider === "google") {
-    return createGoogleProvider(
-      config.clientId,
-      decryptedSecret,
-      callbackBaseUrl,
-    );
-  }
-
-  if (normalizedProvider === "entra") {
-    const entraTenantId = config.tenantHint || "common";
-    return createEntraProvider(
-      entraTenantId,
-      config.clientId,
-      decryptedSecret,
-      callbackBaseUrl,
-    );
-  }
-
-  logger.warn("Unsupported provider requested.", { providerType });
-  throw new Error(`Unsupported provider: "${providerType}"`);
-}
-
 async function buildProviderRedirect({
   email,
   tenantId,
@@ -210,6 +150,11 @@ async function buildProviderRedirect({
   );
 
   url.searchParams.set("login_hint", email);
+
+  if (providerType === "google") {
+    url.searchParams.set("access_type", "offline");
+    url.searchParams.set("prompt", "consent");
+  }
 
   const cookieOpts = {
     path: "/",
@@ -448,10 +393,7 @@ export const providerCallback = async ({
 
   try {
     const normalizedProvider = provider.toLowerCase();
-    const authProvider = await getTenantAuthProvider(
-      tenantId,
-      normalizedProvider,
-    );
+      const authProvider = await getTenantAuthProvider(tenantId, normalizedProvider);
 
     let tokens;
     let userProfile: OAuthUserProfile | null = null;
@@ -551,6 +493,15 @@ export const providerCallback = async ({
     }
 
     logger.debug("User record upserted.", { userId: user.id, tenantId });
+
+    if (tokens) {
+      await persistUserOAuthGrant({
+        tenantId,
+        userId: user.id,
+        provider: normalizedProvider,
+        tokens,
+      });
+    }
 
     if (user.deletedAt) {
       logger.warn("Deleted user attempted to authenticate.", {

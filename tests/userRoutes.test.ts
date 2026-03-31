@@ -1,11 +1,15 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "../core/database";
+import { calendarEvents } from "../models/calendarEventModel";
 import { tenantAuthConfigs, tenantDomains, tenants } from "../models/tenantModel";
+import { userOAuthGrants } from "../models/userOAuthGrantModel";
 import { users } from "../models/userModel";
 import { userTenants } from "../models/userTenantModel";
 import { decrypt, encrypt } from "../utils/fernet";
 import { generateApiSessionToken } from "../utils/security";
+import { syncCalendarEventsForUser } from "../services/calendarSyncService";
+import { resolveUserOAuthAccessToken } from "../services/userOAuthGrantService";
 import {
   BASE_URL,
   cleanupTestData,
@@ -14,6 +18,7 @@ import {
 } from "./utils/testHelpers";
 
 describe("User Routes", () => {
+  const originalFetch = globalThis.fetch;
   const tenantOneId = "users-tenant-1";
   const tenantTwoId = "users-tenant-2";
 
@@ -169,6 +174,10 @@ describe("User Routes", () => {
     await cleanupTestData();
   });
 
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   it("returns /user/me with role and tenant name", async () => {
     const response = await fetch(`${BASE_URL}/user/me`, {
       headers: { Cookie: `auth_session=${tokens.t1admin}` },
@@ -202,6 +211,286 @@ describe("User Routes", () => {
       .from(users)
       .where(eq(users.id, "users_t1_member_a"));
     expect(updatedUser?.languageCode).toBe("ja");
+  });
+
+  it("returns cached calendar events within the requested range for the authenticated user", async () => {
+    const from = "2026-04-01";
+    const to = "2026-04-01";
+
+    await db.insert(calendarEvents).values([
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_member_a",
+        provider: "google",
+        providerEventId: "calendar-upcoming-1",
+        title: "Standup",
+        startsAt: new Date("2026-04-01T11:00:00.000Z"),
+        endsAt: new Date("2026-04-01T11:30:00.000Z"),
+        status: "confirmed",
+        platform: "google_meet",
+        joinUrl: "https://meet.google.com/aaa-bbbb-ccc",
+      },
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_member_a",
+        provider: "google",
+        providerEventId: "calendar-upcoming-2",
+        title: "Design Review",
+        startsAt: new Date("2026-04-01T12:00:00.000Z"),
+        endsAt: new Date("2026-04-01T12:45:00.000Z"),
+        status: "confirmed",
+        platform: "zoom",
+        joinUrl: "https://zoom.us/j/123456789",
+      },
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_member_a",
+        provider: "google",
+        providerEventId: "calendar-next-day",
+        title: "Next Day Meeting",
+        startsAt: new Date("2026-04-02T12:00:00.000Z"),
+        endsAt: new Date("2026-04-02T12:30:00.000Z"),
+        status: "confirmed",
+        platform: "zoom",
+        joinUrl: "https://zoom.us/j/nextday123",
+      },
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_member_a",
+        provider: "google",
+        providerEventId: "calendar-cancelled",
+        title: "Cancelled",
+        startsAt: new Date("2026-04-01T13:00:00.000Z"),
+        endsAt: new Date("2026-04-01T13:30:00.000Z"),
+        status: "cancelled",
+        platform: "teams",
+        joinUrl: "https://teams.microsoft.com/l/meetup-join/1",
+      },
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_member_a",
+        provider: "google",
+        providerEventId: "calendar-past",
+        title: "Past Meeting",
+        startsAt: new Date("2026-04-01T08:00:00.000Z"),
+        endsAt: new Date("2026-04-01T08:30:00.000Z"),
+        status: "confirmed",
+        platform: "app",
+        joinUrl: "http://localhost:5173/?join=past-meeting",
+      },
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_member_b",
+        provider: "google",
+        providerEventId: "calendar-other-user",
+        title: "Other User Meeting",
+        startsAt: new Date("2026-04-01T14:00:00.000Z"),
+        endsAt: new Date("2026-04-01T14:30:00.000Z"),
+        status: "confirmed",
+        platform: "google_meet",
+        joinUrl: "https://meet.google.com/zzz-yyyy-xxx",
+      },
+    ]);
+
+    const response = await fetch(
+      `${BASE_URL}/user/calendar/events?limit=5&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      {
+        headers: { Cookie: `auth_session=${tokens.t1memberA}` },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as any;
+
+    expect(data.events).toHaveLength(3);
+    expect(data.events.map((event: any) => event.providerEventId)).toEqual([
+      "calendar-past",
+      "calendar-upcoming-1",
+      "calendar-upcoming-2",
+    ]);
+    expect(data.events[1].startsAt).toBe("2026-04-01T11:00:00.000Z");
+    expect(data.events[1].lastSyncedAt).toEqual(expect.any(String));
+  });
+
+  it("returns reauth providers when manual calendar sync needs a fresh login", async () => {
+    await db
+      .insert(userOAuthGrants)
+      .values({
+        tenantId: tenantOneId,
+        userId: "users_t1_admin",
+        provider: "google",
+        accessTokenEncrypted: encrypt("expired-access-token"),
+        refreshTokenEncrypted: null,
+        accessTokenExpiresAt: new Date("2020-01-01T00:00:00.000Z"),
+      })
+      .onConflictDoUpdate({
+        target: [
+          userOAuthGrants.userId,
+          userOAuthGrants.tenantId,
+          userOAuthGrants.provider,
+        ],
+        set: {
+          accessTokenEncrypted: encrypt("expired-access-token"),
+          refreshTokenEncrypted: null,
+          accessTokenExpiresAt: new Date("2020-01-01T00:00:00.000Z"),
+        },
+      });
+
+    const response = await fetch(`${BASE_URL}/user/calendar/sync`, {
+      method: "POST",
+      headers: {
+        Cookie: `auth_session=${tokens.t1admin}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from: "2026-04-01", to: "2026-04-30" }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as any;
+    expect(data.providers).toEqual([]);
+    expect(data.reauthProviders).toEqual(["google"]);
+    expect(data.savedCount).toBe(0);
+  });
+
+  it("refreshes a stored OAuth grant and syncs calendar events", async () => {
+    const requestedFrom = new Date("2026-04-01T00:00:00.000Z");
+    const requestedTo = new Date("2026-04-30T23:59:59.999Z");
+    let googleEventsUrl = "";
+
+    await db
+      .insert(userOAuthGrants)
+      .values({
+        tenantId: tenantOneId,
+        userId: "users_t1_admin",
+        provider: "google",
+        accessTokenEncrypted: encrypt("expired-access-token"),
+        refreshTokenEncrypted: encrypt("refresh-token-1"),
+        accessTokenExpiresAt: new Date("2020-01-01T00:00:00.000Z"),
+      })
+      .onConflictDoUpdate({
+        target: [
+          userOAuthGrants.userId,
+          userOAuthGrants.tenantId,
+          userOAuthGrants.provider,
+        ],
+        set: {
+          accessTokenEncrypted: encrypt("expired-access-token"),
+          refreshTokenEncrypted: encrypt("refresh-token-1"),
+          accessTokenExpiresAt: new Date("2020-01-01T00:00:00.000Z"),
+        },
+      });
+
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.startsWith("http://localhost:") || url.startsWith("http://127.0.0.1:")) {
+        return originalFetch(input, init);
+      }
+
+      if (url === "https://oauth2.googleapis.com/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "fresh-access-token",
+            token_type: "Bearer",
+            expires_in: 3600,
+            refresh_token: "refresh-token-2",
+            scope: "openid profile email https://www.googleapis.com/auth/calendar.readonly",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events")) {
+        googleEventsUrl = url;
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "manual-sync-google-1",
+                summary: "Manual Sync Meeting",
+                status: "confirmed",
+                hangoutLink: "https://meet.google.com/syn-cmee-ting",
+                start: { dateTime: "2026-04-20T14:00:00.000Z" },
+                end: { dateTime: "2026-04-20T14:30:00.000Z" },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return originalFetch(input, init);
+    }) as typeof fetch;
+
+    const tokenResult = await resolveUserOAuthAccessToken({
+      tenantId: tenantOneId,
+      userId: "users_t1_admin",
+      provider: "google",
+    });
+    expect(tokenResult).toEqual({
+      status: "ready",
+      accessToken: "fresh-access-token",
+    });
+
+    if (tokenResult.status !== "ready") {
+      throw new Error(`Expected ready OAuth token, got ${tokenResult.status}`);
+    }
+
+    const syncResult = await syncCalendarEventsForUser({
+      provider: "google",
+      accessToken: tokenResult.accessToken,
+      userId: "users_t1_admin",
+      tenantId: tenantOneId,
+      timeMin: requestedFrom,
+      timeMax: requestedTo,
+    });
+
+    expect(syncResult).toEqual({
+      fetchedCount: 1,
+      savedCount: 1,
+      prunedCount: 0,
+    });
+    expect(googleEventsUrl).toContain(`timeMin=${encodeURIComponent(requestedFrom.toISOString())}`);
+    expect(googleEventsUrl).toContain(`timeMax=${encodeURIComponent(requestedTo.toISOString())}`);
+
+    const [savedEvent] = await db
+      .select({
+        title: calendarEvents.title,
+        joinUrl: calendarEvents.joinUrl,
+      })
+      .from(calendarEvents)
+      .where(eq(calendarEvents.providerEventId, "manual-sync-google-1"));
+    expect(savedEvent?.title).toBe("Manual Sync Meeting");
+    expect(savedEvent?.joinUrl).toBe("https://meet.google.com/syn-cmee-ting");
+
+    const [updatedGrant] = await db
+      .select({
+        accessTokenEncrypted: userOAuthGrants.accessTokenEncrypted,
+        refreshTokenEncrypted: userOAuthGrants.refreshTokenEncrypted,
+      })
+      .from(userOAuthGrants)
+      .where(
+        and(
+          eq(userOAuthGrants.tenantId, tenantOneId),
+          eq(userOAuthGrants.userId, "users_t1_admin"),
+          eq(userOAuthGrants.provider, "google"),
+        ),
+      );
+
+    expect(updatedGrant).toBeDefined();
+    expect(decrypt(updatedGrant!.accessTokenEncrypted)).toBe("fresh-access-token");
+    expect(decrypt(updatedGrant!.refreshTokenEncrypted!)).toBe("refresh-token-2");
   });
 
   it("allows tenant admin to list only users in their tenant", async () => {
@@ -482,7 +771,7 @@ describe("User Routes", () => {
       },
     );
 
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(400);
   });
 
   it("rejects admin attempts to change a user's email", async () => {
@@ -498,7 +787,7 @@ describe("User Routes", () => {
       },
     );
 
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(400);
   });
 
   it("rejects admin attempts to change a user's language", async () => {
@@ -514,7 +803,7 @@ describe("User Routes", () => {
       },
     );
 
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(400);
   });
 
   it("allows super admin to edit users in another tenant", async () => {

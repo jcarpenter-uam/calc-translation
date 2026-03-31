@@ -31,7 +31,14 @@ export function getProviderScopes(provider: SupportedAuthProvider) {
     ];
   }
 
-  return ["openid", "profile", "email", "Calendars.Read", "User.Read"];
+  return [
+    "openid",
+    "profile",
+    "email",
+    "Calendars.Read",
+    "User.Read",
+    "offline_access",
+  ];
 }
 
 /**

@@ -62,6 +62,43 @@ function normalizeJoinUrl(joinUrl: unknown) {
 }
 
 /**
+ * Sanitizes meeting metadata into a filesystem-friendly download filename segment.
+ */
+function sanitizeTranscriptFilenamePart(value: string | null | undefined, fallback: string) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const sanitized = value
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return sanitized || fallback;
+}
+
+/**
+ * Chooses the most relevant meeting date for transcript filenames.
+ */
+function resolveTranscriptFilenameDate(meeting: {
+  ended_at?: Date | string | null;
+  started_at?: Date | string | null;
+  scheduled_time?: Date | string | null;
+}) {
+  const candidate = meeting.ended_at || meeting.started_at || meeting.scheduled_time;
+  const parsed = candidate ? new Date(candidate) : new Date();
+
+  if (Number.isNaN(parsed.getTime())) {
+    const fallback = new Date();
+    return `${String(fallback.getUTCMonth() + 1).padStart(2, "0")}-${String(fallback.getUTCDate()).padStart(2, "0")}`;
+  }
+
+  return `${String(parsed.getUTCMonth() + 1).padStart(2, "0")}-${String(parsed.getUTCDate()).padStart(2, "0")}`;
+}
+
+/**
  * Returns meetings visible to the requesting user under RBAC policy.
  */
 export const getMeetingsList = async ({ user, tenantId, set }: any) => {
@@ -259,6 +296,10 @@ export const downloadMeetingTranscript = async ({
       .select({
         id: meetings.id,
         readable_id: meetings.readable_id,
+        topic: meetings.topic,
+        scheduled_time: meetings.scheduled_time,
+        started_at: meetings.started_at,
+        ended_at: meetings.ended_at,
         host_id: meetings.host_id,
         attendees: meetings.attendees,
       })
@@ -291,15 +332,16 @@ export const downloadMeetingTranscript = async ({
       return { error: "Transcript not found" };
     }
 
-    const safeReadableId = (meeting.readable_id || meeting.id || "meeting").replace(
-      /[^a-zA-Z0-9_-]/g,
-      "_",
+    const safeTitle = sanitizeTranscriptFilenamePart(
+      meeting.topic || meeting.readable_id || meeting.id,
+      "meeting",
     );
+    const transcriptDate = resolveTranscriptFilenameDate(meeting);
     const safeLanguage = String(language).replace(/[^a-zA-Z0-9_-]/g, "_") || "unknown";
 
     set.headers["content-type"] = "text/vtt; charset=utf-8";
     set.headers["content-disposition"] =
-      `attachment; filename="${safeReadableId}-${safeLanguage}.vtt"`;
+      `attachment; filename="${safeTitle}_${transcriptDate}_${safeLanguage}.vtt"`;
 
     logger.info("Transcript download served.", {
       userId,

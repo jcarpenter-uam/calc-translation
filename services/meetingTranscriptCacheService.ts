@@ -12,6 +12,9 @@ export interface CachedMeetingUtterance {
   meetingId: string;
   language: string;
   text: string;
+  transcriptionText?: string | null;
+  translationText?: string | null;
+  sourceLanguage?: string | null;
   startedAtMs: number | null;
   endedAtMs: number | null;
   speaker: string | null;

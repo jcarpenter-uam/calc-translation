@@ -112,4 +112,59 @@ describe("Transcript language isolation", () => {
       sourceLanguage: "en",
     });
   });
+
+  it("broadcasts two-way transcripts to all connected participants", async () => {
+    websocketController.initMeeting("language-isolation-meeting", "host-en");
+
+    const host = createFakeSocket("host-en", "en");
+    const attendeeEs = createFakeSocket("attendee-es", "es");
+    const attendeeNoLanguage = createFakeSocket("attendee-none", null);
+
+    websocketController.joinMeeting("language-isolation-meeting", "host-en", host.socket);
+    websocketController.joinMeeting(
+      "language-isolation-meeting",
+      "attendee-es",
+      attendeeEs.socket,
+    );
+    websocketController.joinMeeting(
+      "language-isolation-meeting",
+      "attendee-none",
+      attendeeNoLanguage.socket,
+    );
+
+    await (websocketController as any).handleTranscriptionEvent(
+      "language-isolation-meeting",
+      {
+        text: "Hola a todos",
+        targetLanguage: "two_way",
+        transcriptionText: "Hello everyone",
+        translationText: "Hola a todos",
+        isFinal: true,
+        startedAtMs: 0,
+        endedAtMs: 1000,
+        speaker: null,
+        sourceLanguage: "en",
+      },
+    );
+
+    expect(host.sentMessages.find((message) => message.type === "transcription")).toMatchObject({
+      language: "two_way",
+      transcriptionText: "Hello everyone",
+      translationText: "Hola a todos",
+    });
+    expect(
+      attendeeEs.sentMessages.find((message) => message.type === "transcription"),
+    ).toMatchObject({
+      language: "two_way",
+      transcriptionText: "Hello everyone",
+      translationText: "Hola a todos",
+    });
+    expect(
+      attendeeNoLanguage.sentMessages.find((message) => message.type === "transcription"),
+    ).toMatchObject({
+      language: "two_way",
+      transcriptionText: "Hello everyone",
+      translationText: "Hola a todos",
+    });
+  });
 });

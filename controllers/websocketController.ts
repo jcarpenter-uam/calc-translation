@@ -254,22 +254,38 @@ export class WebsocketController {
       languageCode,
     );
 
-    for (const utterance of history) {
+    const twoWayHistory = languageCode === "two_way"
+      ? []
+      : await meetingTranscriptCacheService.getLanguageHistory(meetingId, "two_way");
+
+    const combinedHistory = [...history, ...twoWayHistory].sort((left, right) => {
+      const leftTime = left.startedAtMs ?? Number.MAX_SAFE_INTEGER;
+      const rightTime = right.startedAtMs ?? Number.MAX_SAFE_INTEGER;
+      if (leftTime !== rightTime) {
+        return leftTime - rightTime;
+      }
+
+      return left.createdAt.localeCompare(right.createdAt);
+    });
+
+    for (const utterance of combinedHistory) {
       ws.send(
         JSON.stringify({
           type: "transcription",
           meetingId,
           language: utterance.language,
           text: utterance.text,
-          transcriptionText: null,
-          translationText: utterance.text,
+          transcriptionText:
+            utterance.transcriptionText ??
+            (utterance.language === "two_way" ? utterance.text : null),
+          translationText: utterance.translationText ?? utterance.text,
           isFinal: true,
           isHistory: true,
           utteranceId: utterance.id,
           startedAtMs: utterance.startedAtMs,
           endedAtMs: utterance.endedAtMs,
           speaker: utterance.speaker,
-          sourceLanguage: null,
+          sourceLanguage: utterance.sourceLanguage ?? null,
         }),
       );
     }
@@ -569,7 +585,7 @@ export class WebsocketController {
     data: string,
   ) {
     this.meetings.get(meetingId)?.participants.forEach((participant) => {
-      if (participant.languageCode === language) {
+      if (language === "two_way" || participant.languageCode === language) {
         participant.socket.send(data);
       }
     });
@@ -798,6 +814,9 @@ export class WebsocketController {
             meetingId,
             language: event.targetLanguage,
             text: event.text,
+            transcriptionText: event.transcriptionText,
+            translationText: event.translationText,
+            sourceLanguage: event.sourceLanguage,
             startedAtMs: event.startedAtMs,
             endedAtMs: event.endedAtMs,
             speaker: event.speaker,

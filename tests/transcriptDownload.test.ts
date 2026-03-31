@@ -71,6 +71,13 @@ describe("Transcript download access", () => {
     );
     expect(hostResponse.status).toBe(200);
     expect(hostResponse.headers.get("content-type")).toContain("text/vtt");
+    expect(hostResponse.headers.get("content-disposition")).toContain(
+      'filename="Transcript_Download_',
+    );
+    expect(hostResponse.headers.get("content-disposition")).toMatch(
+      /filename="Transcript_Download_\d{2}-\d{2}_en\.vtt"/,
+    );
+    expect(hostResponse.headers.get("content-disposition")).toContain('_en.vtt"');
     expect(await hostResponse.text()).toContain("Archived transcript line");
 
     const attendeeResponse = await apiGet(

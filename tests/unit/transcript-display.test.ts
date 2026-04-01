@@ -3,7 +3,7 @@ import {
   hasTranslatedTranscriptContent,
   renderTranscriptItem,
   type TranscriptItem,
-} from "../clients/packages/app/src/meetings/transcriptDisplay";
+} from "../../clients/packages/app/src/meetings/transcriptDisplay";
 
 function buildTranscriptItem(overrides: Partial<TranscriptItem> = {}): TranscriptItem {
   return {

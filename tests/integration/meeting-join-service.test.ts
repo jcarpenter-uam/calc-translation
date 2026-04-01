@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { db } from "../core/database";
-import { meetings } from "../models/meetingModel";
-import { tenants } from "../models/tenantModel";
-import { users } from "../models/userModel";
+import { db } from "../../core/database";
+import { meetings } from "../../models/meetingModel";
+import { tenants } from "../../models/tenantModel";
+import { users } from "../../models/userModel";
 import {
   buildJoinMeetingPlan,
   buildRealtimeJoinState,
@@ -11,8 +11,8 @@ import {
   getMeetingByReadableId,
   normalizeReadableMeetingId,
   persistJoinMeetingPlan,
-} from "../services/meetingJoinService";
-import { cleanupTestData, trackTestTenants, trackTestUsers } from "./utils/testHelpers";
+} from "../../services/meetingJoinService";
+import { cleanupTestData, trackTestTenants, trackTestUsers } from "../setup/utils/testHelpers";
 
 describe("meetingJoinService", () => {
   const tenantId = "meeting-join-service-tenant";

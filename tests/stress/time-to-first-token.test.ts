@@ -8,7 +8,7 @@ import {
   apiFetch,
   WS_URL,
   audioData,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 const CONCURRENCY_LEVELS = [1, 5, 10, 25, 50, 100];
 

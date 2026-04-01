@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
-import { websocketController } from "../controllers/websocketController";
+import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
+import { websocketController } from "../../controllers/websocketController";
 
 describe("Meeting transcript cache", () => {
   afterEach(async () => {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { websocketController } from "../controllers/websocketController";
-import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
+import { websocketController } from "../../controllers/websocketController";
+import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
 
 /**
  * Builds a lightweight websocket double that records outgoing messages by participant language.

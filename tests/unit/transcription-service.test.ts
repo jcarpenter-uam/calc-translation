@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   normalizeSpeakerLabel,
   splitTranscriptTexts,
-} from "../services/transcriptionService";
+} from "../../services/transcriptionService";
 
 describe("Soniox transcript splitting", () => {
   it("separates original transcription from translated text", () => {

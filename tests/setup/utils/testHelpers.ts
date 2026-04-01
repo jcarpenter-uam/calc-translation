@@ -1,15 +1,15 @@
-import { db } from "../../core/database";
-import { users } from "../../models/userModel";
-import { meetings } from "../../models/meetingModel";
-import { bugReports } from "../../models/bugReportModel";
-import { userTenants } from "../../models/userTenantModel";
+import { db } from "../../../core/database";
+import { users } from "../../../models/userModel";
+import { meetings } from "../../../models/meetingModel";
+import { bugReports } from "../../../models/bugReportModel";
+import { userTenants } from "../../../models/userTenantModel";
 import {
   tenants,
   tenantDomains,
   tenantAuthConfigs,
-} from "../../models/tenantModel";
+} from "../../../models/tenantModel";
 import { inArray } from "drizzle-orm";
-import { generateApiSessionToken } from "../../utils/security";
+import { generateApiSessionToken } from "../../../utils/security";
 import * as fs from "fs";
 
 export interface TestUser {
@@ -43,7 +43,7 @@ export const BASE_URL = `http://localhost:${PORT}/api`;
 export const WS_URL = `ws://localhost:${PORT}/ws`;
 
 // Load test audio once per process.
-export const AUDIO_FILE = "./tests/samples/sample.raw";
+export const AUDIO_FILE = "./tests/setup/samples/sample.raw";
 export const audioData = fs.existsSync(AUDIO_FILE)
   ? fs.readFileSync(AUDIO_FILE)
   : Buffer.alloc(0);

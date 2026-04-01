@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { websocketController } from "../controllers/websocketController";
+import { websocketController } from "../../controllers/websocketController";
 import {
   WS_URL,
   apiFetch,
@@ -8,7 +8,7 @@ import {
   createTestUser,
   endMeeting,
   waitForEvent,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 describe("Transcript language isolation integration", () => {
   let host: any;

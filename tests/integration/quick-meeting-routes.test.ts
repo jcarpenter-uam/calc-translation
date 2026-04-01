@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { db } from "../core/database";
-import { meetings } from "../models/meetingModel";
-import { tenants } from "../models/tenantModel";
-import { users } from "../models/userModel";
-import { userTenants } from "../models/userTenantModel";
-import { generateApiSessionToken } from "../utils/security";
+import { db } from "../../core/database";
+import { meetings } from "../../models/meetingModel";
+import { tenants } from "../../models/tenantModel";
+import { users } from "../../models/userModel";
+import { userTenants } from "../../models/userTenantModel";
+import { generateApiSessionToken } from "../../utils/security";
 import {
   BASE_URL,
   cleanupTestData,
   trackTestTenants,
   trackTestUsers,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 describe("Quick Meeting Routes", () => {
   const tenantOneId = "quick-tenant-1";

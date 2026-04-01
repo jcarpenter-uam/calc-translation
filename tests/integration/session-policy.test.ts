@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { db } from "../core/database";
-import { tenants } from "../models/tenantModel";
-import { users } from "../models/userModel";
-import { userTenants } from "../models/userTenantModel";
-import { requireTenantContext, resolveSessionContext } from "../utils/sessionPolicy";
-import { cleanupTestData, trackTestTenants, trackTestUsers } from "./utils/testHelpers";
+import { db } from "../../core/database";
+import { tenants } from "../../models/tenantModel";
+import { users } from "../../models/userModel";
+import { userTenants } from "../../models/userTenantModel";
+import { requireTenantContext, resolveSessionContext } from "../../utils/sessionPolicy";
+import { cleanupTestData, trackTestTenants, trackTestUsers } from "../setup/utils/testHelpers";
 
 describe("sessionPolicy", () => {
   const tenantId = "session-policy-tenant";

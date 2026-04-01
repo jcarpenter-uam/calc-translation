@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { db } from "../core/database";
+import { db } from "../../core/database";
 import { inArray } from "drizzle-orm";
-import { tenants } from "../models/tenantModel";
-import { users } from "../models/userModel";
-import { bugReports } from "../models/bugReportModel";
-import { userTenants } from "../models/userTenantModel";
-import { generateApiSessionToken } from "../utils/security";
+import { tenants } from "../../models/tenantModel";
+import { users } from "../../models/userModel";
+import { bugReports } from "../../models/bugReportModel";
+import { userTenants } from "../../models/userTenantModel";
+import { generateApiSessionToken } from "../../utils/security";
 import {
   BASE_URL,
   cleanupTestData,
   trackTestTenants,
   trackTestUsers,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 describe("Bug report routes", () => {
   const tenantId = "bug-report-tenant";

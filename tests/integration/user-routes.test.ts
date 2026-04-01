@@ -1,21 +1,21 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { and, eq, isNotNull } from "drizzle-orm";
-import { db } from "../core/database";
-import { calendarEvents } from "../models/calendarEventModel";
-import { tenantAuthConfigs, tenantDomains, tenants } from "../models/tenantModel";
-import { userOAuthGrants } from "../models/userOAuthGrantModel";
-import { users } from "../models/userModel";
-import { userTenants } from "../models/userTenantModel";
-import { decrypt, encrypt } from "../utils/fernet";
-import { generateApiSessionToken } from "../utils/security";
-import { syncCalendarEventsForUser } from "../services/calendarSyncService";
-import { resolveUserOAuthAccessToken } from "../services/userOAuthGrantService";
+import { db } from "../../core/database";
+import { calendarEvents } from "../../models/calendarEventModel";
+import { tenantAuthConfigs, tenantDomains, tenants } from "../../models/tenantModel";
+import { userOAuthGrants } from "../../models/userOAuthGrantModel";
+import { users } from "../../models/userModel";
+import { userTenants } from "../../models/userTenantModel";
+import { decrypt, encrypt } from "../../utils/fernet";
+import { generateApiSessionToken } from "../../utils/security";
+import { syncCalendarEventsForUser } from "../../services/calendarSyncService";
+import { resolveUserOAuthAccessToken } from "../../services/userOAuthGrantService";
 import {
   BASE_URL,
   cleanupTestData,
   trackTestTenants,
   trackTestUsers,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 describe("User Routes", () => {
   const originalFetch = globalThis.fetch;

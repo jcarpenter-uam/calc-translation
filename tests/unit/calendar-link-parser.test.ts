@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   extractUrlsFromText,
   findSupportedMeetingLink,
-} from "../utils/calendarLinkParser";
+} from "../../utils/calendarLinkParser";
 
 describe("calendarLinkParser", () => {
   it("extracts urls and trims trailing punctuation", () => {

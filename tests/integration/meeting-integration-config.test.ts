@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { env } from "../core/config";
-import { db } from "../core/database";
-import { meetings } from "../models/meetingModel";
-import { BASE_URL, cleanupTestUsers, createTestUser } from "./utils/testHelpers";
+import { env } from "../../core/config";
+import { db } from "../../core/database";
+import { meetings } from "../../models/meetingModel";
+import { BASE_URL, cleanupTestUsers, createTestUser } from "../setup/utils/testHelpers";
 
 describe("Meeting integration configuration", () => {
   let host: any;

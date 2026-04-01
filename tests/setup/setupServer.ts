@@ -7,7 +7,7 @@ process.env.PORT = testPort;
 process.env.BASE_URL = process.env.BASE_URL ?? `http://localhost:${testPort}`;
 process.env.NODE_ENV = "development";
 
-const { startServer, stopServer } = await import("../index");
+const { startServer, stopServer } = await import("../../index");
 
 await startServer(Number.parseInt(testPort, 10));
 

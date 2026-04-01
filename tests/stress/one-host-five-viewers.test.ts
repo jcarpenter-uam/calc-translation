@@ -7,7 +7,7 @@ import {
   endMeeting,
   streamAudio,
   WS_URL,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 /**
  * Integration test suite for the complete real-time translation lifecycle.

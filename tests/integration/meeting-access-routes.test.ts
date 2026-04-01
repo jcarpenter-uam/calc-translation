@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { db } from "../core/database";
-import { meetings } from "../models/meetingModel";
-import { userTenants } from "../models/userTenantModel";
+import { db } from "../../core/database";
+import { meetings } from "../../models/meetingModel";
+import { userTenants } from "../../models/userTenantModel";
 import {
   BASE_URL,
   cleanupTestUsers,
   createMeeting,
   createTestUser,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 describe("Meeting access routes", () => {
   let host: Awaited<ReturnType<typeof createTestUser>>;

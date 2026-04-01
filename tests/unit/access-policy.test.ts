@@ -6,7 +6,7 @@ import {
   hasAllowedRole,
   isSuperAdmin,
   isTenantAdmin,
-} from "../utils/accessPolicy";
+} from "../../utils/accessPolicy";
 
 describe("accessPolicy", () => {
   it("recognizes supported admin roles", () => {

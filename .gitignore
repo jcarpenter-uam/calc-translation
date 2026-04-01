@@ -11,7 +11,7 @@ drizzle/
 .env
 
 # test audio files
-tests/samples/
+*samples*
 
 # transcripts
 transcripts/

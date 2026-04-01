@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { websocketController } from "../controllers/websocketController";
-import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
+import { websocketController } from "../../controllers/websocketController";
+import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
 import {
   audioData,
   createTestUser,
@@ -11,7 +11,7 @@ import {
   streamAudio,
   waitForEvent,
   WS_URL,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 describe("Smoke Test - Single Stream", () => {
   let host: any;

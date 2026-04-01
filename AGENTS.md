@@ -52,14 +52,18 @@ The project currently has minimal npm scripts; use Bun/CLI commands directly.
 
 - Run all tests:
   - `bun test`
+- Run tests by suite:
+  - `bun run test:unit`
+  - `bun run test:integration`
+  - `bun run test:stress`
 - Run one test file:
-  - `bun test tests/smoke.test.ts`
-  - `bun test tests/rbac.test.ts`
+  - `bun test tests/integration/smoke-check.test.ts`
+  - `bun test tests/integration/rbac-access.test.ts`
 - Run a single test by name pattern (important for targeted runs):
-  - `bun test tests/rbac.test.ts --test-name-pattern "Super Admin can see all meetings"`
-  - Short flag form: `bun test -t "Scenario A" tests/1U-5V.test.ts`
+  - `bun test tests/integration/rbac-access.test.ts --test-name-pattern "Super Admin can see all meetings"`
+  - Short flag form: `bun test -t "Scenario A" tests/stress/one-host-five-viewers.test.ts`
 - Increase timeout for long integration/stress tests when needed:
-  - `bun test tests/ttft.test.ts --timeout 120000`
+  - `bun test tests/stress/time-to-first-token.test.ts --timeout 120000`
 - Useful focused flags:
   - `bun test --bail`
   - `bun test --only-failures`
@@ -147,7 +151,7 @@ These conventions are inferred from existing code and should be preserved.
 
 - Tests use Bun's test runner (`bun:test`) and hit real HTTP/WebSocket flows.
 - Many tests assume server + DB + env are running/valid.
-- Reuse helpers in `tests/utils/testHelpers.ts`.
+- Reuse helpers in `tests/setup/utils/testHelpers.ts`.
 - Ensure teardown is preserved (`cleanupTestUsers`, closing sockets, ending meetings).
 - For new tests, prefer deterministic waits (`waitForEvent`) over arbitrary long sleeps.
 
@@ -157,6 +161,9 @@ These conventions are inferred from existing code and should be preserved.
 - Dev server: `bun run dev`
 - Type-check: `bunx tsc --noEmit`
 - All tests: `bun test`
-- Single file test: `bun test tests/reconnect.test.ts`
-- Single test case: `bun test tests/reconnect.test.ts -t "host to disconnect and reconnect"`
+- Unit suite: `bun run test:unit`
+- Integration suite: `bun run test:integration`
+- Stress suite: `bun run test:stress`
+- Single file test: `bun test tests/integration/reconnect-flow.test.ts`
+- Single test case: `bun test tests/integration/reconnect-flow.test.ts -t "host to disconnect and reconnect"`
 - Generate migration: `bunx drizzle-kit generate`

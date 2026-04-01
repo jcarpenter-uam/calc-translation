@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { eq } from "drizzle-orm";
-import { db } from "../core/database";
-import { meetings } from "../models/meetingModel";
+import { db } from "../../core/database";
+import { meetings } from "../../models/meetingModel";
 import {
   BASE_URL,
   cleanupTestUsers,
   createMeeting,
   createTestUser,
   endMeeting,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 describe("Meeting language limits", () => {
   let host: any;

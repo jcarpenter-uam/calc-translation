@@ -4,8 +4,8 @@ import {
   cleanupTestUsers,
   createMeeting,
   createTestUser,
-} from "./utils/testHelpers";
-import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
+} from "../setup/utils/testHelpers";
+import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
 
 describe("Transcript download access", () => {
   let host: Awaited<ReturnType<typeof createTestUser>>;

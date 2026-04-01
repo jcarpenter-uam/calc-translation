@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { eq } from "drizzle-orm";
-import { db } from "../core/database";
-import { meetings } from "../models/meetingModel";
+import { db } from "../../core/database";
+import { meetings } from "../../models/meetingModel";
 import {
   createTestUser,
   cleanupTestUsers,
@@ -11,7 +11,7 @@ import {
   streamAudio,
   waitForEvent,
   WS_URL,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 describe("Host Reconnection and Timeout Logic", () => {
   let host: any;

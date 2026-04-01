@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { db } from "../core/database";
-import { users } from "../models/userModel";
-import { meetings } from "../models/meetingModel";
-import { tenants } from "../models/tenantModel";
-import { userTenants } from "../models/userTenantModel";
+import { db } from "../../core/database";
+import { users } from "../../models/userModel";
+import { meetings } from "../../models/meetingModel";
+import { tenants } from "../../models/tenantModel";
+import { userTenants } from "../../models/userTenantModel";
 import { eq } from "drizzle-orm";
-import { generateApiSessionToken } from "../utils/security";
+import { generateApiSessionToken } from "../../utils/security";
 import {
   apiFetch,
   BASE_URL,
@@ -13,7 +13,7 @@ import {
   trackTestTenants,
   cleanupTestData,
   type CreateMeetingResponse,
-} from "./utils/testHelpers";
+} from "../setup/utils/testHelpers";
 
 interface MeetingListResponse {
   meetings: Array<{ topic: string }>;

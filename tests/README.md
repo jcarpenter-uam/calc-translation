@@ -57,6 +57,7 @@ The test suite is organized by scope so it is easier to find the right level of 
 ### Stress
 
 - `tests/stress/one-host-five-viewers.test.ts` - verifies one host and five viewers across several join-order scenarios, including waiting room behavior and TTFT expectations.
+- `tests/stress/concurrent-meetings-two-language-capacity.test.ts` - ramps up the number of simultaneous meetings while each meeting carries 200 viewers split across English and Spanish, then stops when join or transcript delivery latency exceeds the hardcoded limits.
 - `tests/stress/single-meeting-same-language-viewers.test.ts` - ramps one live meeting upward while the host keeps streaming audio, then stops when join/delivery latency breaches hardcoded thresholds or subscriptions break; writes detailed per-level metrics to `tests/stress/results/`.
 - `tests/stress/time-to-first-token.test.ts` - measures time-to-first-token across increasing levels of concurrent live streams.
 

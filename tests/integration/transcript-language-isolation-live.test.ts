@@ -203,6 +203,9 @@ describe("Transcript language isolation integration", () => {
     });
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 
+    const hostJoin = await apiFetch(`/meeting/join/${meeting.readableId}`, host.token);
+    await connectMeetingSocket(hostJoin.token, meeting.meetingId);
+
     const attendeeEnJoin = await apiFetch(
       `/meeting/join/${meeting.readableId}`,
       attendeeEn.token,

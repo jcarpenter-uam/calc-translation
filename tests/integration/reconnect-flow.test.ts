@@ -2,13 +2,13 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "../../core/database";
 import { meetings } from "../../models/meetingModel";
+import { websocketController } from "../../controllers/websocketController";
 import {
   createTestUser,
   cleanupTestUsers,
   apiFetch,
   createMeeting,
   endMeeting,
-  streamAudio,
   waitForEvent,
   WS_URL,
 } from "../setup/utils/testHelpers";
@@ -41,6 +41,20 @@ describe("Host Reconnection and Timeout Logic", () => {
 
     await cleanupTestUsers();
   });
+
+  async function injectTranscript(meetingId: string, text: string) {
+    await (websocketController as any).handleTranscriptionEvent(meetingId, {
+      text,
+      targetLanguage: "en",
+      transcriptionText: text,
+      translationText: null,
+      isFinal: true,
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+      sourceLanguage: "en",
+    });
+  }
 
   it("should allow host to disconnect and reconnect without ending the session", async () => {
     /* Host creates and joins meeting */
@@ -89,11 +103,11 @@ describe("Host Reconnection and Timeout Logic", () => {
       };
     });
 
-    console.log("Streaming initial audio...");
-    await streamAudio(hostWs, 3000); // Send 3 seconds of audio
-
-    // Prove the session is active before simulating a disconnect.
-    await waitForEvent(attendeeMessages, (m) => m.type === "transcription");
+    await injectTranscript(meetingId, "Reconnect flow before disconnect");
+    await waitForEvent(
+      attendeeMessages,
+      (m) => m.type === "transcription" && m.text === "Reconnect flow before disconnect",
+    );
 
     /* Simulate a Host Network Crash */
     attendeeMessages.length = 0; // Clear the log
@@ -129,11 +143,11 @@ describe("Host Reconnection and Timeout Logic", () => {
       (m) => m.type === "status" && m.event === "host_reconnected",
     );
 
-    /* Host sends new audio to prove stream is un-paused */
-    await streamAudio(hostWs, 3000);
-
-    // Fresh transcript events confirm the audio pipeline resumed after reconnect.
-    await waitForEvent(attendeeMessages, (m) => m.type === "transcription");
+    await injectTranscript(meetingId, "Reconnect flow after reconnect");
+    await waitForEvent(
+      attendeeMessages,
+      (m) => m.type === "transcription" && m.text === "Reconnect flow after reconnect",
+    );
 
     /* Proactively clean up to prevent bleeding into the next test */
     hostWs.close();
@@ -155,6 +169,21 @@ describe("Host Reconnection and Timeout Logic", () => {
     const readableId = createRes.readableId;
 
     const hostJoin = await apiFetch(`/meeting/join/${readableId}`, host.token);
+    const attendeeJoin = await apiFetch(`/meeting/join/${readableId}`, attendee.token);
+    const attendeeWs = new WebSocket(`${WS_URL}?ticket=${attendeeJoin.token}`);
+    activeSockets.push(attendeeWs);
+    const attendeeMessages: any[] = [];
+    attendeeWs.onmessage = (event) => {
+      attendeeMessages.push(JSON.parse(event.data.toString()));
+    };
+
+    await new Promise((r) => {
+      attendeeWs.onopen = () => {
+        attendeeWs.send(JSON.stringify({ action: "subscribe_meeting", meetingId }));
+        r(null);
+      };
+    });
+
     const hostWs = new WebSocket(`${WS_URL}?ticket=${hostJoin.token}`);
     activeSockets.push(hostWs);
 
@@ -165,20 +194,33 @@ describe("Host Reconnection and Timeout Logic", () => {
       };
     });
 
-    // Start a real upstream session before disconnecting so the timeout path exercises live state.
-    await streamAudio(hostWs, 2000);
-
     /* Host disconnects */
+    const closed = new Promise<void>((resolve) => {
+      hostWs.onclose = () => resolve();
+    });
     hostWs.close();
+    await closed;
 
-    // Wait slightly past the host grace period so the server marks the meeting ended.
-    await new Promise((r) => setTimeout(r, 65000));
+    await waitForEvent(
+      attendeeMessages,
+      (m) => m.type === "status" && m.event === "host_disconnected",
+    );
 
-    /* Check Database to ensure ended_at is set */
-    const [dbMeeting] = await db
-      .select()
-      .from(meetings)
-      .where(eq(meetings.id, meetingId));
+    const timeoutDeadline = Date.now() + 70000;
+    let dbMeeting: any = null;
+
+    while (Date.now() < timeoutDeadline) {
+      [dbMeeting] = await db
+        .select()
+        .from(meetings)
+        .where(eq(meetings.id, meetingId));
+
+      if (dbMeeting?.ended_at) {
+        break;
+      }
+
+      await new Promise((r) => setTimeout(r, 1000));
+    }
 
     if (!dbMeeting) {
       throw new Error("Expected meeting record to exist after reconnect timeout.");

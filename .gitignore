@@ -10,8 +10,9 @@ drizzle/
 # secrets
 .env
 
-# test audio files
+# test files
 *samples*
+*results*
 
 # transcripts
 transcripts/

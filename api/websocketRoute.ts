@@ -1,6 +1,27 @@
 import { Elysia, t } from "elysia";
 import { websocketController } from "../controllers/websocketController";
 import { logger } from "../core/logger";
+import { db } from "../core/database";
+import { meetings } from "../models/meetingModel";
+import { eq } from "drizzle-orm";
+import { canAccessMeetingRecord } from "../utils/accessPolicy";
+
+async function canSubscribeToMeeting(meetingId: string, wsUser: any, wsTenantId: string | null) {
+  const [meeting] = await db
+    .select({
+      host_id: meetings.host_id,
+      attendees: meetings.attendees,
+      tenant_id: meetings.tenant_id,
+    })
+    .from(meetings)
+    .where(eq(meetings.id, meetingId));
+
+  if (!meeting || !wsUser) {
+    return false;
+  }
+
+  return canAccessMeetingRecord(meeting, wsUser, wsTenantId);
+}
 
 /**
  * WebSocket route for authenticated meeting subscriptions and audio streaming.
@@ -23,6 +44,7 @@ export const websocketRoute = new Elysia().ws("/ws", {
 
   async message(ws, message) {
     const user = (ws.data as any).wsUser;
+    const wsTenantId = (ws.data as any).wsTenantId ?? null;
 
     // Host microphone chunks are forwarded without JSON parsing to keep the audio path minimal.
     if (
@@ -72,6 +94,29 @@ export const websocketRoute = new Elysia().ws("/ws", {
 
       if (payload.action === "subscribe_meeting" && payload.meetingId) {
         const secureParticipantId = user?.id || "unknown_user";
+
+        const isAuthorized = await canSubscribeToMeeting(
+          payload.meetingId,
+          user,
+          wsTenantId,
+        );
+
+        if (!isAuthorized) {
+          logger.warn("WebSocket meeting subscription denied.", {
+            userId: secureParticipantId,
+            meetingId: payload.meetingId,
+            tenantId: wsTenantId,
+            socketId: ws.id,
+          });
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              error: "Not authorized to subscribe to this meeting",
+              meetingId: payload.meetingId,
+            }),
+          );
+          return;
+        }
 
         websocketController.joinMeeting(
           payload.meetingId,

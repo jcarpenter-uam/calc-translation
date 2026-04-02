@@ -127,7 +127,7 @@ These conventions are inferred from existing code and should be preserved.
 
 - Validate request shapes at route layer with Elysia `t.Object(...)` when possible.
 - Keep business logic in controllers, not route definitions.
-- Use middleware-derived auth context (`user`, `tenantId`, `wsUser`) consistently.
+- Use middleware-provided auth context (`user`, `tenantId`, `wsUser`) consistently.
 - Return structured JSON errors with appropriate HTTP status via `set.status`.
 
 ### Error handling and logging

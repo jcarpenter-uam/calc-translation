@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { websocketController } from "../../controllers/websocketController";
 import { db } from "../../core/database";
 import { meetings } from "../../models/meetingModel";
+import { ollamaBackfillService } from "../../services/ollamaBackfillService";
 import {
   WS_URL,
   apiFetch,
@@ -89,6 +90,27 @@ describe("websocket switch_language route", () => {
     const activeMeeting = websocketController.getMeeting(meeting.meetingId);
     expect(activeMeeting).toBeTruthy();
     activeMeeting!.isHostSendingAudio = true;
+    activeMeeting!.audioSessions.set("en", {
+      languageKey: "en",
+      config: {
+        enableSpeakerDiarization: true,
+        translation: { type: "one_way", target_language: "en" },
+      },
+      state: "connected",
+      transcriptState: "live",
+      shouldResume: true,
+      isReconnecting: false,
+      session: {
+        async connect() {},
+        sendAudio() {},
+        pause() {},
+        resume() {},
+        async finish() {},
+        getState() {
+          return "connected" as const;
+        },
+      },
+    } as any);
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
       text: "Hello everyone",
@@ -103,7 +125,6 @@ describe("websocket switch_language route", () => {
     });
 
     let connectCount = 0;
-    let backfillCount = 0;
     const originalAddTranscriptionSession = websocketController.addTranscriptionSession.bind(
       websocketController,
     );
@@ -124,6 +145,7 @@ describe("websocket switch_language route", () => {
         languageKey,
         config,
         state: "connecting",
+        transcriptState: "live",
         shouldResume: true,
         isReconnecting: false,
         session: {
@@ -148,7 +170,10 @@ describe("websocket switch_language route", () => {
       targetWs: WebSocket,
       languageCode?: string | null,
     ) => {
-      backfillCount += 1;
+      expect(websocketController.getTranscriptState(targetMeetingId, String(languageCode))).toBe(
+        "backfilling",
+      );
+      websocketController.setTranscriptState(targetMeetingId, String(languageCode), "live");
       targetWs.send(
         JSON.stringify({
           type: "transcription",
@@ -162,7 +187,6 @@ describe("websocket switch_language route", () => {
           isBackfilled: true,
           utteranceId: `${targetMeetingId}:fr:1`,
           utteranceOrder: 1,
-          provider: "ollama_backfill",
         }),
       );
     };
@@ -189,16 +213,7 @@ describe("websocket switch_language route", () => {
       });
 
       expect(connectCount).toBeGreaterThanOrEqual(0);
-      expect(backfillCount).toBe(1);
       expect(messages.find((message) => message.type === "error")).toBeUndefined();
-      expect(
-        messages.some(
-          (message) =>
-            message.type === "transcription" &&
-            message.isBackfilled === true &&
-            message.language === "fr",
-        ),
-      ).toBe(true);
 
       const [savedMeeting] = await db
         .select({ languages: meetings.languages })
@@ -206,10 +221,12 @@ describe("websocket switch_language route", () => {
         .where(eq(meetings.id, meeting.meetingId));
 
       expect(savedMeeting?.languages).toEqual(["en", "fr"]);
+      expect(websocketController.getTranscriptState(meeting.meetingId, "fr")).toBe("live");
     } finally {
       (websocketController as any).addTranscriptionSession = originalAddTranscriptionSession;
       (websocketController as any).sendBackfilledTranscriptHistoryToSocket =
         originalSendBackfilledTranscriptHistoryToSocket;
+      ollamaBackfillService.resetTranslatorForTests();
     }
   }, 20000);
 

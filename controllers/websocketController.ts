@@ -9,8 +9,6 @@ import {
   type TranscriptionSessionLifecycleEvent,
   type TranscriptionSessionState,
 } from "../services/transcriptionService";
-import { meetingCanonicalTranscriptService } from "../services/meetingCanonicalTranscriptService";
-import { meetingDerivedTranslationStore } from "../services/meetingDerivedTranslationStore";
 import { ollamaBackfillService } from "../services/ollamaBackfillService";
 import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 import { db } from "../core/database";
@@ -57,6 +55,7 @@ interface MeetingAudioSession {
   config: TranscriptionConfig;
   session: TranscriptionSession;
   state: TranscriptionSessionState;
+  transcriptState: "backfilling" | "backfill_failed" | "live";
   shouldResume: boolean;
   isReconnecting: boolean;
 }
@@ -143,6 +142,7 @@ export class WebsocketController {
       config,
       session,
       state: session.getState(),
+      transcriptState: "live",
       shouldResume: meeting.isHostSendingAudio,
       isReconnecting: false,
     };
@@ -457,35 +457,78 @@ export class WebsocketController {
       return;
     }
 
-    const result = await ollamaBackfillService.backfillMeetingLanguage(meetingId, targetLanguage);
-    logger.debug("Replaying backfilled transcript history to websocket subscriber.", {
-      meetingId,
-      socketId: ws.id,
-      targetLanguage,
-      backfilledEntryCount: result.entries.length,
-    });
-    for (const entry of result.entries) {
-      ws.send(
-        JSON.stringify({
-          type: "transcription",
-          meetingId,
-          language: targetLanguage,
-          text: entry.text,
-          transcriptionText: entry.transcriptionText,
-          translationText: entry.translationText,
-          isFinal: true,
-          isHistory: true,
-          isBackfilled: true,
-          utteranceId: `${meetingId}:${targetLanguage}:${entry.utteranceOrder}`,
-          utteranceOrder: entry.utteranceOrder,
-          startedAtMs: entry.startedAtMs,
-          endedAtMs: entry.endedAtMs,
-          speaker: entry.speaker,
-          sourceLanguage: entry.sourceLanguage,
-          provider: entry.provider,
-        }),
+    try {
+      const sourceContext = await this.selectBackfillSourceLanguage(meetingId, targetLanguage);
+      const targetHistory = await meetingTranscriptCacheService.getLanguageHistory(
+        meetingId,
+        targetLanguage,
       );
+      const currentTargetOrder = this.getLatestCachedUtteranceOrder(targetHistory);
+
+      if (!sourceContext || sourceContext.throughOrder <= currentTargetOrder) {
+        this.setTranscriptState(meetingId, targetLanguage, "live");
+        return;
+      }
+
+      const result = await ollamaBackfillService.backfillMeetingLanguage(
+        meetingId,
+        targetLanguage,
+        sourceContext.language,
+        sourceContext.throughOrder,
+      );
+      logger.debug("Replaying backfilled transcript history to websocket subscriber.", {
+        meetingId,
+        socketId: ws.id,
+        targetLanguage,
+        sourceLanguage: sourceContext.language,
+        throughOrder: sourceContext.throughOrder,
+        backfilledEntryCount: result.entries.length,
+      });
+      for (const entry of result.entries) {
+        ws.send(
+          JSON.stringify({
+            type: "transcription",
+            meetingId,
+            language: targetLanguage,
+            text: entry.text,
+            transcriptionText: entry.transcriptionText,
+            translationText: entry.translationText,
+            isFinal: true,
+            isHistory: true,
+            isBackfilled: true,
+            utteranceId: `${meetingId}:${targetLanguage}:${entry.utteranceOrder}`,
+            utteranceOrder: entry.utteranceOrder,
+            startedAtMs: entry.startedAtMs,
+            endedAtMs: entry.endedAtMs,
+            speaker: entry.speaker,
+            sourceLanguage: entry.sourceLanguage,
+          }),
+        );
+      }
+
+      this.setTranscriptState(meetingId, targetLanguage, "live");
+    } catch (error) {
+      this.setTranscriptState(meetingId, targetLanguage, "backfill_failed");
+      throw error;
     }
+  }
+
+  setTranscriptState(
+    meetingId: string,
+    languageKey: string,
+    transcriptState: MeetingAudioSession["transcriptState"],
+  ) {
+    const sessionEntry = this.meetings.get(meetingId)?.audioSessions.get(languageKey);
+    if (!sessionEntry) {
+      return false;
+    }
+
+    sessionEntry.transcriptState = transcriptState;
+    return true;
+  }
+
+  getTranscriptState(meetingId: string, languageKey: string) {
+    return this.meetings.get(meetingId)?.audioSessions.get(languageKey)?.transcriptState;
   }
 
   /**
@@ -509,25 +552,77 @@ export class WebsocketController {
       meetingId,
       targetLanguage,
     );
-    if (existingHistory.length > 0) {
-      logger.debug("Subscribe-time backfill not needed because cached history exists.", {
+    const sourceContext = await this.selectBackfillSourceLanguage(meetingId, targetLanguage);
+    if (!sourceContext) {
+      logger.debug("Skipping subscribe-time backfill because no live source language exists.", {
         meetingId,
         targetLanguage,
-        cachedHistoryCount: existingHistory.length,
       });
       return false;
     }
 
-    const canonicalHistory = await meetingCanonicalTranscriptService.getMeetingHistory(meetingId);
-    const shouldBackfill = canonicalHistory.length > 0;
+    const currentTargetOrder = this.getLatestCachedUtteranceOrder(existingHistory);
+    const shouldBackfill = currentTargetOrder < sourceContext.throughOrder;
     logger.debug("Subscribe-time backfill evaluation completed.", {
       meetingId,
       targetLanguage,
       cachedHistoryCount: existingHistory.length,
-      canonicalHistoryCount: canonicalHistory.length,
+      currentTargetOrder,
+      sourceLanguage: sourceContext.language,
+      sourceThroughOrder: sourceContext.throughOrder,
       shouldBackfill,
     });
     return shouldBackfill;
+  }
+
+  private getLatestCachedUtteranceOrder(history: Array<{ utteranceOrder: number | null }>) {
+    return history.reduce((maxOrder, entry) => {
+      const utteranceOrder = entry.utteranceOrder;
+      return typeof utteranceOrder === "number" && Number.isFinite(utteranceOrder)
+        ? Math.max(maxOrder, utteranceOrder)
+        : maxOrder;
+    }, 0);
+  }
+
+  private async selectBackfillSourceLanguage(meetingId: string, targetLanguage: string) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting) {
+      return null;
+    }
+
+    const isUuidMeetingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      meetingId,
+    );
+    const [dbMeeting] = isUuidMeetingId
+      ? await db.select().from(meetings).where(eq(meetings.id, meetingId))
+      : [];
+    const orderedLanguages = dbMeeting
+      ? getUniqueMeetingLanguages(dbMeeting.languages)
+      : Array.from(meeting.audioSessions.keys());
+
+    for (const language of orderedLanguages) {
+      if (language === targetLanguage) {
+        continue;
+      }
+
+      const sessionEntry = meeting.audioSessions.get(language);
+      if (!sessionEntry || sessionEntry.transcriptState !== "live") {
+        continue;
+      }
+
+      const history = await meetingTranscriptCacheService.getLanguageHistory(meetingId, language);
+      const throughOrder = this.getLatestCachedUtteranceOrder(history);
+      if (throughOrder <= 0) {
+        continue;
+      }
+
+      return {
+        language,
+        throughOrder,
+      };
+    }
+
+    return null;
   }
 
   /**
@@ -762,8 +857,6 @@ export class WebsocketController {
 
       try {
         outputPaths = await meetingTranscriptCacheService.flushMeetingToVtt(id);
-        await meetingCanonicalTranscriptService.clearMeetingHistory(id);
-        await meetingDerivedTranslationStore.clearMeetingHistory(id);
         if (outputPaths.length > 0) {
           logger.info("Meeting transcript history flushed to disk.", {
             meetingId: id,
@@ -1050,23 +1143,11 @@ export class WebsocketController {
 
     if (event.isFinal && event.text) {
       try {
-        const canonicalUtterance = await meetingCanonicalTranscriptService.registerUtterance({
-          meetingId,
-          text: event.text,
-          language: event.targetLanguage,
-          transcriptionText: event.transcriptionText,
-          translationText: event.translationText,
-          sourceLanguage: event.sourceLanguage,
-          startedAtMs: event.startedAtMs,
-          endedAtMs: event.endedAtMs,
-          speaker: event.speaker,
-        });
         const cachedUtterance =
           await meetingTranscriptCacheService.appendFinalUtterance({
             meetingId,
             language: event.targetLanguage,
             text: event.text,
-            utteranceOrder: canonicalUtterance.utteranceOrder,
             transcriptionText: event.transcriptionText,
             translationText: event.translationText,
             sourceLanguage: event.sourceLanguage,

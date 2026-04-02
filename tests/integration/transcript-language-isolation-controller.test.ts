@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { websocketController } from "../../controllers/websocketController";
-import { meetingCanonicalTranscriptService } from "../../services/meetingCanonicalTranscriptService";
 import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
+import { ollamaBackfillService } from "../../services/ollamaBackfillService";
 
 /**
  * Builds a lightweight websocket double that records outgoing messages by participant language.
@@ -29,12 +29,36 @@ function createFakeSocket(id: string, languageCode: string | null) {
   };
 }
 
+function createFakeAudioSession(languageKey: string, transcriptState: "backfilling" | "backfill_failed" | "live" = "live") {
+  return {
+    languageKey,
+    config: {
+      enableSpeakerDiarization: true,
+      translation: { type: "one_way" as const, target_language: languageKey },
+    },
+    session: {
+      async connect() {},
+      sendAudio() {},
+      pause() {},
+      resume() {},
+      async finish() {},
+      getState() {
+        return "connected" as const;
+      },
+    },
+    state: "connected" as const,
+    transcriptState,
+    shouldResume: true,
+    isReconnecting: false,
+  };
+}
+
 describe("Transcript language isolation", () => {
   afterEach(async () => {
-    await meetingCanonicalTranscriptService.clearMeetingHistory("language-isolation-meeting");
     await meetingTranscriptCacheService.clearMeetingHistory("language-isolation-meeting");
     await meetingTranscriptCacheService.removeTranscriptArtifacts("language-isolation-meeting");
     await websocketController.deleteMeeting("language-isolation-meeting");
+    ollamaBackfillService.resetTranslatorForTests();
   });
 
   it("sends one-way transcripts only to matching-language participants", async () => {
@@ -170,7 +194,7 @@ describe("Transcript language isolation", () => {
     });
   });
 
-  it("reuses the same utterance order across translated live variants", async () => {
+  it("stores finalized live variants per language in transcript cache", async () => {
     websocketController.initMeeting("language-isolation-meeting", "host-en");
 
     const host = createFakeSocket("host-en", "en");
@@ -220,19 +244,30 @@ describe("Transcript language isolation", () => {
     expect(
       attendeeEs.sentMessages.find((message) => message.type === "transcription"),
     ).toMatchObject({
-      utteranceOrder: 1,
+      utteranceOrder: expect.any(Number),
       utteranceId: expect.any(String),
     });
 
-    const canonicalHistory = await meetingCanonicalTranscriptService.getMeetingHistory(
+    const englishHistory = await meetingTranscriptCacheService.getLanguageHistory(
       "language-isolation-meeting",
+      "en",
     );
-    expect(canonicalHistory).toHaveLength(1);
-    expect(canonicalHistory[0]?.utteranceOrder).toBe(1);
+    const spanishHistory = await meetingTranscriptCacheService.getLanguageHistory(
+      "language-isolation-meeting",
+      "es",
+    );
+    expect(englishHistory).toHaveLength(1);
+    expect(spanishHistory).toHaveLength(1);
+    expect(englishHistory[0]?.utteranceOrder).toBe(1);
+    expect(spanishHistory[0]?.utteranceOrder).toEqual(expect.any(Number));
   });
 
   it("detects when initial subscription should backfill missing language history", async () => {
     websocketController.initMeeting("language-isolation-meeting", "host-en");
+    websocketController.getMeeting("language-isolation-meeting")?.audioSessions.set(
+      "en",
+      createFakeAudioSession("en"),
+    );
 
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
@@ -262,6 +297,112 @@ describe("Transcript language isolation", () => {
         "en",
       ),
     ).toBe(false);
+  });
+
+  it("marks transcript state live after backfill completes", async () => {
+    websocketController.initMeeting("language-isolation-meeting", "host-en");
+
+    const attendeeFr = createFakeSocket("attendee-fr", "fr");
+    websocketController.joinMeeting(
+      "language-isolation-meeting",
+      "attendee-fr",
+      attendeeFr.socket,
+    );
+
+    const meeting = websocketController.getMeeting("language-isolation-meeting");
+    meeting?.audioSessions.set("en", createFakeAudioSession("en"));
+    meeting?.audioSessions.set("fr", createFakeAudioSession("fr", "backfilling"));
+
+    await (websocketController as any).handleTranscriptionEvent(
+      "language-isolation-meeting",
+      {
+        text: "Hello everyone",
+        targetLanguage: "en",
+        transcriptionText: "Hello everyone",
+        translationText: null,
+        isFinal: true,
+        startedAtMs: 0,
+        endedAtMs: 1000,
+        speaker: null,
+        sourceLanguage: "en",
+      },
+    );
+
+    ollamaBackfillService.setTranslatorForTests({
+      async translateBatch(_meetingId, targetLanguage, utterances) {
+        return utterances.map((utterance) => ({
+          utteranceOrder: utterance.utteranceOrder,
+          text: `${targetLanguage}:${utterance.sourceText}`,
+          transcriptionText: utterance.sourceText,
+          translationText: `${targetLanguage}:${utterance.sourceText}`,
+          sourceLanguage: utterance.sourceLanguage,
+        }));
+      },
+    });
+
+    await websocketController.sendBackfilledTranscriptHistoryToSocket(
+      "language-isolation-meeting",
+      attendeeFr.socket,
+      "fr",
+    );
+
+    expect(websocketController.getTranscriptState("language-isolation-meeting", "fr")).toBe("live");
+    expect(
+      attendeeFr.sentMessages.some(
+        (message) =>
+          message.type === "transcription" &&
+          message.language === "fr" &&
+          message.isBackfilled === true,
+      ),
+    ).toBe(true);
+  });
+
+  it("marks transcript state backfill_failed when backfill errors", async () => {
+    websocketController.initMeeting("language-isolation-meeting", "host-en");
+
+    const attendeeFr = createFakeSocket("attendee-fr", "fr");
+    websocketController.joinMeeting(
+      "language-isolation-meeting",
+      "attendee-fr",
+      attendeeFr.socket,
+    );
+
+    const meeting = websocketController.getMeeting("language-isolation-meeting");
+    meeting?.audioSessions.set("en", createFakeAudioSession("en"));
+    meeting?.audioSessions.set("fr", createFakeAudioSession("fr", "backfilling"));
+
+    await (websocketController as any).handleTranscriptionEvent(
+      "language-isolation-meeting",
+      {
+        text: "Hello everyone",
+        targetLanguage: "en",
+        transcriptionText: "Hello everyone",
+        translationText: null,
+        isFinal: true,
+        startedAtMs: 0,
+        endedAtMs: 1000,
+        speaker: null,
+        sourceLanguage: "en",
+      },
+    );
+
+    ollamaBackfillService.setTranslatorForTests({
+      async translateBatch() {
+        throw new Error("backfill exploded");
+      },
+    });
+
+    await expect(
+      websocketController.sendBackfilledTranscriptHistoryToSocket(
+        "language-isolation-meeting",
+        attendeeFr.socket,
+        "fr",
+      ),
+    ).rejects.toThrow("backfill exploded");
+
+    expect(websocketController.getTranscriptState("language-isolation-meeting", "fr")).toBe(
+      "backfill_failed",
+    );
   });
 
 });

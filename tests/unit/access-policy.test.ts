@@ -23,7 +23,7 @@ describe("accessPolicy", () => {
   });
 
   it("allows meeting access for hosts, attendees, scoped tenant admins, and super admins", () => {
-    // Keep one canonical record shape here so role-based visibility stays easy to reason about.
+    // Keep one representative record shape here so role-based visibility stays easy to reason about.
     const meeting = {
       host_id: "host-1",
       attendees: ["attendee-1"],

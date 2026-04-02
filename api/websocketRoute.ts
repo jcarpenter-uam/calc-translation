@@ -131,6 +131,23 @@ export const websocketRoute = new Elysia().ws("/ws", {
           ws,
         );
 
+        if (typeof user?.languageCode === "string" && user.languageCode.trim()) {
+          const sessionResult = await websocketController.ensureParticipantLanguageSession(
+            payload.meetingId,
+            user.languageCode,
+          );
+          if (!sessionResult.ok) {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                error: sessionResult.error,
+                meetingId: payload.meetingId,
+              }),
+            );
+            return;
+          }
+        }
+
         await websocketController.sendTranscriptHistoryToSocket(
           payload.meetingId,
           ws,
@@ -149,6 +166,12 @@ export const websocketRoute = new Elysia().ws("/ws", {
         });
 
         if (shouldBackfill) {
+          websocketController.setTranscriptState(
+            payload.meetingId,
+            user?.languageCode || "",
+            "backfilling",
+          );
+
           logger.debug("Starting subscribe-time transcript backfill.", {
             userId: secureParticipantId,
             meetingId: payload.meetingId,
@@ -282,6 +305,12 @@ export const websocketRoute = new Elysia().ws("/ws", {
             );
             return;
           }
+
+          websocketController.setTranscriptState(
+            payload.meetingId,
+            payload.languageCode,
+            "backfilling",
+          );
 
           await websocketController.sendBackfilledTranscriptHistoryToSocket(
             payload.meetingId,

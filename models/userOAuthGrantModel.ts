@@ -22,6 +22,12 @@ export const userOAuthGrants = pgTable(
       withTimezone: true,
     }),
     scopes: text("scopes"),
+    calendarSyncStatus: varchar("calendar_sync_status", { length: 30 })
+      .default("idle")
+      .notNull(),
+    lastCalendarSyncAt: timestamp("last_calendar_sync_at", { withTimezone: true }),
+    nextCalendarSyncAt: timestamp("next_calendar_sync_at", { withTimezone: true }),
+    lastCalendarSyncError: text("last_calendar_sync_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

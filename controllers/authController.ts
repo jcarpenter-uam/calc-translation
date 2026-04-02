@@ -16,9 +16,9 @@ import {
   setSessionCookie,
   clearSessionCookie,
 } from "../utils/security";
-import { syncCalendarEventsForUser } from "../services/calendarSyncService";
 import { getTenantAuthProvider } from "../services/tenantAuthService";
 import { persistUserOAuthGrant } from "../services/userOAuthGrantService";
+import { syncLinkedCalendarsForUser } from "../services/userCalendarSyncService";
 
 interface OAuthUserProfile {
   id?: string;
@@ -524,11 +524,13 @@ export const providerCallback = async ({
     // not part of authentication correctness.
     if (tokens?.accessToken) {
       try {
-        await syncCalendarEventsForUser({
-          provider: normalizedProvider as "google" | "entra",
-          accessToken: tokens.accessToken(),
+        const calendarSyncNow = new Date();
+        await syncLinkedCalendarsForUser({
           userId: user.id,
           tenantId,
+          timeMin: new Date(calendarSyncNow.getTime() - 24 * 60 * 60 * 1000),
+          timeMax: new Date(calendarSyncNow.getTime() + 30 * 24 * 60 * 60 * 1000),
+          pruneMode: "window",
         });
       } catch (syncErr) {
         logger.warn("Calendar sync failed after successful OAuth login.", {

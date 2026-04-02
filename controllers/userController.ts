@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lte, ne, or } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte } from "drizzle-orm";
 import { db } from "../core/database";
 import { logger } from "../core/logger";
 import { calendarEvents } from "../models/calendarEventModel";
@@ -6,11 +6,7 @@ import { tenants } from "../models/tenantModel";
 import { users } from "../models/userModel";
 import { parseBoundedInteger } from "../utils/pagination";
 import { requireTenantContext } from "../utils/sessionPolicy";
-import {
-  listLinkedUserOAuthProviders,
-  resolveUserOAuthAccessToken,
-} from "../services/userOAuthGrantService";
-import { syncCalendarEventsForUser } from "../services/calendarSyncService";
+import { syncLinkedCalendarsForUser } from "../services/userCalendarSyncService";
 
 /**
  * Returns the authenticated user profile with tenant details.
@@ -119,7 +115,6 @@ export const getCalendarEvents = async ({ user, tenantId, query, set }: any) => 
     const conditions = [
       eq(calendarEvents.userId, user.id),
       eq(calendarEvents.tenantId, scopedTenantId),
-      or(isNull(calendarEvents.status), ne(calendarEvents.status, "cancelled")),
       gte(calendarEvents.startsAt, range.from),
     ];
 
@@ -190,39 +185,19 @@ export const syncMyCalendar = async ({ user, tenantId, body, set }: any) => {
   }
 
   try {
-    const linkedProviders = await listLinkedUserOAuthProviders(scopedTenantId, user.id);
-    const providers: Array<"google" | "entra"> = [];
-    const reauthProviders: Array<"google" | "entra"> = [];
-    let fetchedCount = 0;
-    let savedCount = 0;
-    let prunedCount = 0;
-
-    for (const provider of linkedProviders) {
-      const tokenResult = await resolveUserOAuthAccessToken({
-        tenantId: scopedTenantId,
-        userId: user.id,
-        provider,
-      });
-
-      if (tokenResult.status !== "ready") {
-        reauthProviders.push(provider);
-        continue;
-      }
-
-      const syncResult = await syncCalendarEventsForUser({
-        provider,
-        accessToken: tokenResult.accessToken,
-        userId: user.id,
-        tenantId: scopedTenantId,
-        timeMin: requestedRange.from,
-        timeMax: requestedRange.to || undefined,
-      });
-
-      providers.push(provider);
-      fetchedCount += syncResult.fetchedCount;
-      savedCount += syncResult.savedCount;
-      prunedCount += syncResult.prunedCount;
-    }
+    const {
+      providers,
+      reauthProviders,
+      fetchedCount,
+      savedCount,
+      prunedCount,
+    } = await syncLinkedCalendarsForUser({
+      tenantId: scopedTenantId,
+      userId: user.id,
+      timeMin: requestedRange.from,
+      timeMax: requestedRange.to || undefined,
+      pruneMode: "none",
+    });
 
     logger.info("Manual calendar sync completed.", {
       userId,

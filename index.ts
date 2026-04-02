@@ -12,6 +12,7 @@ import { tenantRoutes } from "./api/tenantRoutes";
 import { bugReportRoutes } from "./api/bugReportRoutes";
 import { serverLogRoutes } from "./api/serverLogRoutes";
 import { meetingTranscriptCacheService } from "./services/meetingTranscriptCacheService";
+import { calendarAutoSyncService } from "./services/calendarAutoSyncService";
 
 const requestStartTimes = new WeakMap<Request, number>();
 
@@ -79,6 +80,7 @@ export async function startServer(port = env.PORT) {
 
   const startedApp = buildApp().listen(port);
   app = startedApp;
+  calendarAutoSyncService.start();
   logger.info(
     `Server is running at ${startedApp.server?.hostname}:${startedApp.server?.port}`,
   );
@@ -91,12 +93,14 @@ export async function startServer(port = env.PORT) {
  */
 export async function stopServer() {
   if (!app) {
+    await calendarAutoSyncService.shutdown();
     await meetingTranscriptCacheService.shutdown();
     return;
   }
 
   app.stop();
   app = null;
+  await calendarAutoSyncService.shutdown();
   await meetingTranscriptCacheService.shutdown();
 }
 

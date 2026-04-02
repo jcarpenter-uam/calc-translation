@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "../core/database";
 import { env } from "../core/config";
 import { logger } from "../core/logger";
@@ -8,7 +8,25 @@ import {
   findSupportedMeetingLink,
 } from "../utils/calendarLinkParser";
 
-type CalendarProvider = "google" | "entra";
+export type CalendarProvider = "google" | "entra";
+
+export type CalendarSyncPruneMode = "none" | "window";
+
+/**
+ * Provider API error surfaced with status metadata for retry decisions.
+ */
+export class CalendarProviderSyncError extends Error {
+  status: number;
+
+  retryAfterSeconds: number | null;
+
+  constructor(message: string, status: number, retryAfterSeconds: number | null) {
+    super(message);
+    this.name = "CalendarProviderSyncError";
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
 
 /**
  * Input required to sync one user's external calendar into tenant-scoped meeting records.
@@ -20,6 +38,7 @@ interface SyncCalendarEventsInput {
   tenantId: string;
   timeMin?: Date;
   timeMax?: Date;
+  pruneMode?: CalendarSyncPruneMode;
 }
 
 /**
@@ -45,6 +64,7 @@ export async function syncCalendarEventsForUser({
   tenantId,
   timeMin,
   timeMax,
+  pruneMode = "window",
 }: SyncCalendarEventsInput) {
   const now = new Date();
   const effectiveTimeMin = timeMin || new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -118,7 +138,7 @@ export async function syncCalendarEventsForUser({
       title: event.title,
       startsAt: event.startsAt,
       endsAt: event.endsAt,
-      status: event.status,
+      status: normalizeCalendarEventStatus(event.status),
       platform: parsed.platform,
       joinUrl: parsed.joinUrl,
       lastSyncedAt: now,
@@ -151,36 +171,23 @@ export async function syncCalendarEventsForUser({
       });
   }
 
-  // Provider events that disappeared from the current sync window are removed so the local cache
-  // reflects only still-visible meetings.
-  const retainedProviderEventIds = new Set(records.map((record) => record.providerEventId));
-  const existing = await db
-    .select({ providerEventId: calendarEvents.providerEventId })
-    .from(calendarEvents)
-    .where(
-      and(eq(calendarEvents.userId, userId), eq(calendarEvents.provider, provider)),
-    );
-
-  const staleProviderEventIds = existing
-    .map((entry) => entry.providerEventId)
-    .filter((providerEventId) => !retainedProviderEventIds.has(providerEventId));
-
-  if (staleProviderEventIds.length > 0) {
-    await db
-      .delete(calendarEvents)
-      .where(
-        and(
-          eq(calendarEvents.userId, userId),
-          eq(calendarEvents.provider, provider),
-          inArray(calendarEvents.providerEventId, staleProviderEventIds),
-        ),
-      );
-  }
+  const staleProviderEventIds =
+    pruneMode === "window"
+      ? await pruneCalendarEventsWithinWindow({
+          userId,
+          tenantId,
+          provider,
+          timeMin: effectiveTimeMin,
+          timeMax: effectiveTimeMax,
+          retainedProviderEventIds: records.map((record) => record.providerEventId),
+        })
+      : [];
 
   logger.info("Calendar sync completed.", {
     userId,
     tenantId,
     provider,
+    pruneMode,
     fetchedCount: sourceEvents.length,
     savedCount: records.length,
     prunedCount: staleProviderEventIds.length,
@@ -191,6 +198,57 @@ export async function syncCalendarEventsForUser({
     savedCount: records.length,
     prunedCount: staleProviderEventIds.length,
   };
+}
+
+async function pruneCalendarEventsWithinWindow({
+  userId,
+  tenantId,
+  provider,
+  timeMin,
+  timeMax,
+  retainedProviderEventIds,
+}: {
+  userId: string;
+  tenantId: string;
+  provider: CalendarProvider;
+  timeMin: Date;
+  timeMax: Date;
+  retainedProviderEventIds: string[];
+}) {
+  const existing = await db
+    .select({ providerEventId: calendarEvents.providerEventId })
+    .from(calendarEvents)
+    .where(
+      and(
+        eq(calendarEvents.userId, userId),
+        eq(calendarEvents.tenantId, tenantId),
+        eq(calendarEvents.provider, provider),
+        gte(calendarEvents.startsAt, timeMin),
+        lte(calendarEvents.startsAt, timeMax),
+      ),
+    );
+
+  const retainedProviderEventIdSet = new Set(retainedProviderEventIds);
+  const staleProviderEventIds = existing
+    .map((entry) => entry.providerEventId)
+    .filter((providerEventId) => !retainedProviderEventIdSet.has(providerEventId));
+
+  if (staleProviderEventIds.length === 0) {
+    return staleProviderEventIds;
+  }
+
+  await db
+    .delete(calendarEvents)
+    .where(
+      and(
+        eq(calendarEvents.userId, userId),
+        eq(calendarEvents.tenantId, tenantId),
+        eq(calendarEvents.provider, provider),
+        inArray(calendarEvents.providerEventId, staleProviderEventIds),
+      ),
+    );
+
+  return staleProviderEventIds;
 }
 
 interface GoogleCalendarApiEvent {
@@ -238,7 +296,11 @@ async function fetchGoogleCalendarEvents(
 
   if (!response.ok) {
     const responseBody = await response.text();
-    throw new Error(`Google calendar fetch failed (${response.status}): ${responseBody}`);
+    throw new CalendarProviderSyncError(
+      `Google calendar fetch failed (${response.status}): ${responseBody}`,
+      response.status,
+      parseRetryAfterSeconds(response.headers.get("Retry-After")),
+    );
   }
 
   const payload = (await response.json()) as { items?: GoogleCalendarApiEvent[] };
@@ -259,7 +321,7 @@ async function fetchGoogleCalendarEvents(
         providerEventId: item.id,
         icalUid: item.iCalUID || null,
         title: item.summary || null,
-        status: item.status || null,
+        status: normalizeCalendarEventStatus(item.status),
         startsAt: parseCalendarDate(item.start?.dateTime || item.start?.date),
         endsAt: parseCalendarDate(item.end?.dateTime || item.end?.date),
         urlCandidates,
@@ -314,7 +376,11 @@ async function fetchEntraCalendarEvents(
 
     if (!response.ok) {
       const responseBody = await response.text();
-      throw new Error(`Entra calendar fetch failed (${response.status}): ${responseBody}`);
+      throw new CalendarProviderSyncError(
+        `Entra calendar fetch failed (${response.status}): ${responseBody}`,
+        response.status,
+        parseRetryAfterSeconds(response.headers.get("Retry-After")),
+      );
     }
 
     const payload = (await response.json()) as {
@@ -365,6 +431,35 @@ function parseCalendarDate(value: string | undefined): Date | null {
 
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+/**
+ * Normalizes provider-specific event status values for consistent UI handling.
+ */
+function normalizeCalendarEventStatus(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "cancelled" || normalized === "canceled") {
+    return "cancelled";
+  }
+
+  return normalized;
+}
+
+function parseRetryAfterSeconds(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
     return null;
   }
 

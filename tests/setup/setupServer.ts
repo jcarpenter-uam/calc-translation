@@ -6,6 +6,7 @@ const testPort = process.env.PORT ?? "18000";
 process.env.PORT = testPort;
 process.env.BASE_URL = process.env.BASE_URL ?? `http://localhost:${testPort}`;
 process.env.NODE_ENV = "development";
+process.env.DISABLE_BACKGROUND_JOBS = "true";
 
 const { startServer, stopServer } = await import("../../index");
 

@@ -9,6 +9,8 @@ import { userTenants } from "../../models/userTenantModel";
 import { decrypt, encrypt } from "../../utils/fernet";
 import { generateApiSessionToken } from "../../utils/security";
 import { syncCalendarEventsForUser } from "../../services/calendarSyncService";
+import { calendarAutoSyncService } from "../../services/calendarAutoSyncService";
+import { syncCalendarProviderGrant } from "../../services/userCalendarSyncService";
 import { resolveUserOAuthAccessToken } from "../../services/userOAuthGrantService";
 import {
   BASE_URL,
@@ -28,6 +30,8 @@ describe("User Routes", () => {
     "users_t2_admin",
     "users_t1_member_a",
     "users_t1_member_b",
+    "users_t1_sync_manual",
+    "users_t1_sync_window",
     "users_t2_member",
     "users_t2_member_delete",
   ];
@@ -85,6 +89,20 @@ describe("User Routes", () => {
           role: "user" as any,
         },
         {
+          id: "users_t1_sync_manual",
+          name: "Tenant One Manual Sync",
+          email: "users_t1_sync_manual@test.com",
+          languageCode: "en",
+          role: "user" as any,
+        },
+        {
+          id: "users_t1_sync_window",
+          name: "Tenant One Window Sync",
+          email: "users_t1_sync_window@test.com",
+          languageCode: "en",
+          role: "user" as any,
+        },
+        {
           id: "users_t2_member",
           name: "Tenant Two Member",
           email: "users_t2_member@test.com",
@@ -108,6 +126,8 @@ describe("User Routes", () => {
         { userId: "users_t1_admin", tenantId: tenantOneId },
         { userId: "users_t1_member_a", tenantId: tenantOneId },
         { userId: "users_t1_member_b", tenantId: tenantOneId },
+        { userId: "users_t1_sync_manual", tenantId: tenantOneId },
+        { userId: "users_t1_sync_window", tenantId: tenantOneId },
         { userId: "users_t2_admin", tenantId: tenantTwoId },
         { userId: "users_t2_member", tenantId: tenantTwoId },
         { userId: "users_t2_member_delete", tenantId: tenantTwoId },
@@ -163,6 +183,10 @@ describe("User Routes", () => {
       "users_t1_member_b",
       tenantOneId,
     );
+    tokens.t1syncManual = await generateApiSessionToken(
+      "users_t1_sync_manual",
+      tenantOneId,
+    );
     tokens.t2member = await generateApiSessionToken("users_t2_member", tenantTwoId);
     tokens.t2memberDelete = await generateApiSessionToken(
       "users_t2_member_delete",
@@ -213,7 +237,7 @@ describe("User Routes", () => {
     expect(updatedUser?.languageCode).toBe("ja");
   });
 
-  it("returns cached calendar events within the requested range for the authenticated user", async () => {
+  it("returns cached calendar events within the requested range for the authenticated user, including cancelled meetings", async () => {
     const from = "2026-04-01";
     const to = "2026-04-01";
 
@@ -302,13 +326,15 @@ describe("User Routes", () => {
     expect(response.status).toBe(200);
     const data = (await response.json()) as any;
 
-    expect(data.events).toHaveLength(3);
+    expect(data.events).toHaveLength(4);
     expect(data.events.map((event: any) => event.providerEventId)).toEqual([
       "calendar-past",
       "calendar-upcoming-1",
       "calendar-upcoming-2",
+      "calendar-cancelled",
     ]);
     expect(data.events[1].startsAt).toBe("2026-04-01T11:00:00.000Z");
+    expect(data.events[3].status).toBe("cancelled");
     expect(data.events[1].lastSyncedAt).toEqual(expect.any(String));
   });
 
@@ -447,9 +473,20 @@ describe("User Routes", () => {
       throw new Error(`Expected ready OAuth token, got ${tokenResult.status}`);
     }
 
-    const syncResult = await syncCalendarEventsForUser({
+    const [grant] = await db
+      .select({ id: userOAuthGrants.id })
+      .from(userOAuthGrants)
+      .where(
+        and(
+          eq(userOAuthGrants.tenantId, tenantOneId),
+          eq(userOAuthGrants.userId, "users_t1_admin"),
+          eq(userOAuthGrants.provider, "google"),
+        ),
+      );
+
+    const syncResult = await syncCalendarProviderGrant({
+      grantId: grant!.id,
       provider: "google",
-      accessToken: tokenResult.accessToken,
       userId: "users_t1_admin",
       tenantId: tenantOneId,
       timeMin: requestedFrom,
@@ -457,6 +494,8 @@ describe("User Routes", () => {
     });
 
     expect(syncResult).toEqual({
+      status: "synced",
+      provider: "google",
       fetchedCount: 1,
       savedCount: 1,
       prunedCount: 0,
@@ -478,6 +517,10 @@ describe("User Routes", () => {
       .select({
         accessTokenEncrypted: userOAuthGrants.accessTokenEncrypted,
         refreshTokenEncrypted: userOAuthGrants.refreshTokenEncrypted,
+        calendarSyncStatus: userOAuthGrants.calendarSyncStatus,
+        lastCalendarSyncAt: userOAuthGrants.lastCalendarSyncAt,
+        nextCalendarSyncAt: userOAuthGrants.nextCalendarSyncAt,
+        lastCalendarSyncError: userOAuthGrants.lastCalendarSyncError,
       })
       .from(userOAuthGrants)
       .where(
@@ -491,6 +534,423 @@ describe("User Routes", () => {
     expect(updatedGrant).toBeDefined();
     expect(decrypt(updatedGrant!.accessTokenEncrypted)).toBe("fresh-access-token");
     expect(decrypt(updatedGrant!.refreshTokenEncrypted!)).toBe("refresh-token-2");
+    expect(updatedGrant!.calendarSyncStatus).toBe("idle");
+    expect(updatedGrant!.lastCalendarSyncAt).toBeInstanceOf(Date);
+    expect(updatedGrant!.nextCalendarSyncAt).toBeInstanceOf(Date);
+    expect(updatedGrant!.lastCalendarSyncError).toBeNull();
+  });
+
+  it("refreshes only the selected manual sync window without pruning outside events", async () => {
+    await db
+      .insert(userOAuthGrants)
+      .values({
+        tenantId: tenantOneId,
+        userId: "users_t1_sync_manual",
+        provider: "google",
+        accessTokenEncrypted: encrypt("manual-window-access-token"),
+        refreshTokenEncrypted: encrypt("manual-window-refresh-token"),
+        accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      })
+      .onConflictDoUpdate({
+        target: [
+          userOAuthGrants.userId,
+          userOAuthGrants.tenantId,
+          userOAuthGrants.provider,
+        ],
+        set: {
+          accessTokenEncrypted: encrypt("manual-window-access-token"),
+          refreshTokenEncrypted: encrypt("manual-window-refresh-token"),
+          accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          calendarSyncStatus: "idle",
+          lastCalendarSyncAt: null,
+          nextCalendarSyncAt: new Date(),
+          lastCalendarSyncError: null,
+        },
+      });
+
+    await db.insert(calendarEvents).values([
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_sync_manual",
+        provider: "google",
+        providerEventId: "manual-window-in-range-existing",
+        title: "Old In Range Event",
+        startsAt: new Date("2026-04-10T15:00:00.000Z"),
+        endsAt: new Date("2026-04-10T15:30:00.000Z"),
+        status: "confirmed",
+        platform: "google_meet",
+        joinUrl: "https://meet.google.com/manual-old-range",
+      },
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_sync_manual",
+        provider: "google",
+        providerEventId: "manual-window-out-of-range-existing",
+        title: "Out Of Range Event",
+        startsAt: new Date("2026-05-20T15:00:00.000Z"),
+        endsAt: new Date("2026-05-20T15:30:00.000Z"),
+        status: "confirmed",
+        platform: "google_meet",
+        joinUrl: "https://meet.google.com/manual-out-range",
+      },
+    ]);
+
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.startsWith("http://localhost:") || url.startsWith("http://127.0.0.1:")) {
+        return originalFetch(input, init);
+      }
+
+      if (url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "manual-window-in-range-existing",
+                summary: "Updated In Range Event",
+                status: "confirmed",
+                hangoutLink: "https://meet.google.com/manual-new-range",
+                start: { dateTime: "2026-04-10T15:00:00.000Z" },
+                end: { dateTime: "2026-04-10T15:45:00.000Z" },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return originalFetch(input, init);
+    }) as typeof fetch;
+
+    const response = await fetch(`${BASE_URL}/user/calendar/sync`, {
+      method: "POST",
+      headers: {
+        Cookie: `auth_session=${tokens.t1syncManual}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from: "2026-04-01", to: "2026-04-30" }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as any;
+    expect(data.providers).toEqual(["google"]);
+    expect(data.prunedCount).toBe(0);
+
+    const savedEvents = await db
+      .select({
+        providerEventId: calendarEvents.providerEventId,
+        title: calendarEvents.title,
+        joinUrl: calendarEvents.joinUrl,
+      })
+      .from(calendarEvents)
+      .where(
+        and(
+          eq(calendarEvents.tenantId, tenantOneId),
+          eq(calendarEvents.userId, "users_t1_sync_manual"),
+          eq(calendarEvents.provider, "google"),
+          eq(calendarEvents.providerEventId, "manual-window-in-range-existing"),
+        ),
+      );
+
+    expect(savedEvents).toEqual([
+      {
+        providerEventId: "manual-window-in-range-existing",
+        title: "Updated In Range Event",
+        joinUrl: "https://meet.google.com/manual-new-range",
+      },
+    ]);
+
+    const [outsideEvent] = await db
+      .select({
+        providerEventId: calendarEvents.providerEventId,
+        title: calendarEvents.title,
+      })
+      .from(calendarEvents)
+      .where(eq(calendarEvents.providerEventId, "manual-window-out-of-range-existing"));
+
+    expect(outsideEvent).toEqual({
+      providerEventId: "manual-window-out-of-range-existing",
+      title: "Out Of Range Event",
+    });
+  });
+
+  it("prunes only stale events inside the synced background window", async () => {
+    await db
+      .insert(userOAuthGrants)
+      .values({
+        tenantId: tenantOneId,
+        userId: "users_t1_sync_window",
+        provider: "google",
+        accessTokenEncrypted: encrypt("window-prune-access-token"),
+        refreshTokenEncrypted: encrypt("window-prune-refresh-token"),
+        accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      })
+      .onConflictDoUpdate({
+        target: [
+          userOAuthGrants.userId,
+          userOAuthGrants.tenantId,
+          userOAuthGrants.provider,
+        ],
+        set: {
+          accessTokenEncrypted: encrypt("window-prune-access-token"),
+          refreshTokenEncrypted: encrypt("window-prune-refresh-token"),
+          accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          calendarSyncStatus: "idle",
+          lastCalendarSyncAt: null,
+          nextCalendarSyncAt: new Date(),
+          lastCalendarSyncError: null,
+        },
+      });
+
+    await db.insert(calendarEvents).values([
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_sync_window",
+        provider: "google",
+        providerEventId: "window-prune-keep",
+        title: "Keep Me",
+        startsAt: new Date("2026-04-12T09:00:00.000Z"),
+        endsAt: new Date("2026-04-12T09:30:00.000Z"),
+        status: "confirmed",
+        platform: "google_meet",
+        joinUrl: "https://meet.google.com/window-keep-old",
+      },
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_sync_window",
+        provider: "google",
+        providerEventId: "window-prune-delete",
+        title: "Delete Me",
+        startsAt: new Date("2026-04-13T09:00:00.000Z"),
+        endsAt: new Date("2026-04-13T09:30:00.000Z"),
+        status: "confirmed",
+        platform: "google_meet",
+        joinUrl: "https://meet.google.com/window-delete-old",
+      },
+      {
+        tenantId: tenantOneId,
+        userId: "users_t1_sync_window",
+        provider: "google",
+        providerEventId: "window-prune-outside",
+        title: "Outside Window",
+        startsAt: new Date("2026-06-01T09:00:00.000Z"),
+        endsAt: new Date("2026-06-01T09:30:00.000Z"),
+        status: "confirmed",
+        platform: "google_meet",
+        joinUrl: "https://meet.google.com/window-outside-old",
+      },
+    ]);
+
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.startsWith("http://localhost:") || url.startsWith("http://127.0.0.1:")) {
+        return originalFetch(input, init);
+      }
+
+      if (url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "window-prune-keep",
+                summary: "Keep Me Updated",
+                status: "confirmed",
+                hangoutLink: "https://meet.google.com/window-keep-new",
+                start: { dateTime: "2026-04-12T09:00:00.000Z" },
+                end: { dateTime: "2026-04-12T10:00:00.000Z" },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return originalFetch(input, init);
+    }) as typeof fetch;
+
+    const [grant] = await db
+      .select({ id: userOAuthGrants.id })
+      .from(userOAuthGrants)
+      .where(
+        and(
+          eq(userOAuthGrants.tenantId, tenantOneId),
+          eq(userOAuthGrants.userId, "users_t1_sync_window"),
+          eq(userOAuthGrants.provider, "google"),
+        ),
+      );
+
+    const syncResult = await syncCalendarProviderGrant({
+      grantId: grant!.id,
+      provider: "google",
+      userId: "users_t1_sync_window",
+      tenantId: tenantOneId,
+      timeMin: new Date("2026-04-01T00:00:00.000Z"),
+      timeMax: new Date("2026-04-30T23:59:59.999Z"),
+      pruneMode: "window",
+    });
+
+    expect(syncResult).toEqual({
+      status: "synced",
+      provider: "google",
+      fetchedCount: 1,
+      savedCount: 1,
+      prunedCount: 1,
+    });
+
+    const googleEvents = await db
+      .select({
+        providerEventId: calendarEvents.providerEventId,
+        title: calendarEvents.title,
+        joinUrl: calendarEvents.joinUrl,
+      })
+      .from(calendarEvents)
+      .where(
+        and(
+          eq(calendarEvents.tenantId, tenantOneId),
+          eq(calendarEvents.userId, "users_t1_sync_window"),
+          eq(calendarEvents.provider, "google"),
+          isNotNull(calendarEvents.startsAt),
+        ),
+      );
+
+    const eventIds = googleEvents.map((event) => event.providerEventId);
+    expect(eventIds).toContain("window-prune-keep");
+    expect(eventIds).toContain("window-prune-outside");
+    expect(eventIds).not.toContain("window-prune-delete");
+
+    const keptEvent = googleEvents.find(
+      (event) => event.providerEventId === "window-prune-keep",
+    );
+    expect(keptEvent).toEqual({
+      providerEventId: "window-prune-keep",
+      title: "Keep Me Updated",
+      joinUrl: "https://meet.google.com/window-keep-new",
+    });
+  });
+
+  it("runs due calendar sync grants in the background scheduler", async () => {
+    let graphCalendarUrl = "";
+
+    await db
+      .insert(userOAuthGrants)
+      .values({
+        tenantId: tenantOneId,
+        userId: "users_t1_admin",
+        provider: "entra",
+        accessTokenEncrypted: encrypt("valid-entra-access-token"),
+        refreshTokenEncrypted: encrypt("valid-entra-refresh-token"),
+        accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        calendarSyncStatus: "idle",
+        nextCalendarSyncAt: new Date(Date.now() - 60 * 1000),
+      })
+      .onConflictDoUpdate({
+        target: [
+          userOAuthGrants.userId,
+          userOAuthGrants.tenantId,
+          userOAuthGrants.provider,
+        ],
+        set: {
+          accessTokenEncrypted: encrypt("valid-entra-access-token"),
+          refreshTokenEncrypted: encrypt("valid-entra-refresh-token"),
+          accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          calendarSyncStatus: "idle",
+          nextCalendarSyncAt: new Date(Date.now() - 60 * 1000),
+          lastCalendarSyncAt: null,
+          lastCalendarSyncError: null,
+        },
+      });
+
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.startsWith("http://localhost:") || url.startsWith("http://127.0.0.1:")) {
+        return originalFetch(input, init);
+      }
+
+      if (url.startsWith("https://graph.microsoft.com/v1.0/me/calendarView")) {
+        graphCalendarUrl = url;
+        return new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "background-entra-1",
+                subject: "Background Teams Meeting",
+                onlineMeeting: {
+                  joinUrl: "https://teams.microsoft.com/l/meetup-join/background-1",
+                },
+                start: { dateTime: "2026-04-22T13:00:00.000Z" },
+                end: { dateTime: "2026-04-22T13:30:00.000Z" },
+                isCancelled: false,
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return originalFetch(input, init);
+    }) as typeof fetch;
+
+    await calendarAutoSyncService.runDueSyncs(10);
+
+    expect(graphCalendarUrl).toContain("startDateTime=");
+    expect(graphCalendarUrl).toContain("endDateTime=");
+
+    const [savedEvent] = await db
+      .select({
+        providerEventId: calendarEvents.providerEventId,
+        joinUrl: calendarEvents.joinUrl,
+      })
+      .from(calendarEvents)
+      .where(eq(calendarEvents.providerEventId, "background-entra-1"));
+    expect(savedEvent?.joinUrl).toBe(
+      "https://teams.microsoft.com/l/meetup-join/background-1",
+    );
+
+    const [updatedGrant] = await db
+      .select({
+        calendarSyncStatus: userOAuthGrants.calendarSyncStatus,
+        lastCalendarSyncAt: userOAuthGrants.lastCalendarSyncAt,
+        nextCalendarSyncAt: userOAuthGrants.nextCalendarSyncAt,
+      })
+      .from(userOAuthGrants)
+      .where(
+        and(
+          eq(userOAuthGrants.tenantId, tenantOneId),
+          eq(userOAuthGrants.userId, "users_t1_admin"),
+          eq(userOAuthGrants.provider, "entra"),
+        ),
+      );
+
+    expect(updatedGrant?.calendarSyncStatus).toBe("idle");
+    expect(updatedGrant?.lastCalendarSyncAt).toBeInstanceOf(Date);
+    expect(updatedGrant?.nextCalendarSyncAt).toBeInstanceOf(Date);
   });
 
   it("allows tenant admin to list only users in their tenant", async () => {

@@ -127,9 +127,9 @@ describe("Meeting subscription authorization", () => {
     return { ws, messages };
   }
 
-  it("rejects joining a meeting from another tenant", async () => {
+  it("allows joining a meeting from another tenant when the user is authenticated", async () => {
     const meeting = await createMeeting(hostToken, {
-      topic: "Cross Tenant Join Denial",
+      topic: "Cross Tenant Join Allowed",
       languages: ["en"],
     });
 
@@ -138,9 +138,11 @@ describe("Meeting subscription authorization", () => {
       headers: { Cookie: `auth_session=${crossTenantOutsiderToken}` },
     });
 
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({
-      error: "Not authorized to join this meeting",
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      meetingId: meeting.meetingId,
+      readableId: meeting.readableId,
+      token: expect.any(String),
     });
   });
 

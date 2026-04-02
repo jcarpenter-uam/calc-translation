@@ -94,6 +94,13 @@ export const websocketRoute = new Elysia().ws("/ws", {
 
       if (payload.action === "subscribe_meeting" && payload.meetingId) {
         const secureParticipantId = user?.id || "unknown_user";
+        logger.debug("Processing meeting subscription request.", {
+          userId: secureParticipantId,
+          meetingId: payload.meetingId,
+          socketId: ws.id,
+          viewerLanguage: user?.languageCode || null,
+          tenantId: wsTenantId,
+        });
 
         const isAuthorized = await canSubscribeToMeeting(
           payload.meetingId,
@@ -128,6 +135,53 @@ export const websocketRoute = new Elysia().ws("/ws", {
           payload.meetingId,
           ws,
         );
+
+        const shouldBackfill = await websocketController.shouldBackfillTranscriptHistoryOnSubscribe(
+          payload.meetingId,
+          user?.languageCode,
+        );
+        logger.debug("Evaluated subscribe-time transcript backfill.", {
+          userId: secureParticipantId,
+          meetingId: payload.meetingId,
+          socketId: ws.id,
+          viewerLanguage: user?.languageCode || null,
+          shouldBackfill,
+        });
+
+        if (shouldBackfill) {
+          logger.debug("Starting subscribe-time transcript backfill.", {
+            userId: secureParticipantId,
+            meetingId: payload.meetingId,
+            socketId: ws.id,
+            viewerLanguage: user?.languageCode || null,
+          });
+
+          try {
+            await websocketController.sendBackfilledTranscriptHistoryToSocket(
+              payload.meetingId,
+              ws,
+              user?.languageCode,
+            );
+          } catch (error) {
+            logger.error("Subscribe-time transcript backfill failed.", {
+              userId: secureParticipantId,
+              meetingId: payload.meetingId,
+              socketId: ws.id,
+              viewerLanguage: user?.languageCode || null,
+              errorMessage: error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+            });
+            ws.send(
+              JSON.stringify({
+                type: "status",
+                event: "backfill_failed",
+                meetingId: payload.meetingId,
+                languageCode: user?.languageCode || null,
+                message: "Transcript history backfill failed.",
+              }),
+            );
+          }
+        }
 
         await websocketController.prepareHostAudio(
           payload.meetingId,
@@ -169,6 +223,88 @@ export const websocketRoute = new Elysia().ws("/ws", {
 
       if (payload.action === "audio_stopped") {
         websocketController.setHostAudioState(ws.id, false);
+        return;
+      }
+
+      if (
+        payload.action === "switch_language" &&
+        payload.meetingId &&
+        typeof payload.languageCode === "string"
+      ) {
+        const secureParticipantId = user?.id || "unknown_user";
+        const subscribedMeetingId = websocketController.getMeetingBySocket(ws.id);
+        if (subscribedMeetingId !== payload.meetingId) {
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              error: "Socket is not subscribed to the requested meeting",
+              meetingId: payload.meetingId,
+            }),
+          );
+          return;
+        }
+
+        try {
+          logger.debug("Processing transcript language switch request.", {
+            userId: secureParticipantId,
+            meetingId: payload.meetingId,
+            socketId: ws.id,
+            requestedLanguage: payload.languageCode,
+            currentLanguage: user?.languageCode || (ws.data as any)?.wsUser?.languageCode || null,
+          });
+          const sessionResult = await websocketController.ensureParticipantLanguageSession(
+            payload.meetingId,
+            payload.languageCode,
+          );
+          if (!sessionResult.ok) {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                error: sessionResult.error,
+                meetingId: payload.meetingId,
+              }),
+            );
+            return;
+          }
+
+          const updated = websocketController.updateParticipantLanguage(
+            payload.meetingId,
+            secureParticipantId,
+            payload.languageCode,
+          );
+          if (!updated) {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                error: "Unable to switch transcript language",
+                meetingId: payload.meetingId,
+              }),
+            );
+            return;
+          }
+
+          await websocketController.sendBackfilledTranscriptHistoryToSocket(
+            payload.meetingId,
+            ws,
+            payload.languageCode,
+          );
+        } catch (error) {
+          logger.error("Failed sending backfilled transcript history after language switch.", {
+            userId: secureParticipantId,
+            meetingId: payload.meetingId,
+            languageCode: payload.languageCode,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+          });
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              error: "Failed to backfill transcript history for the selected language",
+              meetingId: payload.meetingId,
+            }),
+          );
+        }
+        return;
       }
     }
   },

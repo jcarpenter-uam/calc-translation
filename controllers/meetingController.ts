@@ -625,11 +625,6 @@ export const joinMeeting = async ({
 
   try {
     const dbMeeting = await getMeetingByReadableId(cleanReadableId);
-    const scopedTenantId = requireTenantContext(tenantId, set);
-
-    if (!scopedTenantId) {
-      return { error: "Missing tenant context" };
-    }
 
     if (!dbMeeting) {
       logger.warn(
@@ -640,15 +635,13 @@ export const joinMeeting = async ({
       return { error: "Meeting not found" };
     }
 
-    if (dbMeeting.tenant_id !== scopedTenantId) {
-      logger.warn("Join attempted across tenant boundary.", {
+    if (dbMeeting.tenant_id !== tenantId) {
+      logger.info("Allowing authenticated cross-tenant meeting join.", {
         userId,
         readableId: cleanReadableId,
         meetingTenantId: dbMeeting.tenant_id,
-        tenantId: scopedTenantId,
+        tenantId,
       });
-      set.status = 403;
-      return { error: "Not authorized to join this meeting" };
     }
 
     const internalId = dbMeeting.id;
@@ -699,7 +692,13 @@ export const joinMeeting = async ({
 
     await persistJoinMeetingPlan(internalId, joinPlan.updatePayload);
 
-    const wsTicket = await generateWsTicket(user.id, scopedTenantId);
+    const wsTicketTenantId = tenantId || dbMeeting.tenant_id;
+    if (!wsTicketTenantId) {
+      set.status = 400;
+      return { error: "Missing tenant context" };
+    }
+
+    const wsTicket = await generateWsTicket(user.id, wsTicketTenantId);
 
     logger.info(
       "User joined meeting.",

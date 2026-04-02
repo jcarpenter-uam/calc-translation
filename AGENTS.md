@@ -29,6 +29,10 @@ Guidance for autonomous coding agents working in this repository.
   - `ENCRYPTION_KEY`
   - `JWT_SECRET`
   - `SONIOX_API_KEY`
+- Optional Ollama backfill variables are also defined in `core/config.ts`:
+  - `OLLAMA_BASE_URL`
+  - `OLLAMA_API_KEY`
+  - `OLLAMA_BACKFILL_MODEL`
 - If env validation fails, app exits at startup.
 - `.env` is gitignored; do not commit secrets.
 

@@ -9,12 +9,18 @@ import {
   type TranscriptionSessionLifecycleEvent,
   type TranscriptionSessionState,
 } from "../services/transcriptionService";
+import { meetingCanonicalTranscriptService } from "../services/meetingCanonicalTranscriptService";
+import { meetingDerivedTranslationStore } from "../services/meetingDerivedTranslationStore";
+import { ollamaBackfillService } from "../services/ollamaBackfillService";
 import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
 import { eq } from "drizzle-orm";
 import {
+  addOneWayMeetingLanguage,
+  buildOneWayTranscriptionConfig,
   buildMeetingSessionPlan,
+  getUniqueMeetingLanguages,
   type MeetingSessionPlan,
 } from "../utils/meetingPolicy";
 
@@ -166,6 +172,13 @@ export class WebsocketController {
   }
 
   /**
+   * Returns the subscribed meeting id for a websocket connection.
+   */
+  getMeetingBySocket(wsId: string) {
+    return this.socketToMeeting.get(wsId);
+  }
+
+  /**
    * Subscribes a user's WebSocket connection to a specific meeting.
    *
    * @param meetingId - The internal database ID of the meeting to join.
@@ -241,6 +254,124 @@ export class WebsocketController {
   }
 
   /**
+   * Updates the in-memory language preference for a connected meeting participant.
+   */
+  updateParticipantLanguage(meetingId: string, participantId: string, languageCode: string) {
+    const meeting = this.meetings.get(meetingId);
+    const participant = meeting?.participants.get(participantId);
+    if (!meeting || !participant) {
+      return false;
+    }
+
+    participant.languageCode = languageCode;
+
+    const wsUser = (participant.socket.data as any)?.wsUser;
+    if (wsUser) {
+      wsUser.languageCode = languageCode;
+    }
+
+    participant.socket.send(
+      JSON.stringify({
+        type: "status",
+        event: "language_switched",
+        meetingId,
+        languageCode,
+        message: `Transcript language switched to ${languageCode}.`,
+      }),
+    );
+
+    this.broadcastToMeeting(
+      meetingId,
+      JSON.stringify({
+        type: "presence",
+        event: "participant_updated",
+        meetingId,
+        participant: {
+          id: participant.id,
+          name: participant.name,
+          email: participant.email,
+          role: participant.role,
+          languageCode,
+          isConnected: true,
+        },
+        connectedCount: meeting.participants.size,
+      }),
+    );
+
+    return true;
+  }
+
+  /**
+   * Ensures a one-way meeting can produce live transcript output for a switched language.
+   */
+  async ensureParticipantLanguageSession(meetingId: string, languageCode: string) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting || !languageCode) {
+      return { ok: false as const, error: "Meeting not found" };
+    }
+
+    const [dbMeeting] = await db.select().from(meetings).where(eq(meetings.id, meetingId));
+    if (!dbMeeting) {
+      return { ok: false as const, error: "Meeting not found" };
+    }
+
+    if ((dbMeeting.method || "one_way") !== "one_way") {
+      return { ok: true as const, addedLanguage: false, startedSession: false };
+    }
+
+    const currentLanguages = getUniqueMeetingLanguages(dbMeeting.languages);
+    const nextLanguages = addOneWayMeetingLanguage(currentLanguages, languageCode);
+    if (nextLanguages.limitExceeded) {
+      return {
+        ok: false as const,
+        error: "One-way meeting language limit reached",
+      };
+    }
+
+    if (nextLanguages.added) {
+      await db
+        .update(meetings)
+        .set({ languages: nextLanguages.languages })
+        .where(eq(meetings.id, meetingId));
+    }
+
+    let startedSession = false;
+    if (meeting.isHostSendingAudio && !meeting.audioSessions.has(languageCode)) {
+      const newSession = this.addTranscriptionSession(
+        meetingId,
+        languageCode,
+        buildOneWayTranscriptionConfig(languageCode),
+      );
+
+      if (newSession) {
+        await newSession.session.connect();
+        newSession.state = newSession.session.getState();
+        startedSession = true;
+      }
+    }
+
+    logger.info(
+      startedSession
+        ? "Started on-demand one-way session after transcript language switch."
+        : nextLanguages.added
+          ? "Registered on-demand one-way language after transcript language switch."
+          : "Transcript language switch reused existing one-way session.",
+      {
+        meetingId,
+        languageCode,
+        startedSession,
+        addedLanguage: nextLanguages.added,
+      },
+    );
+
+    return {
+      ok: true as const,
+      addedLanguage: nextLanguages.added,
+      startedSession,
+    };
+  }
+
+  /**
    * Replays cached finalized transcript history to a newly subscribed socket.
    */
   async sendTranscriptHistoryToSocket(meetingId: string, ws: ElysiaWS) {
@@ -259,6 +390,12 @@ export class WebsocketController {
       : await meetingTranscriptCacheService.getLanguageHistory(meetingId, "two_way");
 
     const combinedHistory = [...history, ...twoWayHistory].sort((left, right) => {
+      const leftOrder = left.utteranceOrder ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = right.utteranceOrder ?? Number.MAX_SAFE_INTEGER;
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+
       const leftTime = left.startedAtMs ?? Number.MAX_SAFE_INTEGER;
       const rightTime = right.startedAtMs ?? Number.MAX_SAFE_INTEGER;
       if (leftTime !== rightTime) {
@@ -266,6 +403,15 @@ export class WebsocketController {
       }
 
       return left.createdAt.localeCompare(right.createdAt);
+    });
+
+    logger.debug("Replaying cached transcript history to websocket subscriber.", {
+      meetingId,
+      socketId: ws.id,
+      viewerLanguage: languageCode,
+      cachedLanguageHistoryCount: history.length,
+      cachedTwoWayHistoryCount: twoWayHistory.length,
+      combinedHistoryCount: combinedHistory.length,
     });
 
     for (const utterance of combinedHistory) {
@@ -282,6 +428,7 @@ export class WebsocketController {
           isFinal: true,
           isHistory: true,
           utteranceId: utterance.id,
+          utteranceOrder: utterance.utteranceOrder,
           startedAtMs: utterance.startedAtMs,
           endedAtMs: utterance.endedAtMs,
           speaker: utterance.speaker,
@@ -289,6 +436,98 @@ export class WebsocketController {
         }),
       );
     }
+  }
+
+  /**
+   * Materializes and replays target-language history for one connected socket.
+   */
+  async sendBackfilledTranscriptHistoryToSocket(
+    meetingId: string,
+    ws: ElysiaWS,
+    languageCode?: string | null,
+  ) {
+    const targetLanguage = languageCode || (ws.data as any)?.wsUser?.languageCode;
+    if (!targetLanguage || targetLanguage === "two_way") {
+      logger.debug("Skipping transcript backfill replay for websocket subscriber.", {
+        meetingId,
+        socketId: ws.id,
+        requestedLanguage: languageCode || null,
+        resolvedLanguage: targetLanguage || null,
+      });
+      return;
+    }
+
+    const result = await ollamaBackfillService.backfillMeetingLanguage(meetingId, targetLanguage);
+    logger.debug("Replaying backfilled transcript history to websocket subscriber.", {
+      meetingId,
+      socketId: ws.id,
+      targetLanguage,
+      backfilledEntryCount: result.entries.length,
+    });
+    for (const entry of result.entries) {
+      ws.send(
+        JSON.stringify({
+          type: "transcription",
+          meetingId,
+          language: targetLanguage,
+          text: entry.text,
+          transcriptionText: entry.transcriptionText,
+          translationText: entry.translationText,
+          isFinal: true,
+          isHistory: true,
+          isBackfilled: true,
+          utteranceId: `${meetingId}:${targetLanguage}:${entry.utteranceOrder}`,
+          utteranceOrder: entry.utteranceOrder,
+          startedAtMs: entry.startedAtMs,
+          endedAtMs: entry.endedAtMs,
+          speaker: entry.speaker,
+          sourceLanguage: entry.sourceLanguage,
+          provider: entry.provider,
+        }),
+      );
+    }
+  }
+
+  /**
+   * Returns whether initial subscription should trigger backfill for the viewer language.
+   */
+  async shouldBackfillTranscriptHistoryOnSubscribe(
+    meetingId: string,
+    languageCode?: string | null,
+  ) {
+    const targetLanguage = languageCode?.trim();
+    if (!targetLanguage || targetLanguage === "two_way") {
+      logger.debug("Skipping subscribe-time backfill evaluation.", {
+        meetingId,
+        requestedLanguage: languageCode || null,
+        resolvedLanguage: targetLanguage || null,
+      });
+      return false;
+    }
+
+    const existingHistory = await meetingTranscriptCacheService.getLanguageHistory(
+      meetingId,
+      targetLanguage,
+    );
+    if (existingHistory.length > 0) {
+      logger.debug("Subscribe-time backfill not needed because cached history exists.", {
+        meetingId,
+        targetLanguage,
+        cachedHistoryCount: existingHistory.length,
+      });
+      return false;
+    }
+
+    const canonicalHistory = await meetingCanonicalTranscriptService.getMeetingHistory(meetingId);
+    const shouldBackfill = canonicalHistory.length > 0;
+    logger.debug("Subscribe-time backfill evaluation completed.", {
+      meetingId,
+      targetLanguage,
+      cachedHistoryCount: existingHistory.length,
+      canonicalHistoryCount: canonicalHistory.length,
+      shouldBackfill,
+    });
+    return shouldBackfill;
   }
 
   /**
@@ -523,6 +762,8 @@ export class WebsocketController {
 
       try {
         outputPaths = await meetingTranscriptCacheService.flushMeetingToVtt(id);
+        await meetingCanonicalTranscriptService.clearMeetingHistory(id);
+        await meetingDerivedTranslationStore.clearMeetingHistory(id);
         if (outputPaths.length > 0) {
           logger.info("Meeting transcript history flushed to disk.", {
             meetingId: id,
@@ -809,11 +1050,23 @@ export class WebsocketController {
 
     if (event.isFinal && event.text) {
       try {
+        const canonicalUtterance = await meetingCanonicalTranscriptService.registerUtterance({
+          meetingId,
+          text: event.text,
+          language: event.targetLanguage,
+          transcriptionText: event.transcriptionText,
+          translationText: event.translationText,
+          sourceLanguage: event.sourceLanguage,
+          startedAtMs: event.startedAtMs,
+          endedAtMs: event.endedAtMs,
+          speaker: event.speaker,
+        });
         const cachedUtterance =
           await meetingTranscriptCacheService.appendFinalUtterance({
             meetingId,
             language: event.targetLanguage,
             text: event.text,
+            utteranceOrder: canonicalUtterance.utteranceOrder,
             transcriptionText: event.transcriptionText,
             translationText: event.translationText,
             sourceLanguage: event.sourceLanguage,
@@ -834,6 +1087,7 @@ export class WebsocketController {
             translationText: event.translationText,
             isFinal: true,
             utteranceId: cachedUtterance.id,
+            utteranceOrder: cachedUtterance.utteranceOrder,
             startedAtMs: event.startedAtMs,
             endedAtMs: event.endedAtMs,
             speaker: event.speaker,

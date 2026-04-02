@@ -52,9 +52,45 @@ describe("Meeting transcript cache", () => {
       text: "Hello there",
       isFinal: true,
       isHistory: true,
+      utteranceOrder: 1,
       startedAtMs: 120,
       endedAtMs: 980,
     });
+  });
+
+  it("assigns stable utterance order across meeting languages", async () => {
+    const first = await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId: "history-test-meeting",
+      language: "en",
+      text: "First line",
+      startedAtMs: 0,
+      endedAtMs: 1200,
+      speaker: null,
+    });
+
+    const second = await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId: "history-test-meeting",
+      language: "es",
+      text: "Segunda linea",
+      startedAtMs: 100,
+      endedAtMs: 1300,
+      speaker: null,
+    });
+
+    expect(first.utteranceOrder).toBe(1);
+    expect(second.utteranceOrder).toBe(2);
+
+    const englishHistory = await meetingTranscriptCacheService.getLanguageHistory(
+      "history-test-meeting",
+      "en",
+    );
+    const spanishHistory = await meetingTranscriptCacheService.getLanguageHistory(
+      "history-test-meeting",
+      "es",
+    );
+
+    expect(englishHistory[0]?.utteranceOrder).toBe(1);
+    expect(spanishHistory[0]?.utteranceOrder).toBe(2);
   });
 
   it("writes per-language VTT files and clears cached history", async () => {
@@ -89,8 +125,10 @@ describe("Meeting transcript cache", () => {
     const vttContent = await Bun.file(outputPath).text();
 
     expect(vttContent).toContain("WEBVTT");
+    expect(vttContent).toContain("1\n00:00:00.000 --> 00:00:01.200");
     expect(vttContent).toContain("00:00:00.000 --> 00:00:01.200");
     expect(vttContent).toContain("Speaker 1: First line");
+    expect(vttContent).toContain("2\n00:00:01.400 --> 00:00:02.400");
     expect(vttContent).toContain("Second line");
 
     const history = await meetingTranscriptCacheService.getLanguageHistory(

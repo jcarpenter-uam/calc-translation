@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { websocketController } from "../../controllers/websocketController";
+import { meetingCanonicalTranscriptService } from "../../services/meetingCanonicalTranscriptService";
 import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
 
 /**
@@ -30,6 +31,7 @@ function createFakeSocket(id: string, languageCode: string | null) {
 
 describe("Transcript language isolation", () => {
   afterEach(async () => {
+    await meetingCanonicalTranscriptService.clearMeetingHistory("language-isolation-meeting");
     await meetingTranscriptCacheService.clearMeetingHistory("language-isolation-meeting");
     await meetingTranscriptCacheService.removeTranscriptArtifacts("language-isolation-meeting");
     await websocketController.deleteMeeting("language-isolation-meeting");
@@ -167,4 +169,99 @@ describe("Transcript language isolation", () => {
       translationText: "Hola a todos",
     });
   });
+
+  it("reuses the same utterance order across translated live variants", async () => {
+    websocketController.initMeeting("language-isolation-meeting", "host-en");
+
+    const host = createFakeSocket("host-en", "en");
+    const attendeeEs = createFakeSocket("attendee-es", "es");
+
+    websocketController.joinMeeting("language-isolation-meeting", "host-en", host.socket);
+    websocketController.joinMeeting(
+      "language-isolation-meeting",
+      "attendee-es",
+      attendeeEs.socket,
+    );
+
+    await (websocketController as any).handleTranscriptionEvent(
+      "language-isolation-meeting",
+      {
+        text: "Hello everyone",
+        targetLanguage: "en",
+        transcriptionText: "Hello everyone",
+        translationText: null,
+        isFinal: true,
+        startedAtMs: 0,
+        endedAtMs: 1000,
+        speaker: null,
+        sourceLanguage: "en",
+      },
+    );
+
+    await (websocketController as any).handleTranscriptionEvent(
+      "language-isolation-meeting",
+      {
+        text: "Hola a todos",
+        targetLanguage: "es",
+        transcriptionText: "Hello everyone",
+        translationText: "Hola a todos",
+        isFinal: true,
+        startedAtMs: 0,
+        endedAtMs: 1000,
+        speaker: null,
+        sourceLanguage: "en",
+      },
+    );
+
+    expect(host.sentMessages.find((message) => message.type === "transcription")).toMatchObject({
+      utteranceOrder: 1,
+      utteranceId: expect.any(String),
+    });
+    expect(
+      attendeeEs.sentMessages.find((message) => message.type === "transcription"),
+    ).toMatchObject({
+      utteranceOrder: 1,
+      utteranceId: expect.any(String),
+    });
+
+    const canonicalHistory = await meetingCanonicalTranscriptService.getMeetingHistory(
+      "language-isolation-meeting",
+    );
+    expect(canonicalHistory).toHaveLength(1);
+    expect(canonicalHistory[0]?.utteranceOrder).toBe(1);
+  });
+
+  it("detects when initial subscription should backfill missing language history", async () => {
+    websocketController.initMeeting("language-isolation-meeting", "host-en");
+
+    await (websocketController as any).handleTranscriptionEvent(
+      "language-isolation-meeting",
+      {
+        text: "Hello everyone",
+        targetLanguage: "en",
+        transcriptionText: "Hello everyone",
+        translationText: null,
+        isFinal: true,
+        startedAtMs: 0,
+        endedAtMs: 1000,
+        speaker: null,
+        sourceLanguage: "en",
+      },
+    );
+
+    expect(
+      await websocketController.shouldBackfillTranscriptHistoryOnSubscribe(
+        "language-isolation-meeting",
+        "fr",
+      ),
+    ).toBe(true);
+
+    expect(
+      await websocketController.shouldBackfillTranscriptHistoryOnSubscribe(
+        "language-isolation-meeting",
+        "en",
+      ),
+    ).toBe(false);
+  });
+
 });

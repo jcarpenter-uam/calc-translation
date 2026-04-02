@@ -29,6 +29,15 @@ const envSchema = z.object({
 
   SONIOX_API_KEY: z.string({ message: "SONIOX_API_KEY must be a string" }),
 
+  OLLAMA_API_KEY: z.string().optional(),
+
+  OLLAMA_BASE_URL: z
+    .string()
+    .url({ message: "OLLAMA_BASE_URL must be a valid URL" })
+    .default("https://ollama.com/api"),
+
+  OLLAMA_BACKFILL_MODEL: z.string().default("gpt-oss:20b"),
+
   REDIS_URL: z.string().url({ message: "REDIS_URL must be a valid URL" }).optional(),
 
   TRANSCRIPT_OUTPUT_DIR: z.string().default("transcripts"),

@@ -3,11 +3,13 @@ import {
   hasTranslatedTranscriptContent,
   renderTranscriptItem,
   type TranscriptItem,
+  upsertTranscriptItem,
 } from "../../clients/packages/app/src/meetings/transcriptDisplay";
 
 function buildTranscriptItem(overrides: Partial<TranscriptItem> = {}): TranscriptItem {
   return {
     id: "item-1",
+    utteranceOrder: 1,
     language: "es",
     speaker: null,
     isFinal: true,
@@ -34,6 +36,7 @@ describe("transcript display helpers", () => {
   it("renders translated-only mode by default", () => {
     expect(renderTranscriptItem(buildTranscriptItem(), "translated_only")).toEqual({
       id: "item-1",
+      utteranceOrder: 1,
       language: "es",
       speaker: null,
       isFinal: true,
@@ -110,6 +113,65 @@ describe("transcript display helpers", () => {
     ).toMatchObject({
       primaryText: "Hola a todos",
       secondaryText: "Hello everyone",
+    });
+  });
+
+  it("upserts finalized transcript items by utterance order", () => {
+    const current = [
+      buildTranscriptItem({
+        id: "draft-1",
+        utteranceOrder: null,
+        isFinal: false,
+        transcriptionText: "Hello every",
+        translationText: "Hola a to",
+      }),
+      buildTranscriptItem({
+        id: "item-3",
+        utteranceOrder: 3,
+        translationText: "Tercera linea",
+      }),
+    ];
+
+    const next = upsertTranscriptItem(
+      current,
+      buildTranscriptItem({
+        id: "item-2",
+        utteranceOrder: 2,
+        isFinal: true,
+      }),
+    );
+
+    expect(next.map((item) => item.utteranceOrder)).toEqual([2, 3]);
+    expect(next[0]).toMatchObject({
+      id: "item-2",
+      utteranceOrder: 2,
+      isFinal: true,
+    });
+  });
+
+  it("replaces an existing utterance when the same order is replayed", () => {
+    const current = [
+      buildTranscriptItem({
+        id: "item-8",
+        utteranceOrder: 8,
+        translationText: "Hola inicial",
+      }),
+    ];
+
+    const next = upsertTranscriptItem(
+      current,
+      buildTranscriptItem({
+        id: "item-8-replayed",
+        utteranceOrder: 8,
+        translationText: "Hola final",
+      }),
+    );
+
+    expect(next).toHaveLength(1);
+    expect(next[0]).toMatchObject({
+      id: "item-8-replayed",
+      utteranceOrder: 8,
+      translationText: "Hola final",
     });
   });
 });

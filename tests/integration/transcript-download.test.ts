@@ -58,7 +58,7 @@ describe("Transcript download access", () => {
     await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId: meeting.meetingId,
       language: "en",
-      text: "Archived transcript line",
+      transcriptionText: "Archived transcript line",
       startedAtMs: 0,
       endedAtMs: 1500,
       speaker: null,

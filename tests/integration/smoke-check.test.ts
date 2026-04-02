@@ -40,7 +40,6 @@ describe("Smoke Test - Single Stream", () => {
 
   async function injectTranscript(meetingId: string, text: string) {
     await (websocketController as any).handleTranscriptionEvent(meetingId, {
-      text,
       targetLanguage: "en",
       transcriptionText: text,
       translationText: null,
@@ -74,7 +73,7 @@ describe("Smoke Test - Single Stream", () => {
       messages.push(parsed);
       if (parsed.type === "transcription") {
         process.stdout.write(
-          `\r\x1b[K\x1b[32m${parsed.text}\x1b[0m${parsed.isFinal ? "\n" : ""}`,
+          `\r\x1b[K\x1b[32m${parsed.translationText || parsed.transcriptionText || ""}\x1b[0m${parsed.isFinal ? "\n" : ""}`,
         );
       }
     };
@@ -119,14 +118,14 @@ describe("Smoke Test - Single Stream", () => {
       await injectTranscript(meeting.meetingId, "Smoke test transcript");
       await waitForEvent(
         messages,
-        (m) => m.type === "transcription" && m.text === "Smoke test transcript",
+        (m) => m.type === "transcription" && m.transcriptionText === "Smoke test transcript",
       );
 
       const history = await meetingTranscriptCacheService.getLanguageHistory(
         meeting.meetingId,
         "en",
       );
-      expect(history.some((entry) => entry.text === "Smoke test transcript")).toBe(true);
+      expect(history.some((entry) => entry.transcriptionText === "Smoke test transcript")).toBe(true);
     }
 
     ws.close();

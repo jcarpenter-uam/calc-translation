@@ -58,7 +58,6 @@ describe("Single meeting same-language fanout stress", () => {
 
   async function injectTranscript(meetingId: string, text: string) {
     await (websocketController as any).handleTranscriptionEvent(meetingId, {
-      text,
       targetLanguage: "en",
       transcriptionText: text,
       translationText: null,
@@ -242,7 +241,7 @@ describe("Single meeting same-language fanout stress", () => {
               (message) =>
                 message.type === "transcription" &&
                 message.language === "en" &&
-                message.text === transcriptText,
+                message.transcriptionText === transcriptText,
               10000,
             );
 

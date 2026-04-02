@@ -9,11 +9,9 @@ import { logger } from "../core/logger";
  */
 export interface CachedMeetingUtterance {
   id: string;
-  utteranceOrder: number | null;
   meetingId: string;
   language: string;
-  text: string;
-  transcriptionText: string | null;
+  transcriptionText: string;
   translationText: string | null;
   sourceLanguage: string | null;
   startedAtMs: number | null;
@@ -24,10 +22,8 @@ export interface CachedMeetingUtterance {
 
 type AppendFinalUtteranceInput = Omit<
   CachedMeetingUtterance,
-  "id" | "utteranceOrder" | "createdAt" | "transcriptionText" | "translationText" | "sourceLanguage"
+  "id" | "createdAt" | "translationText" | "sourceLanguage"
 > & {
-  utteranceOrder?: number | null;
-  transcriptionText?: string | null;
   translationText?: string | null;
   sourceLanguage?: string | null;
 };
@@ -42,8 +38,6 @@ class MeetingTranscriptCacheService {
 
   private readonly memoryStore = new Map<string, Map<string, CachedMeetingUtterance[]>>();
 
-  private readonly memoryMeetingCounters = new Map<string, number>();
-
   private readonly outputRoot = resolve(process.cwd(), env.TRANSCRIPT_OUTPUT_DIR);
 
   /**
@@ -52,16 +46,9 @@ class MeetingTranscriptCacheService {
   async appendFinalUtterance(
     utterance: AppendFinalUtteranceInput,
   ) {
-    const providedOrder =
-      typeof utterance.utteranceOrder === "number" && Number.isFinite(utterance.utteranceOrder)
-        ? utterance.utteranceOrder
-        : null;
-    const utteranceOrder = providedOrder ?? (await this.nextUtteranceOrder(utterance.meetingId));
     const entry: CachedMeetingUtterance = {
       ...utterance,
       id: crypto.randomUUID(),
-      utteranceOrder,
-      transcriptionText: utterance.transcriptionText ?? null,
       translationText: utterance.translationText ?? null,
       sourceLanguage: utterance.sourceLanguage ?? null,
       createdAt: new Date().toISOString(),
@@ -69,15 +56,8 @@ class MeetingTranscriptCacheService {
 
     const redis = await this.getRedisClient();
     if (!redis) {
-      if (providedOrder !== null) {
-        this.bumpMemoryCounter(entry.meetingId, providedOrder);
-      }
       this.appendToMemory(entry);
       return entry;
-    }
-
-    if (providedOrder !== null) {
-      await this.bumpRedisCounter(entry.meetingId, providedOrder);
     }
 
     const serialized = JSON.stringify(entry);
@@ -138,7 +118,6 @@ class MeetingTranscriptCacheService {
     const redis = await this.getRedisClient();
     if (!redis) {
       this.memoryStore.delete(meetingId);
-      this.memoryMeetingCounters.delete(meetingId);
       return;
     }
 
@@ -148,7 +127,7 @@ class MeetingTranscriptCacheService {
       await redis.del(...keys);
     }
 
-    await redis.del(this.languagesKey(meetingId), this.orderKey(meetingId));
+    await redis.del(this.languagesKey(meetingId));
   }
 
   /**
@@ -238,49 +217,6 @@ class MeetingTranscriptCacheService {
   }
 
   /**
-   * Allocates the next stable utterance order number for a meeting.
-   */
-  private async nextUtteranceOrder(meetingId: string) {
-    const redis = await this.getRedisClient();
-    if (!redis) {
-      const nextOrder = (this.memoryMeetingCounters.get(meetingId) || 0) + 1;
-      this.memoryMeetingCounters.set(meetingId, nextOrder);
-      return nextOrder;
-    }
-
-    return await redis.incr(this.orderKey(meetingId));
-  }
-
-  /**
-   * Keeps the in-memory order counter aligned with externally supplied utterance orders.
-   */
-  private bumpMemoryCounter(meetingId: string, utteranceOrder: number) {
-    const currentOrder = this.memoryMeetingCounters.get(meetingId) || 0;
-    if (utteranceOrder > currentOrder) {
-      this.memoryMeetingCounters.set(meetingId, utteranceOrder);
-    }
-  }
-
-  /**
-   * Keeps the Redis order counter aligned with externally supplied utterance orders.
-   */
-  private async bumpRedisCounter(meetingId: string, utteranceOrder: number) {
-    const redis = await this.getRedisClient();
-    if (!redis) {
-      this.bumpMemoryCounter(meetingId, utteranceOrder);
-      return;
-    }
-
-    const currentValue = await redis.get(this.orderKey(meetingId));
-    const currentOrder = currentValue ? Number(currentValue) : 0;
-    if (!Number.isFinite(currentOrder) || utteranceOrder <= currentOrder) {
-      return;
-    }
-
-    await redis.set(this.orderKey(meetingId), String(utteranceOrder));
-  }
-
-  /**
    * Lazily connects to Redis and permanently falls back to memory if Redis is unavailable.
    */
   private async getRedisClient() {
@@ -329,22 +265,14 @@ class MeetingTranscriptCacheService {
     language: string,
   ) {
     try {
-      const parsed = JSON.parse(value) as Partial<CachedMeetingUtterance>;
+        const parsed = JSON.parse(value) as Partial<CachedMeetingUtterance>;
 
-      return {
-        ...parsed,
-        id: typeof parsed.id === "string" ? parsed.id : crypto.randomUUID(),
-        utteranceOrder:
-          typeof parsed.utteranceOrder === "number" && Number.isFinite(parsed.utteranceOrder)
-            ? parsed.utteranceOrder
-            : null,
-        meetingId,
-        language,
-        text: typeof parsed.text === "string" ? parsed.text : "",
-        transcriptionText:
-          typeof parsed.transcriptionText === "string" || parsed.transcriptionText === null
-            ? parsed.transcriptionText
-            : null,
+        return {
+          ...parsed,
+          id: typeof parsed.id === "string" ? parsed.id : crypto.randomUUID(),
+          meetingId,
+          language,
+        transcriptionText: typeof parsed.transcriptionText === "string" ? parsed.transcriptionText : "",
         translationText:
           typeof parsed.translationText === "string" || parsed.translationText === null
             ? parsed.translationText
@@ -384,14 +312,25 @@ class MeetingTranscriptCacheService {
 
     utterances.forEach((utterance, index) => {
       const startMs = utterance.startedAtMs ?? utterance.endedAtMs ?? index * 2000;
+      const transcriptionLine = utterance.speaker
+        ? `${utterance.speaker}: ${utterance.transcriptionText}`
+        : utterance.transcriptionText;
+      const translatedLine =
+        utterance.translationText && utterance.translationText !== utterance.transcriptionText
+          ? `Translated: ${utterance.translationText}`
+          : null;
       const endMs = Math.max(
         startMs + 1,
-        utterance.endedAtMs ?? startMs + Math.max(utterance.text.length * 40, 1500),
+        utterance.endedAtMs ??
+          startMs + Math.max((utterance.transcriptionText.length || translatedLine?.length || 0) * 40, 1500),
       );
 
-      lines.push(String(utterance.utteranceOrder ?? index + 1));
+      lines.push(String(index + 1));
       lines.push(`${this.formatTimestamp(startMs)} --> ${this.formatTimestamp(endMs)}`);
-      lines.push(utterance.speaker ? `${utterance.speaker}: ${utterance.text}` : utterance.text);
+      lines.push(transcriptionLine);
+      if (translatedLine) {
+        lines.push(translatedLine);
+      }
       lines.push("");
     });
 
@@ -426,13 +365,6 @@ class MeetingTranscriptCacheService {
    */
   private languagesKey(meetingId: string) {
     return `meeting_transcript_languages:${meetingId}`;
-  }
-
-  /**
-   * Redis counter key for allocating meeting utterance order numbers.
-   */
-  private orderKey(meetingId: string) {
-    return `meeting_transcript_order:${meetingId}`;
   }
 
   /**

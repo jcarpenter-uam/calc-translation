@@ -78,7 +78,6 @@ describe("Concurrent meetings two-language capacity", () => {
 
   async function injectTranscript(meetingId: string, text: string, language: LanguageCode) {
     await (websocketController as any).handleTranscriptionEvent(meetingId, {
-      text,
       targetLanguage: language,
       transcriptionText: text,
       translationText: null,
@@ -311,7 +310,7 @@ describe("Concurrent meetings two-language capacity", () => {
                   (message) =>
                     message.type === "transcription" &&
                     message.language === language &&
-                    message.text === transcriptText,
+                    message.transcriptionText === transcriptText,
                   10000,
                 );
 

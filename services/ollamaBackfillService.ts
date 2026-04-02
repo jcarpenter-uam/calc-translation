@@ -6,16 +6,13 @@ import {
 } from "./meetingTranscriptCacheService";
 
 export interface BackfillTranslationRequest {
-  utteranceOrder: number;
   sourceText: string;
   sourceLanguage: string | null;
   speaker: string | null;
 }
 
 export interface BackfillTranslationResult {
-  utteranceOrder: number;
-  text: string;
-  transcriptionText: string | null;
+  transcriptionText: string;
   translationText: string | null;
   sourceLanguage: string | null;
 }
@@ -51,7 +48,6 @@ class OllamaCloudTranslator implements BackfillTranslator {
     const prompt = [
       "You translate meeting transcript utterances into one target language.",
       "Return strict JSON only.",
-      "Preserve the utteranceOrder values exactly.",
       "Do not merge or split utterances.",
       "Keep speaker names out of translated text.",
       `Target language: ${targetLanguage}`,
@@ -86,7 +82,7 @@ class OllamaCloudTranslator implements BackfillTranslator {
             {
               role: "system",
               content:
-                "You are a transcript translation engine. Reply with JSON: {\"translations\":[{\"utteranceOrder\":number,\"text\":string,\"translationText\":string|null}]}",
+                "You are a transcript translation engine. Reply with JSON: {\"translations\":[{\"translationText\":string|null}]}",
             },
             {
               role: "user",
@@ -119,8 +115,6 @@ class OllamaCloudTranslator implements BackfillTranslator {
 
     const parsed = this.parseStructuredContent(content) as {
       translations?: Array<{
-        utteranceOrder?: number;
-        text?: string;
         translationText?: string | null;
       }>;
     };
@@ -134,17 +128,13 @@ class OllamaCloudTranslator implements BackfillTranslator {
     });
 
     return utterances.map((utterance) => {
-      const match = translations.find(
-        (translation) => translation.utteranceOrder === utterance.utteranceOrder,
-      );
+      const match = translations[0];
       const translatedText =
-        typeof match?.text === "string" && match.text.trim().length > 0
-          ? match.text.trim()
+        typeof match?.translationText === "string" && match.translationText.trim().length > 0
+          ? match.translationText.trim()
           : utterance.sourceText;
 
       return {
-        utteranceOrder: utterance.utteranceOrder,
-        text: translatedText,
         transcriptionText: utterance.sourceText,
         translationText:
           utterance.sourceLanguage === targetLanguage ? null : match?.translationText ?? translatedText,
@@ -214,16 +204,18 @@ class OllamaBackfillService {
   async backfillMeetingLanguage(
     meetingId: string,
     targetLanguage: string,
-    sourceLanguage: string,
-    throughOrder: number,
+    missingUtterances: CachedMeetingUtterance[],
   ) {
-    const jobKey = `${meetingId}:${targetLanguage}:${sourceLanguage}:${throughOrder}`;
+    const fingerprint = missingUtterances
+      .map((utterance) => this.getTranscriptEntryFingerprint(utterance))
+      .join("||");
+    const jobKey = `${meetingId}:${targetLanguage}:${fingerprint}`;
     const existingJob = this.inFlight.get(jobKey);
     if (existingJob) {
       return await existingJob;
     }
 
-    const job = this.runBackfill(meetingId, targetLanguage, sourceLanguage, throughOrder);
+    const job = this.runBackfill(meetingId, targetLanguage, missingUtterances);
     this.inFlight.set(jobKey, job);
 
     try {
@@ -241,45 +233,18 @@ class OllamaBackfillService {
   private async runBackfill(
     meetingId: string,
     targetLanguage: string,
-    sourceLanguage: string,
-    throughOrder: number,
+    missingUtterances: CachedMeetingUtterance[],
   ) {
-    const sourceHistory = await meetingTranscriptCacheService.getLanguageHistory(
-      meetingId,
-      sourceLanguage,
-    );
-    const targetHistory = await meetingTranscriptCacheService.getLanguageHistory(
-      meetingId,
-      targetLanguage,
-    );
-
-    const existingOrders = new Set(
-      targetHistory
-        .map((entry) => entry.utteranceOrder)
-        .filter((order): order is number => typeof order === "number" && Number.isFinite(order)),
-    );
-    const missingUtterances = sourceHistory.filter((utterance) => {
-      const utteranceOrder = utterance.utteranceOrder;
-      return typeof utteranceOrder === "number" &&
-        Number.isFinite(utteranceOrder) &&
-        utteranceOrder <= throughOrder &&
-        !existingOrders.has(utteranceOrder);
-    });
-
     const entries = await this.materializeMissingUtterances(
       meetingId,
       targetLanguage,
-      missingUtterances,
+      this.sortTranscriptHistory(missingUtterances),
     );
 
     return {
       meetingId,
       language: targetLanguage,
-      entries: entries.sort((left, right) => {
-        const leftOrder = left.utteranceOrder ?? Number.MAX_SAFE_INTEGER;
-        const rightOrder = right.utteranceOrder ?? Number.MAX_SAFE_INTEGER;
-        return leftOrder - rightOrder;
-      }),
+      entries: this.sortTranscriptHistory(entries),
     } satisfies BackfillHistoryResult;
   }
 
@@ -295,95 +260,62 @@ class OllamaBackfillService {
       return [] as CachedMeetingUtterance[];
     }
 
-    const passthroughUtterances: CachedMeetingUtterance[] = [];
-    const translatedUtterances: CachedMeetingUtterance[] = [];
-
-    for (const utterance of missingUtterances) {
-      const sourceLanguage = utterance.sourceLanguage || utterance.language;
-      if (sourceLanguage === targetLanguage) {
-        passthroughUtterances.push(utterance);
-      } else {
-        translatedUtterances.push(utterance);
-      }
-    }
-
     const results: CachedMeetingUtterance[] = [];
 
-    for (const utterance of passthroughUtterances) {
-      const sourceText = utterance.transcriptionText || utterance.text;
-      results.push(await this.persistDerivedEntry(meetingId, targetLanguage, utterance, {
-        utteranceOrder: utterance.utteranceOrder || 0,
-        text: sourceText,
-        transcriptionText: sourceText,
-        translationText: null,
-        sourceLanguage: utterance.sourceLanguage || utterance.language,
-      }));
-    }
+    for (const [index, utterance] of missingUtterances.entries()) {
+      const sourceLanguage = utterance.sourceLanguage || utterance.language;
+      const sourceText = utterance.transcriptionText;
 
-    if (translatedUtterances.length > 0) {
-      const translated = await this.translator.translateBatch(
-        meetingId,
-        targetLanguage,
-        translatedUtterances.map((utterance) => ({
-          utteranceOrder: utterance.utteranceOrder || 0,
-          sourceText: utterance.transcriptionText || utterance.text,
-          sourceLanguage: utterance.sourceLanguage || utterance.language,
-          speaker: utterance.speaker,
-        })),
-      );
-
-      const translatedByOrder = new Map(
-        translated.map((entry) => [entry.utteranceOrder, entry] as const),
-      );
-
-      for (const utterance of translatedUtterances) {
-        const utteranceOrder = utterance.utteranceOrder;
-        if (typeof utteranceOrder !== "number" || !Number.isFinite(utteranceOrder)) {
-          continue;
-        }
-
-        const translation = translatedByOrder.get(utteranceOrder);
-        if (!translation) {
-          logger.warn("Backfill translator skipped cached transcript utterance.", {
-            meetingId,
-            targetLanguage,
-            utteranceOrder,
-          });
-          continue;
-        }
-
-        results.push(
-          await this.persistDerivedEntry(meetingId, targetLanguage, utterance, translation),
-        );
+      if (sourceLanguage === targetLanguage) {
+        results.push(await this.persistTranslatedEntry(meetingId, targetLanguage, utterance, {
+          transcriptionText: sourceText,
+          translationText: null,
+          sourceLanguage,
+        }));
+        continue;
       }
+
+      const translated = await this.translator.translateBatch(meetingId, targetLanguage, [
+        {
+          sourceText,
+          sourceLanguage,
+          speaker: utterance.speaker,
+        },
+      ]);
+
+      const translation = translated[0];
+      if (!translation) {
+        logger.warn("Backfill translator skipped cached transcript utterance.", {
+          meetingId,
+          targetLanguage,
+          startedAtMs: utterance.startedAtMs,
+          endedAtMs: utterance.endedAtMs,
+        });
+        continue;
+      }
+
+      results.push(await this.persistTranslatedEntry(meetingId, targetLanguage, utterance, translation));
     }
 
-    return results.sort((left, right) => {
-      const leftOrder = left.utteranceOrder ?? Number.MAX_SAFE_INTEGER;
-      const rightOrder = right.utteranceOrder ?? Number.MAX_SAFE_INTEGER;
-      return leftOrder - rightOrder;
-    });
+    return this.sortTranscriptHistory(results);
   }
 
   /**
    * Writes a translated cache entry while preserving the shared utterance order.
    */
-  private async persistDerivedEntry(
+  private async persistTranslatedEntry(
     meetingId: string,
     targetLanguage: string,
     utterance: CachedMeetingUtterance,
     translation: BackfillTranslationResult,
   ) {
-    const utteranceOrder = translation.utteranceOrder || utterance.utteranceOrder;
-    if (typeof utteranceOrder !== "number" || !Number.isFinite(utteranceOrder)) {
-      throw new Error("Backfill entry is missing a stable utterance order.");
-    }
-
     const existingEntries = await meetingTranscriptCacheService.getLanguageHistory(
       meetingId,
       targetLanguage,
     );
-    const existing = existingEntries.find((entry) => entry.utteranceOrder === utteranceOrder);
+    const existing = existingEntries.find(
+      (entry) => this.getTranscriptEntryFingerprint(entry) === this.getTranscriptEntryFingerprint(utterance),
+    );
     if (existing) {
       return existing;
     }
@@ -391,8 +323,6 @@ class OllamaBackfillService {
     return await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId,
       language: targetLanguage,
-      text: translation.text,
-      utteranceOrder,
       transcriptionText: translation.transcriptionText,
       translationText: translation.translationText,
       sourceLanguage: translation.sourceLanguage,
@@ -400,6 +330,33 @@ class OllamaBackfillService {
       endedAtMs: utterance.endedAtMs,
       speaker: utterance.speaker,
     });
+  }
+
+  private sortTranscriptHistory(history: CachedMeetingUtterance[]) {
+    return [...history].sort((left, right) => {
+      const leftStart = left.startedAtMs ?? Number.MAX_SAFE_INTEGER;
+      const rightStart = right.startedAtMs ?? Number.MAX_SAFE_INTEGER;
+      if (leftStart !== rightStart) {
+        return leftStart - rightStart;
+      }
+
+      const leftEnd = left.endedAtMs ?? leftStart;
+      const rightEnd = right.endedAtMs ?? rightStart;
+      if (leftEnd !== rightEnd) {
+        return leftEnd - rightEnd;
+      }
+
+      return left.createdAt.localeCompare(right.createdAt);
+    });
+  }
+
+  private getTranscriptEntryFingerprint(entry: CachedMeetingUtterance) {
+    const normalizedText = entry.transcriptionText.trim().toLowerCase();
+    return [
+      entry.startedAtMs ?? "null",
+      entry.endedAtMs ?? "null",
+      normalizedText,
+    ].join("|");
   }
 }
 

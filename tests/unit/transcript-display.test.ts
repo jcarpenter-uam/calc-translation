@@ -9,7 +9,8 @@ import {
 function buildTranscriptItem(overrides: Partial<TranscriptItem> = {}): TranscriptItem {
   return {
     id: "item-1",
-    utteranceOrder: 1,
+    startedAtMs: 0,
+    endedAtMs: 1000,
     language: "es",
     speaker: null,
     isFinal: true,
@@ -36,7 +37,8 @@ describe("transcript display helpers", () => {
   it("renders translated-only mode by default", () => {
     expect(renderTranscriptItem(buildTranscriptItem(), "translated_only")).toEqual({
       id: "item-1",
-      utteranceOrder: 1,
+      startedAtMs: 0,
+      endedAtMs: 1000,
       language: "es",
       speaker: null,
       isFinal: true,
@@ -116,18 +118,20 @@ describe("transcript display helpers", () => {
     });
   });
 
-  it("upserts finalized transcript items by utterance order", () => {
+  it("upserts finalized transcript items by meeting timestamps", () => {
     const current = [
       buildTranscriptItem({
         id: "draft-1",
-        utteranceOrder: null,
+        startedAtMs: null,
+        endedAtMs: null,
         isFinal: false,
         transcriptionText: "Hello every",
         translationText: "Hola a to",
       }),
       buildTranscriptItem({
         id: "item-3",
-        utteranceOrder: 3,
+        startedAtMs: 3000,
+        endedAtMs: 4000,
         translationText: "Tercera linea",
       }),
     ];
@@ -136,24 +140,26 @@ describe("transcript display helpers", () => {
       current,
       buildTranscriptItem({
         id: "item-2",
-        utteranceOrder: 2,
+        startedAtMs: 2000,
+        endedAtMs: 3000,
         isFinal: true,
       }),
     );
 
-    expect(next.map((item) => item.utteranceOrder)).toEqual([2, 3]);
+    expect(next.map((item) => item.startedAtMs)).toEqual([2000, 3000]);
     expect(next[0]).toMatchObject({
       id: "item-2",
-      utteranceOrder: 2,
+      startedAtMs: 2000,
       isFinal: true,
     });
   });
 
-  it("replaces an existing utterance when the same order is replayed", () => {
+  it("replaces an existing utterance when the same timestamps are replayed", () => {
     const current = [
       buildTranscriptItem({
         id: "item-8",
-        utteranceOrder: 8,
+        startedAtMs: 8000,
+        endedAtMs: 9000,
         translationText: "Hola inicial",
       }),
     ];
@@ -162,7 +168,8 @@ describe("transcript display helpers", () => {
       current,
       buildTranscriptItem({
         id: "item-8-replayed",
-        utteranceOrder: 8,
+        startedAtMs: 8000,
+        endedAtMs: 9000,
         translationText: "Hola final",
       }),
     );
@@ -170,8 +177,40 @@ describe("transcript display helpers", () => {
     expect(next).toHaveLength(1);
     expect(next[0]).toMatchObject({
       id: "item-8-replayed",
-      utteranceOrder: 8,
+      startedAtMs: 8000,
       translationText: "Hola final",
+    });
+  });
+
+  it("keeps partial transcript updates on a single line", () => {
+    const current = [
+      buildTranscriptItem({
+        id: "partial-1",
+        startedAtMs: 4000,
+        endedAtMs: 4200,
+        isFinal: false,
+        transcriptionText: "Hello ev",
+        translationText: "Hola a",
+      }),
+    ];
+
+    const next = upsertTranscriptItem(
+      current,
+      buildTranscriptItem({
+        id: "partial-2",
+        startedAtMs: 4000,
+        endedAtMs: 4400,
+        isFinal: false,
+        transcriptionText: "Hello everyone",
+        translationText: "Hola a todos",
+      }),
+    );
+
+    expect(next).toHaveLength(1);
+    expect(next[0]).toMatchObject({
+      id: "partial-2",
+      isFinal: false,
+      transcriptionText: "Hello everyone",
     });
   });
 });

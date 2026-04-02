@@ -12,7 +12,7 @@ describe("Meeting transcript cache", () => {
     await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId: "history-test-meeting",
       language: "en",
-      text: "Hello there",
+      transcriptionText: "Hello there",
       startedAtMs: 120,
       endedAtMs: 980,
       speaker: null,
@@ -21,7 +21,7 @@ describe("Meeting transcript cache", () => {
     await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId: "history-test-meeting",
       language: "es",
-      text: "Hola",
+      transcriptionText: "Hola",
       startedAtMs: 1000,
       endedAtMs: 1600,
       speaker: null,
@@ -49,20 +49,20 @@ describe("Meeting transcript cache", () => {
     expect(sentPayloads[0]).toMatchObject({
       type: "transcription",
       language: "en",
-      text: "Hello there",
+      transcriptionText: "Hello there",
+      translationText: null,
       isFinal: true,
       isHistory: true,
-      utteranceOrder: 1,
       startedAtMs: 120,
       endedAtMs: 980,
     });
   });
 
-  it("assigns stable utterance order across meeting languages", async () => {
+  it("preserves meeting-relative timestamps across meeting languages", async () => {
     const first = await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId: "history-test-meeting",
       language: "en",
-      text: "First line",
+      transcriptionText: "First line",
       startedAtMs: 0,
       endedAtMs: 1200,
       speaker: null,
@@ -71,14 +71,14 @@ describe("Meeting transcript cache", () => {
     const second = await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId: "history-test-meeting",
       language: "es",
-      text: "Segunda linea",
+      transcriptionText: "Segunda linea",
       startedAtMs: 100,
       endedAtMs: 1300,
       speaker: null,
     });
 
-    expect(first.utteranceOrder).toBe(1);
-    expect(second.utteranceOrder).toBe(2);
+    expect(first.startedAtMs).toBe(0);
+    expect(second.startedAtMs).toBe(100);
 
     const englishHistory = await meetingTranscriptCacheService.getLanguageHistory(
       "history-test-meeting",
@@ -89,15 +89,15 @@ describe("Meeting transcript cache", () => {
       "es",
     );
 
-    expect(englishHistory[0]?.utteranceOrder).toBe(1);
-    expect(spanishHistory[0]?.utteranceOrder).toBe(2);
+    expect(englishHistory[0]?.startedAtMs).toBe(0);
+    expect(spanishHistory[0]?.startedAtMs).toBe(100);
   });
 
   it("writes per-language VTT files and clears cached history", async () => {
     await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId: "history-test-meeting",
       language: "en",
-      text: "First line",
+      transcriptionText: "First line",
       startedAtMs: 0,
       endedAtMs: 1200,
       speaker: "Speaker 1",
@@ -106,7 +106,7 @@ describe("Meeting transcript cache", () => {
     await meetingTranscriptCacheService.appendFinalUtterance({
       meetingId: "history-test-meeting",
       language: "en",
-      text: "Second line",
+      transcriptionText: "Second line",
       startedAtMs: 1400,
       endedAtMs: 2400,
       speaker: null,
@@ -130,7 +130,8 @@ describe("Meeting transcript cache", () => {
     expect(vttContent).toContain("Speaker 1: First line");
     expect(vttContent).toContain("2\n00:00:01.400 --> 00:00:02.400");
     expect(vttContent).toContain("Second line");
-
+    expect(vttContent).not.toContain("Translated:");
+  
     const history = await meetingTranscriptCacheService.getLanguageHistory(
       "history-test-meeting",
       "en",

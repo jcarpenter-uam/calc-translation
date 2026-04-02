@@ -113,7 +113,6 @@ describe("websocket switch_language route", () => {
     } as any);
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
-      text: "Hello everyone",
       targetLanguage: "en",
       transcriptionText: "Hello everyone",
       translationText: null,
@@ -179,14 +178,12 @@ describe("websocket switch_language route", () => {
           type: "transcription",
           meetingId: targetMeetingId,
           language: languageCode,
-          text: "fr:Hello everyone",
           transcriptionText: "Hello everyone",
           translationText: "fr:Hello everyone",
           isFinal: true,
           isHistory: true,
           isBackfilled: true,
           utteranceId: `${targetMeetingId}:fr:1`,
-          utteranceOrder: 1,
         }),
       );
     };
@@ -221,7 +218,6 @@ describe("websocket switch_language route", () => {
         .where(eq(meetings.id, meeting.meetingId));
 
       expect(savedMeeting?.languages).toEqual(["en", "fr"]);
-      expect(websocketController.getTranscriptState(meeting.meetingId, "fr")).toBe("live");
     } finally {
       (websocketController as any).addTranscriptionSession = originalAddTranscriptionSession;
       (websocketController as any).sendBackfilledTranscriptHistoryToSocket =

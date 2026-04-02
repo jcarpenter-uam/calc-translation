@@ -148,11 +148,6 @@ export const websocketRoute = new Elysia().ws("/ws", {
           }
         }
 
-        await websocketController.sendTranscriptHistoryToSocket(
-          payload.meetingId,
-          ws,
-        );
-
         const shouldBackfill = await websocketController.shouldBackfillTranscriptHistoryOnSubscribe(
           payload.meetingId,
           user?.languageCode,
@@ -204,6 +199,12 @@ export const websocketRoute = new Elysia().ws("/ws", {
               }),
             );
           }
+        }
+        else {
+          await websocketController.sendTranscriptHistoryToSocket(
+            payload.meetingId,
+            ws,
+          );
         }
 
         await websocketController.prepareHostAudio(

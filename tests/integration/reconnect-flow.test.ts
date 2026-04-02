@@ -44,7 +44,6 @@ describe("Host Reconnection and Timeout Logic", () => {
 
   async function injectTranscript(meetingId: string, text: string) {
     await (websocketController as any).handleTranscriptionEvent(meetingId, {
-      text,
       targetLanguage: "en",
       transcriptionText: text,
       translationText: null,
@@ -106,7 +105,7 @@ describe("Host Reconnection and Timeout Logic", () => {
     await injectTranscript(meetingId, "Reconnect flow before disconnect");
     await waitForEvent(
       attendeeMessages,
-      (m) => m.type === "transcription" && m.text === "Reconnect flow before disconnect",
+      (m) => m.type === "transcription" && m.transcriptionText === "Reconnect flow before disconnect",
     );
 
     /* Simulate a Host Network Crash */
@@ -146,7 +145,7 @@ describe("Host Reconnection and Timeout Logic", () => {
     await injectTranscript(meetingId, "Reconnect flow after reconnect");
     await waitForEvent(
       attendeeMessages,
-      (m) => m.type === "transcription" && m.text === "Reconnect flow after reconnect",
+      (m) => m.type === "transcription" && m.transcriptionText === "Reconnect flow after reconnect",
     );
 
     /* Proactively clean up to prevent bleeding into the next test */

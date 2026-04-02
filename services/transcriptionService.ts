@@ -17,9 +17,8 @@ export interface TranscriptionConfig {
  * Normalized transcription event passed from Soniox to the websocket layer.
  */
 export interface TranscriptionEvent {
-  text: string;
   targetLanguage: string;
-  transcriptionText: string | null;
+  transcriptionText: string;
   translationText: string | null;
   isFinal: boolean;
   startedAtMs: number | null;
@@ -68,7 +67,7 @@ function joinTokenText(tokens: SonioxToken[]) {
 }
 
 /**
- * Splits mixed Soniox token streams into display, transcription, and translation text.
+ * Splits mixed Soniox token streams into transcription and translation text.
  */
 function splitTranscriptTexts(tokens: SonioxToken[]) {
   const translationTokens = tokens.filter(
@@ -83,8 +82,7 @@ function splitTranscriptTexts(tokens: SonioxToken[]) {
 
   return {
     translationText: translationText || null,
-    transcriptionText: transcriptionText || null,
-    displayText: translationText || transcriptionText,
+    transcriptionText: transcriptionText || translationText || "",
     sourceLanguage:
       translationTokens.find((token) => token.source_language)?.source_language ||
       transcriptionTokens.find((token) => token.source_language)?.source_language ||
@@ -209,12 +207,11 @@ class SonioxTranscriptionService {
 
       if (!result || !result.tokens) return;
 
-      const { displayText, transcriptionText, translationText, sourceLanguage } =
+      const { transcriptionText, translationText, sourceLanguage } =
         splitTranscriptTexts(result.tokens as SonioxToken[]);
 
-      if (displayText) {
+      if (transcriptionText || translationText) {
         onTranscriptionReady({
-          text: displayText,
           targetLanguage,
           transcriptionText,
           translationText,
@@ -275,46 +272,21 @@ class SonioxTranscriptionService {
 
   private buildFinalEvent(utterance: any, targetLanguage: string): TranscriptionEvent {
     const tokens = Array.isArray(utterance?.tokens) ? utterance.tokens : [];
-    const { displayText, transcriptionText, translationText, sourceLanguage } =
+    const { transcriptionText, translationText, sourceLanguage } =
       splitTranscriptTexts(tokens as SonioxToken[]);
-    const firstTokenWithStart = tokens.find((token: any) => token?.start_ms != null);
-    const lastTokenWithEnd = [...tokens]
-      .reverse()
-      .find((token: any) => token?.end_ms != null);
 
     return {
-      text: displayText,
       targetLanguage,
       transcriptionText,
       translationText,
       isFinal: true,
-      startedAtMs: this.normalizeMs(
-        utterance?.start_ms ?? utterance?.startMs ?? firstTokenWithStart?.start_ms,
-      ),
-      endedAtMs: this.normalizeMs(
-        utterance?.end_ms ?? utterance?.endMs ?? lastTokenWithEnd?.end_ms,
-      ),
+      startedAtMs: null,
+      endedAtMs: null,
       speaker: this.normalizeSpeaker(
-        utterance?.speaker ?? utterance?.speaker_label ?? firstTokenWithStart?.speaker,
+        utterance?.speaker ?? utterance?.speaker_label,
       ),
       sourceLanguage,
     };
-  }
-
-  /**
-   * Converts Soniox millisecond fields into finite numeric timestamps when available.
-   */
-  private normalizeMs(value: unknown) {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === "string") {
-      const parsed = Number.parseFloat(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    return null;
   }
 
   /**

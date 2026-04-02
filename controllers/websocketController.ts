@@ -1,6 +1,7 @@
 import type { ElysiaWS } from "elysia/ws";
 import { basename, extname } from "node:path";
 import { logger } from "../core/logger";
+import type { CachedMeetingUtterance } from "../services/meetingTranscriptCacheService";
 import {
   transcriptionService,
   type TranscriptionSession,
@@ -42,6 +43,10 @@ interface Meeting {
   hostId: string | null;
   participants: Map<string, Participant>;
   audioSessions: Map<string, MeetingAudioSession>;
+  audioCursorMs: number;
+  audioClockStarted: boolean;
+  lastChunkStartedAtMs: number | null;
+  lastChunkEndedAtMs: number | null;
   pendingHostAudioChunks: Buffer[];
   hostTimeout?: ReturnType<typeof setTimeout>;
   hostAudioIdleTimeout?: ReturnType<typeof setTimeout>;
@@ -58,6 +63,8 @@ interface MeetingAudioSession {
   transcriptState: "backfilling" | "backfill_failed" | "live";
   shouldResume: boolean;
   isReconnecting: boolean;
+  currentUtteranceStartedAtMs: number | null;
+  currentUtteranceLastSeenAtMs: number | null;
 }
 
 /**
@@ -82,6 +89,10 @@ export class WebsocketController {
         hostId: hostId || null,
         participants: new Map(),
         audioSessions: new Map(),
+        audioCursorMs: 0,
+        audioClockStarted: false,
+        lastChunkStartedAtMs: null,
+        lastChunkEndedAtMs: null,
         pendingHostAudioChunks: [],
         isHostSendingAudio: false,
       });
@@ -130,7 +141,7 @@ export class WebsocketController {
       meetingId,
       config,
       (event) => {
-        void this.handleTranscriptionEvent(meetingId, event);
+        void this.handleTranscriptionEvent(meetingId, languageKey, event);
       },
       (event) => {
         void this.handleSessionLifecycleEvent(languageKey, event);
@@ -145,6 +156,8 @@ export class WebsocketController {
       transcriptState: "live",
       shouldResume: meeting.isHostSendingAudio,
       isReconnecting: false,
+      currentUtteranceStartedAtMs: null,
+      currentUtteranceLastSeenAtMs: null,
     };
 
     meeting.audioSessions.set(languageKey, entry);
@@ -390,12 +403,6 @@ export class WebsocketController {
       : await meetingTranscriptCacheService.getLanguageHistory(meetingId, "two_way");
 
     const combinedHistory = [...history, ...twoWayHistory].sort((left, right) => {
-      const leftOrder = left.utteranceOrder ?? Number.MAX_SAFE_INTEGER;
-      const rightOrder = right.utteranceOrder ?? Number.MAX_SAFE_INTEGER;
-      if (leftOrder !== rightOrder) {
-        return leftOrder - rightOrder;
-      }
-
       const leftTime = left.startedAtMs ?? Number.MAX_SAFE_INTEGER;
       const rightTime = right.startedAtMs ?? Number.MAX_SAFE_INTEGER;
       if (leftTime !== rightTime) {
@@ -420,15 +427,11 @@ export class WebsocketController {
           type: "transcription",
           meetingId,
           language: utterance.language,
-          text: utterance.text,
-          transcriptionText:
-            utterance.transcriptionText ??
-            (utterance.language === "two_way" ? utterance.text : null),
-          translationText: utterance.translationText ?? utterance.text,
+          transcriptionText: utterance.transcriptionText,
+          translationText: utterance.translationText,
           isFinal: true,
           isHistory: true,
           utteranceId: utterance.id,
-          utteranceOrder: utterance.utteranceOrder,
           startedAtMs: utterance.startedAtMs,
           endedAtMs: utterance.endedAtMs,
           speaker: utterance.speaker,
@@ -459,54 +462,33 @@ export class WebsocketController {
 
     try {
       const sourceContext = await this.selectBackfillSourceLanguage(meetingId, targetLanguage);
-      const targetHistory = await meetingTranscriptCacheService.getLanguageHistory(
-        meetingId,
-        targetLanguage,
-      );
-      const currentTargetOrder = this.getLatestCachedUtteranceOrder(targetHistory);
+      const targetHistory = await this.getSortedTranscriptHistory(meetingId, targetLanguage);
+      const missingEntries = sourceContext
+        ? this.getMissingTranscriptEntries(sourceContext.history, targetHistory)
+        : [];
 
-      if (!sourceContext || sourceContext.throughOrder <= currentTargetOrder) {
+      if (!sourceContext || missingEntries.length === 0) {
         this.setTranscriptState(meetingId, targetLanguage, "live");
+        await this.replayTranscriptHistoryToSocket(meetingId, ws, targetLanguage, false);
         return;
       }
 
       const result = await ollamaBackfillService.backfillMeetingLanguage(
         meetingId,
         targetLanguage,
-        sourceContext.language,
-        sourceContext.throughOrder,
+        missingEntries,
       );
       logger.debug("Replaying backfilled transcript history to websocket subscriber.", {
         meetingId,
         socketId: ws.id,
         targetLanguage,
         sourceLanguage: sourceContext.language,
-        throughOrder: sourceContext.throughOrder,
+        missingEntryCount: missingEntries.length,
         backfilledEntryCount: result.entries.length,
       });
-      for (const entry of result.entries) {
-        ws.send(
-          JSON.stringify({
-            type: "transcription",
-            meetingId,
-            language: targetLanguage,
-            text: entry.text,
-            transcriptionText: entry.transcriptionText,
-            translationText: entry.translationText,
-            isFinal: true,
-            isHistory: true,
-            isBackfilled: true,
-            utteranceId: `${meetingId}:${targetLanguage}:${entry.utteranceOrder}`,
-            utteranceOrder: entry.utteranceOrder,
-            startedAtMs: entry.startedAtMs,
-            endedAtMs: entry.endedAtMs,
-            speaker: entry.speaker,
-            sourceLanguage: entry.sourceLanguage,
-          }),
-        );
-      }
 
       this.setTranscriptState(meetingId, targetLanguage, "live");
+      await this.replayTranscriptHistoryToSocket(meetingId, ws, targetLanguage, true);
     } catch (error) {
       this.setTranscriptState(meetingId, targetLanguage, "backfill_failed");
       throw error;
@@ -561,27 +543,36 @@ export class WebsocketController {
       return false;
     }
 
-    const currentTargetOrder = this.getLatestCachedUtteranceOrder(existingHistory);
-    const shouldBackfill = currentTargetOrder < sourceContext.throughOrder;
+    const shouldBackfill =
+      this.getMissingTranscriptEntries(sourceContext.history, this.sortTranscriptHistory(existingHistory))
+        .length > 0;
     logger.debug("Subscribe-time backfill evaluation completed.", {
       meetingId,
       targetLanguage,
       cachedHistoryCount: existingHistory.length,
-      currentTargetOrder,
       sourceLanguage: sourceContext.language,
-      sourceThroughOrder: sourceContext.throughOrder,
+      sourceHistoryCount: sourceContext.history.length,
       shouldBackfill,
     });
     return shouldBackfill;
   }
 
-  private getLatestCachedUtteranceOrder(history: Array<{ utteranceOrder: number | null }>) {
-    return history.reduce((maxOrder, entry) => {
-      const utteranceOrder = entry.utteranceOrder;
-      return typeof utteranceOrder === "number" && Number.isFinite(utteranceOrder)
-        ? Math.max(maxOrder, utteranceOrder)
-        : maxOrder;
-    }, 0);
+  private sortTranscriptHistory(history: CachedMeetingUtterance[]) {
+    return [...history].sort((left, right) => {
+      const leftStart = left.startedAtMs ?? Number.MAX_SAFE_INTEGER;
+      const rightStart = right.startedAtMs ?? Number.MAX_SAFE_INTEGER;
+      if (leftStart !== rightStart) {
+        return leftStart - rightStart;
+      }
+
+      const leftEnd = left.endedAtMs ?? leftStart;
+      const rightEnd = right.endedAtMs ?? rightStart;
+      if (leftEnd !== rightEnd) {
+        return leftEnd - rightEnd;
+      }
+
+      return left.createdAt.localeCompare(right.createdAt);
+    });
   }
 
   private async selectBackfillSourceLanguage(meetingId: string, targetLanguage: string) {
@@ -610,19 +601,74 @@ export class WebsocketController {
         continue;
       }
 
-      const history = await meetingTranscriptCacheService.getLanguageHistory(meetingId, language);
-      const throughOrder = this.getLatestCachedUtteranceOrder(history);
-      if (throughOrder <= 0) {
+      const history = await this.getSortedTranscriptHistory(meetingId, language);
+      if (history.length === 0) {
         continue;
       }
 
       return {
         language,
-        throughOrder,
+        history,
       };
     }
 
     return null;
+  }
+
+  private async getSortedTranscriptHistory(meetingId: string, language: string) {
+    return this.sortTranscriptHistory(
+      await meetingTranscriptCacheService.getLanguageHistory(meetingId, language),
+    );
+  }
+
+  private async replayTranscriptHistoryToSocket(
+    meetingId: string,
+    ws: ElysiaWS,
+    language: string,
+    isBackfilled: boolean,
+  ) {
+    const history = await this.getSortedTranscriptHistory(meetingId, language);
+    for (const entry of history) {
+      ws.send(
+        JSON.stringify({
+          type: "transcription",
+          meetingId,
+          language,
+          transcriptionText: entry.transcriptionText,
+          translationText: entry.translationText,
+          isFinal: true,
+          isHistory: true,
+          isBackfilled,
+          utteranceId: entry.id,
+          startedAtMs: entry.startedAtMs,
+          endedAtMs: entry.endedAtMs,
+          speaker: entry.speaker,
+          sourceLanguage: entry.sourceLanguage,
+        }),
+      );
+    }
+  }
+
+  private getMissingTranscriptEntries(
+    sourceHistory: CachedMeetingUtterance[],
+    targetHistory: CachedMeetingUtterance[],
+  ) {
+    const existingFingerprints = new Set(
+      targetHistory.map((entry) => this.getTranscriptEntryFingerprint(entry)),
+    );
+
+    return sourceHistory.filter(
+      (entry) => !existingFingerprints.has(this.getTranscriptEntryFingerprint(entry)),
+    );
+  }
+
+  private getTranscriptEntryFingerprint(entry: CachedMeetingUtterance) {
+    const normalizedText = entry.transcriptionText.trim().toLowerCase();
+    return [
+      entry.startedAtMs ?? "null",
+      entry.endedAtMs ?? "null",
+      normalizedText,
+    ].join("|");
   }
 
   /**
@@ -696,7 +742,8 @@ export class WebsocketController {
         this.refreshHostAudioIdleTimeout(meetingId);
       }
 
-      this.dispatchAudioChunkToMeeting(meetingId, audioChunk);
+      const timingWindow = this.advanceMeetingAudioClock(meetingId, audioChunk);
+      this.dispatchAudioChunkToMeeting(meetingId, audioChunk, timingWindow);
     }
   }
 
@@ -1090,6 +1137,8 @@ export class WebsocketController {
       sessionEntry.shouldResume = false;
       sessionEntry.session.pause();
       sessionEntry.state = sessionEntry.session.getState();
+      sessionEntry.currentUtteranceStartedAtMs = null;
+      sessionEntry.currentUtteranceLastSeenAtMs = null;
     });
     const wasSendingAudio = meeting.isHostSendingAudio;
     meeting.isHostSendingAudio = false;
@@ -1126,53 +1175,60 @@ export class WebsocketController {
    */
   private async handleTranscriptionEvent(
     meetingId: string,
-    event: TranscriptionEvent,
+    languageKeyOrEvent: string | TranscriptionEvent,
+    maybeEvent?: TranscriptionEvent,
   ) {
+    const languageKey =
+      typeof languageKeyOrEvent === "string"
+        ? languageKeyOrEvent
+        : languageKeyOrEvent.targetLanguage;
+    const event =
+      typeof languageKeyOrEvent === "string" && maybeEvent
+        ? maybeEvent
+        : (languageKeyOrEvent as TranscriptionEvent);
+    const normalizedEvent = this.applyMeetingRelativeTimestamps(meetingId, languageKey, event);
+
     logger.debug("Transcript utterance received.", {
       meetingId,
-      language: event.targetLanguage,
-      isFinal: event.isFinal,
-      text: event.text,
-      transcriptionText: event.transcriptionText,
-      translationText: event.translationText,
-      sourceLanguage: event.sourceLanguage,
-      startedAtMs: event.startedAtMs,
-      endedAtMs: event.endedAtMs,
-      speaker: event.speaker,
+      language: normalizedEvent.targetLanguage,
+      isFinal: normalizedEvent.isFinal,
+      transcriptionText: normalizedEvent.transcriptionText,
+      translationText: normalizedEvent.translationText,
+      sourceLanguage: normalizedEvent.sourceLanguage,
+      startedAtMs: normalizedEvent.startedAtMs,
+      endedAtMs: normalizedEvent.endedAtMs,
+      speaker: normalizedEvent.speaker,
     });
 
-    if (event.isFinal && event.text) {
+    if (normalizedEvent.isFinal && normalizedEvent.transcriptionText) {
       try {
         const cachedUtterance =
           await meetingTranscriptCacheService.appendFinalUtterance({
             meetingId,
-            language: event.targetLanguage,
-            text: event.text,
-            transcriptionText: event.transcriptionText,
-            translationText: event.translationText,
-            sourceLanguage: event.sourceLanguage,
-            startedAtMs: event.startedAtMs,
-            endedAtMs: event.endedAtMs,
-            speaker: event.speaker,
+            language: normalizedEvent.targetLanguage,
+            transcriptionText: normalizedEvent.transcriptionText,
+            translationText: normalizedEvent.translationText,
+            sourceLanguage: normalizedEvent.sourceLanguage,
+            startedAtMs: normalizedEvent.startedAtMs,
+            endedAtMs: normalizedEvent.endedAtMs,
+            speaker: normalizedEvent.speaker,
           });
 
         this.sendTranscriptToLanguageParticipants(
           meetingId,
-          event.targetLanguage,
+          normalizedEvent.targetLanguage,
           JSON.stringify({
             type: "transcription",
             meetingId,
-            language: event.targetLanguage,
-            text: event.text,
-            transcriptionText: event.transcriptionText,
-            translationText: event.translationText,
+            language: normalizedEvent.targetLanguage,
+            transcriptionText: normalizedEvent.transcriptionText,
+            translationText: normalizedEvent.translationText,
             isFinal: true,
             utteranceId: cachedUtterance.id,
-            utteranceOrder: cachedUtterance.utteranceOrder,
-            startedAtMs: event.startedAtMs,
-            endedAtMs: event.endedAtMs,
-            speaker: event.speaker,
-            sourceLanguage: event.sourceLanguage,
+            startedAtMs: normalizedEvent.startedAtMs,
+            endedAtMs: normalizedEvent.endedAtMs,
+            speaker: normalizedEvent.speaker,
+            sourceLanguage: normalizedEvent.sourceLanguage,
           }),
         );
 
@@ -1180,7 +1236,7 @@ export class WebsocketController {
       } catch (err) {
         logger.error("Failed caching finalized transcript utterance.", {
           meetingId,
-          language: event.targetLanguage,
+          language: normalizedEvent.targetLanguage,
           err,
         });
       }
@@ -1188,21 +1244,65 @@ export class WebsocketController {
 
     this.sendTranscriptToLanguageParticipants(
       meetingId,
-      event.targetLanguage,
+      normalizedEvent.targetLanguage,
       JSON.stringify({
         type: "transcription",
         meetingId,
-        language: event.targetLanguage,
-        text: event.text,
-        transcriptionText: event.transcriptionText,
-        translationText: event.translationText,
-        isFinal: event.isFinal,
-        startedAtMs: event.startedAtMs,
-        endedAtMs: event.endedAtMs,
-        speaker: event.speaker,
-        sourceLanguage: event.sourceLanguage,
+        language: normalizedEvent.targetLanguage,
+        transcriptionText: normalizedEvent.transcriptionText,
+        translationText: normalizedEvent.translationText,
+        isFinal: normalizedEvent.isFinal,
+        startedAtMs: normalizedEvent.startedAtMs,
+        endedAtMs: normalizedEvent.endedAtMs,
+        speaker: normalizedEvent.speaker,
+        sourceLanguage: normalizedEvent.sourceLanguage,
       }),
     );
+  }
+
+  private applyMeetingRelativeTimestamps(
+    meetingId: string,
+    languageKey: string,
+    event: TranscriptionEvent,
+  ) {
+    const meeting = this.meetings.get(meetingId);
+    const sessionEntry = meeting?.audioSessions.get(languageKey);
+    if (!meeting || !sessionEntry) {
+      return event;
+    }
+
+    const currentChunkStart = meeting.lastChunkStartedAtMs ?? meeting.audioCursorMs;
+    const currentChunkEnd = meeting.lastChunkEndedAtMs ?? currentChunkStart;
+
+    if (!event.isFinal) {
+      if (event.transcriptionText.trim() || (event.translationText || "").trim()) {
+        if (sessionEntry.currentUtteranceStartedAtMs === null) {
+          sessionEntry.currentUtteranceStartedAtMs = currentChunkStart;
+        }
+        sessionEntry.currentUtteranceLastSeenAtMs = currentChunkEnd;
+      }
+
+      return {
+        ...event,
+        startedAtMs: sessionEntry.currentUtteranceStartedAtMs,
+        endedAtMs: sessionEntry.currentUtteranceLastSeenAtMs,
+      } satisfies TranscriptionEvent;
+    }
+
+    const startedAtMs = sessionEntry.currentUtteranceStartedAtMs ?? currentChunkStart;
+    const endedAtMs = Math.max(
+      sessionEntry.currentUtteranceLastSeenAtMs ?? currentChunkEnd,
+      startedAtMs,
+    );
+
+    sessionEntry.currentUtteranceStartedAtMs = null;
+    sessionEntry.currentUtteranceLastSeenAtMs = null;
+
+    return {
+      ...event,
+      startedAtMs,
+      endedAtMs,
+    } satisfies TranscriptionEvent;
   }
 
   /**
@@ -1307,6 +1407,15 @@ export class WebsocketController {
       return;
     }
 
+    if (
+      event.type === "disconnected" ||
+      event.type === "error" ||
+      event.type === "finished"
+    ) {
+      sessionEntry.currentUtteranceStartedAtMs = null;
+      sessionEntry.currentUtteranceLastSeenAtMs = null;
+    }
+
     if (event.type === "connected") {
       sessionEntry.isReconnecting = false;
       if (sessionEntry.shouldResume) {
@@ -1340,7 +1449,7 @@ export class WebsocketController {
         event.meetingId,
         sessionEntry.config,
         (transcriptionEvent) => {
-          void this.handleTranscriptionEvent(event.meetingId, transcriptionEvent);
+          void this.handleTranscriptionEvent(event.meetingId, languageKey, transcriptionEvent);
         },
         (lifecycleEvent) => {
           void this.handleSessionLifecycleEvent(languageKey, lifecycleEvent);
@@ -1394,20 +1503,33 @@ export class WebsocketController {
 
     const pendingChunks = meeting.pendingHostAudioChunks.splice(0);
     for (const chunk of pendingChunks) {
-      this.dispatchAudioChunkToMeeting(meetingId, chunk);
+      const timingWindow = this.advanceMeetingAudioClock(meetingId, chunk);
+      this.dispatchAudioChunkToMeeting(meetingId, chunk, timingWindow);
     }
   }
 
   /**
    * Broadcasts raw audio chunks to every active Soniox session for the meeting.
    */
-  private dispatchAudioChunkToMeeting(meetingId: string, audioChunk: Buffer) {
+  private dispatchAudioChunkToMeeting(
+    meetingId: string,
+    audioChunk: Buffer,
+    timingWindow?: { startedAtMs: number; endedAtMs: number },
+  ) {
     const meeting = this.meetings.get(meetingId);
     if (!meeting) {
       return;
     }
 
     meeting.audioSessions.forEach((sessionEntry) => {
+      if (
+        timingWindow &&
+        sessionEntry.currentUtteranceStartedAtMs !== null &&
+        sessionEntry.currentUtteranceLastSeenAtMs !== null
+      ) {
+        sessionEntry.currentUtteranceLastSeenAtMs = timingWindow.endedAtMs;
+      }
+
       try {
         sessionEntry.session.sendAudio(audioChunk);
       } catch (err) {
@@ -1417,6 +1539,32 @@ export class WebsocketController {
         });
       }
     });
+  }
+
+  private advanceMeetingAudioClock(meetingId: string, audioChunk: Buffer) {
+    const meeting = this.meetings.get(meetingId);
+    if (!meeting) {
+      return undefined;
+    }
+
+    const durationMs = this.getAudioChunkDurationMs(audioChunk);
+    const startedAtMs = meeting.audioCursorMs;
+    const endedAtMs = startedAtMs + durationMs;
+
+    meeting.audioClockStarted = true;
+    meeting.lastChunkStartedAtMs = startedAtMs;
+    meeting.lastChunkEndedAtMs = endedAtMs;
+    meeting.audioCursorMs = endedAtMs;
+
+    return {
+      startedAtMs,
+      endedAtMs,
+    };
+  }
+
+  private getAudioChunkDurationMs(audioChunk: Buffer) {
+    const bytesPerMillisecond = 32;
+    return audioChunk.length / bytesPerMillisecond;
   }
 }
 

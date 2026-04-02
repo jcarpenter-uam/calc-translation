@@ -154,7 +154,7 @@ describe("Stress Test & TTFT Measurement", () => {
                 ttfts.push(ttft);
 
                 console.log(
-                  `  Stream ${index + 1}/${level} received token: \x1b[32m"${parsed.text}"\x1b[0m in ${ttft.toFixed(2)}ms`,
+                  `  Stream ${index + 1}/${level} received token: \x1b[32m"${parsed.translationText || parsed.transcriptionText || ""}"\x1b[0m in ${ttft.toFixed(2)}ms`,
                 );
 
                 completed++;

@@ -57,7 +57,7 @@ describe("Transcript language isolation integration", () => {
 
     // Give the websocket route one extra tick to finish subscription side effects before the test
     // injects transcript events.
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await new Promise((resolve) => setTimeout(resolve, 750));
 
     return { ws, messages };
   }
@@ -99,7 +99,6 @@ describe("Transcript language isolation integration", () => {
 
     // Inject finalized transcript events directly so the test focuses on websocket fan-out rules.
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
-      text: "Hello everyone",
       targetLanguage: "en",
       transcriptionText: "Hello everyone",
       translationText: null,
@@ -111,7 +110,6 @@ describe("Transcript language isolation integration", () => {
     });
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
-      text: "Hola a todos",
       targetLanguage: "es",
       transcriptionText: "Hello everyone",
       translationText: "Hola a todos",
@@ -158,7 +156,6 @@ describe("Transcript language isolation integration", () => {
     );
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
-      text: "Hello everyone",
       targetLanguage: "en",
       transcriptionText: "Hello everyone",
       translationText: null,
@@ -170,7 +167,6 @@ describe("Transcript language isolation integration", () => {
     });
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
-      text: "Hola a todos",
       targetLanguage: "es",
       transcriptionText: "Hello everyone",
       translationText: "Hola a todos",
@@ -225,7 +221,6 @@ describe("Transcript language isolation integration", () => {
     );
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
-      text: "Hola a todos",
       targetLanguage: "two_way",
       transcriptionText: "Hello everyone",
       translationText: "Hola a todos",
@@ -274,7 +269,6 @@ describe("Transcript language isolation integration", () => {
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
-      text: "Hola a todos",
       targetLanguage: "two_way",
       transcriptionText: "Hello everyone",
       translationText: "Hola a todos",

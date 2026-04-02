@@ -21,7 +21,6 @@ describe("Soniox transcript splitting", () => {
 
     expect(result.transcriptionText).toBe("Extra text.");
     expect(result.translationText).toBe("追加のテキストです。");
-    expect(result.displayText).toBe("追加のテキストです。");
     expect(result.sourceLanguage).toBe("en");
   });
 
@@ -36,7 +35,6 @@ describe("Soniox transcript splitting", () => {
 
     expect(result.transcriptionText).toBe("Only transcription");
     expect(result.translationText).toBeNull();
-    expect(result.displayText).toBe("Only transcription");
     expect(result.sourceLanguage).toBe("en");
   });
 });

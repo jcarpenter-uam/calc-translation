@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import { websocketController } from "../../controllers/websocketController";
+import { db } from "../../core/database";
+import { meetings } from "../../models/meetingModel";
 import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
 import { ollamaBackfillService } from "../../services/ollamaBackfillService";
 
@@ -50,6 +53,8 @@ function createFakeAudioSession(languageKey: string, transcriptState: "backfilli
     transcriptState,
     shouldResume: true,
     isReconnecting: false,
+    currentUtteranceStartedAtMs: null,
+    currentUtteranceLastSeenAtMs: null,
   };
 }
 
@@ -58,6 +63,7 @@ describe("Transcript language isolation", () => {
     await meetingTranscriptCacheService.clearMeetingHistory("language-isolation-meeting");
     await meetingTranscriptCacheService.removeTranscriptArtifacts("language-isolation-meeting");
     await websocketController.deleteMeeting("language-isolation-meeting");
+    await db.delete(meetings).where(eq(meetings.topic, "Language Isolation Meeting"));
     ollamaBackfillService.resetTranslatorForTests();
   });
 
@@ -84,7 +90,6 @@ describe("Transcript language isolation", () => {
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {
-        text: "Hello everyone",
         targetLanguage: "en",
         transcriptionText: "Hello everyone",
         translationText: null,
@@ -99,7 +104,6 @@ describe("Transcript language isolation", () => {
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {
-        text: "Ni hao",
         targetLanguage: "zh",
         transcriptionText: "Hello everyone",
         translationText: "Ni hao",
@@ -132,7 +136,6 @@ describe("Transcript language isolation", () => {
     expect(
       attendeeZh.sentMessages.find((message) => message.type === "transcription"),
     ).toMatchObject({
-      text: "Ni hao",
       transcriptionText: "Hello everyone",
       translationText: "Ni hao",
       sourceLanguage: "en",
@@ -161,7 +164,6 @@ describe("Transcript language isolation", () => {
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {
-        text: "Hola a todos",
         targetLanguage: "two_way",
         transcriptionText: "Hello everyone",
         translationText: "Hola a todos",
@@ -210,7 +212,6 @@ describe("Transcript language isolation", () => {
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {
-        text: "Hello everyone",
         targetLanguage: "en",
         transcriptionText: "Hello everyone",
         translationText: null,
@@ -225,7 +226,6 @@ describe("Transcript language isolation", () => {
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {
-        text: "Hola a todos",
         targetLanguage: "es",
         transcriptionText: "Hello everyone",
         translationText: "Hola a todos",
@@ -238,14 +238,16 @@ describe("Transcript language isolation", () => {
     );
 
     expect(host.sentMessages.find((message) => message.type === "transcription")).toMatchObject({
-      utteranceOrder: 1,
       utteranceId: expect.any(String),
+      startedAtMs: 0,
+      endedAtMs: 1000,
     });
     expect(
       attendeeEs.sentMessages.find((message) => message.type === "transcription"),
     ).toMatchObject({
-      utteranceOrder: expect.any(Number),
       utteranceId: expect.any(String),
+      startedAtMs: 0,
+      endedAtMs: 1000,
     });
 
     const englishHistory = await meetingTranscriptCacheService.getLanguageHistory(
@@ -258,8 +260,8 @@ describe("Transcript language isolation", () => {
     );
     expect(englishHistory).toHaveLength(1);
     expect(spanishHistory).toHaveLength(1);
-    expect(englishHistory[0]?.utteranceOrder).toBe(1);
-    expect(spanishHistory[0]?.utteranceOrder).toEqual(expect.any(Number));
+    expect(englishHistory[0]?.startedAtMs).toBe(0);
+    expect(spanishHistory[0]?.startedAtMs).toBe(0);
   });
 
   it("detects when initial subscription should backfill missing language history", async () => {
@@ -272,7 +274,6 @@ describe("Transcript language isolation", () => {
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {
-        text: "Hello everyone",
         targetLanguage: "en",
         transcriptionText: "Hello everyone",
         translationText: null,
@@ -316,7 +317,6 @@ describe("Transcript language isolation", () => {
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {
-        text: "Hello everyone",
         targetLanguage: "en",
         transcriptionText: "Hello everyone",
         translationText: null,
@@ -331,8 +331,6 @@ describe("Transcript language isolation", () => {
     ollamaBackfillService.setTranslatorForTests({
       async translateBatch(_meetingId, targetLanguage, utterances) {
         return utterances.map((utterance) => ({
-          utteranceOrder: utterance.utteranceOrder,
-          text: `${targetLanguage}:${utterance.sourceText}`,
           transcriptionText: utterance.sourceText,
           translationText: `${targetLanguage}:${utterance.sourceText}`,
           sourceLanguage: utterance.sourceLanguage,
@@ -374,7 +372,6 @@ describe("Transcript language isolation", () => {
     await (websocketController as any).handleTranscriptionEvent(
       "language-isolation-meeting",
       {
-        text: "Hello everyone",
         targetLanguage: "en",
         transcriptionText: "Hello everyone",
         translationText: null,
@@ -403,6 +400,157 @@ describe("Transcript language isolation", () => {
     expect(websocketController.getTranscriptState("language-isolation-meeting", "fr")).toBe(
       "backfill_failed",
     );
+  });
+
+  it("selects the lowest-index live source language for backfill", async () => {
+    const meetingId = crypto.randomUUID();
+    websocketController.initMeeting(meetingId, "host-en");
+    await db.insert(meetings).values({
+      id: meetingId,
+      readable_id: `readable-${meetingId}`,
+      topic: "Language Isolation Meeting",
+      attendees: [],
+      languages: ["es", "en", "fr"],
+      method: "one_way",
+    });
+
+    const attendeeFr = createFakeSocket("attendee-fr", "fr");
+    websocketController.joinMeeting(meetingId, "attendee-fr", attendeeFr.socket);
+
+    const meeting = websocketController.getMeeting(meetingId);
+    meeting?.audioSessions.set("es", createFakeAudioSession("es"));
+    meeting?.audioSessions.set("en", createFakeAudioSession("en"));
+    meeting?.audioSessions.set("fr", createFakeAudioSession("fr", "backfilling"));
+
+    await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId,
+      language: "es",
+      transcriptionText: "Hola a todos",
+      translationText: null,
+      sourceLanguage: "es",
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+    });
+    await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId,
+      language: "en",
+      transcriptionText: "Hello everyone",
+      translationText: null,
+      sourceLanguage: "en",
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+    });
+
+    ollamaBackfillService.setTranslatorForTests({
+      async translateBatch(_meetingId, targetLanguage, utterances) {
+        return utterances.map((utterance) => ({
+          transcriptionText: utterance.sourceText,
+          translationText: `${targetLanguage}:${utterance.sourceText}`,
+          sourceLanguage: utterance.sourceLanguage,
+        }));
+      },
+    });
+
+    await websocketController.sendBackfilledTranscriptHistoryToSocket(
+      meetingId,
+      attendeeFr.socket,
+      "fr",
+    );
+
+    const frenchHistory = await meetingTranscriptCacheService.getLanguageHistory(meetingId, "fr");
+    expect(frenchHistory).toHaveLength(1);
+    expect(frenchHistory[0]?.translationText).toBe("fr:Hola a todos");
+
+    await websocketController.deleteMeeting(meetingId);
+    await meetingTranscriptCacheService.clearMeetingHistory(meetingId);
+    await db.delete(meetings).where(eq(meetings.id, meetingId));
+  });
+
+  it("goes live without backfill when no live source language exists", async () => {
+    websocketController.initMeeting("language-isolation-meeting", "host-en");
+
+    const attendeeFr = createFakeSocket("attendee-fr", "fr");
+    websocketController.joinMeeting(
+      "language-isolation-meeting",
+      "attendee-fr",
+      attendeeFr.socket,
+    );
+
+    const meeting = websocketController.getMeeting("language-isolation-meeting");
+    meeting?.audioSessions.set("fr", createFakeAudioSession("fr", "backfilling"));
+
+    await websocketController.sendBackfilledTranscriptHistoryToSocket(
+      "language-isolation-meeting",
+      attendeeFr.socket,
+      "fr",
+    );
+
+    expect(websocketController.getTranscriptState("language-isolation-meeting", "fr")).toBe("live");
+    expect(attendeeFr.sentMessages.filter((message) => message.type === "transcription")).toHaveLength(0);
+  });
+
+  it("skips duplicate backfill writes when live target history catches up first", async () => {
+    websocketController.initMeeting("language-isolation-meeting", "host-en");
+
+    const attendeeFr = createFakeSocket("attendee-fr", "fr");
+    websocketController.joinMeeting(
+      "language-isolation-meeting",
+      "attendee-fr",
+      attendeeFr.socket,
+    );
+
+    const meeting = websocketController.getMeeting("language-isolation-meeting");
+    meeting?.audioSessions.set("en", createFakeAudioSession("en"));
+    meeting?.audioSessions.set("fr", createFakeAudioSession("fr", "backfilling"));
+
+    await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId: "language-isolation-meeting",
+      language: "en",
+      transcriptionText: "Hello everyone",
+      translationText: null,
+      sourceLanguage: "en",
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+    });
+
+    ollamaBackfillService.setTranslatorForTests({
+      async translateBatch() {
+        await meetingTranscriptCacheService.appendFinalUtterance({
+          meetingId: "language-isolation-meeting",
+          language: "fr",
+          transcriptionText: "Hello everyone",
+          translationText: "fr:Hello everyone",
+          sourceLanguage: "en",
+          startedAtMs: 0,
+          endedAtMs: 1000,
+          speaker: null,
+        });
+
+        return [
+          {
+            transcriptionText: "Hello everyone",
+            translationText: "fr:Hello everyone",
+            sourceLanguage: "en",
+          },
+        ];
+      },
+    });
+
+    await websocketController.sendBackfilledTranscriptHistoryToSocket(
+      "language-isolation-meeting",
+      attendeeFr.socket,
+      "fr",
+    );
+
+    const frenchHistory = await meetingTranscriptCacheService.getLanguageHistory(
+      "language-isolation-meeting",
+      "fr",
+    );
+    expect(frenchHistory).toHaveLength(1);
+    expect(frenchHistory[0]?.translationText).toBe("fr:Hello everyone");
   });
 
 });

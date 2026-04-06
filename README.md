@@ -30,5 +30,5 @@ For setup, configuration, and deployment details, see [HOW-TO.md](./HOW-TO.md).
 
 - [x] On-Demand Language creation and destruction
 - [x] Backfill for late joins and language swaps
-- [ ] Meeting summaries
+- [x] Meeting summaries
 - [ ] Full monitoring and observability including API cost

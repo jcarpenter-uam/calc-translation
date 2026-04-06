@@ -11,6 +11,7 @@ import {
   type TranscriptionSessionState,
 } from "../services/transcriptionService";
 import { ollamaBackfillService } from "../services/ollamaBackfillService";
+import { ollamaSummaryService } from "../services/ollamaSummaryService";
 import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
@@ -912,15 +913,34 @@ export class WebsocketController {
         ),
       );
 
-      const isUuidMeetingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        id,
-      );
+      const isUuidMeetingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
       const [dbMeeting] = isUuidMeetingId
         ? await db
-            .select({ method: meetings.method })
+            .select({
+              method: meetings.method,
+              spoken_languages: meetings.spoken_languages,
+              topic: meetings.topic,
+            })
             .from(meetings)
             .where(eq(meetings.id, id))
         : [];
+
+      let summaryOutputPaths: string[] = [];
+
+      try {
+        summaryOutputPaths = await this.generateMeetingSummaries(id, dbMeeting, finalViewerLanguages);
+        if (summaryOutputPaths.length > 0) {
+          logger.info("Meeting summaries flushed to disk.", {
+            meetingId: id,
+            outputPaths: summaryOutputPaths,
+          });
+        }
+      } catch (err) {
+        logger.error("Failed generating meeting summaries.", {
+          meetingId: id,
+          err,
+        });
+      }
 
       if (isUuidMeetingId && (dbMeeting?.method || "one_way") === "one_way") {
         await db
@@ -958,6 +978,9 @@ export class WebsocketController {
         transcriptLanguages: outputPaths
           .map((outputPath) => basename(outputPath, extname(outputPath)))
           .filter(Boolean),
+        summaryLanguages: summaryOutputPaths
+          .map((outputPath) => basename(outputPath, extname(outputPath)).replace(/^summary-/, ""))
+          .filter(Boolean),
       });
 
       meeting.participants.forEach((p) => {
@@ -989,6 +1012,91 @@ export class WebsocketController {
     this.meetings
       .get(meetingId)
       ?.participants.forEach((p) => p.socket.send(data));
+  }
+
+  /**
+   * Generates meeting summary markdown files for the finalized language set.
+   */
+  private async generateMeetingSummaries(
+    meetingId: string,
+    dbMeeting:
+      | {
+          method: string | null;
+          spoken_languages: string[] | null;
+          topic: string | null;
+        }
+      | undefined,
+    finalViewerLanguages: string[],
+  ) {
+    const resolvedMethod = dbMeeting?.method || "one_way";
+    if (resolvedMethod === "two_way") {
+      const spokenLanguages = getUniqueMeetingLanguages(dbMeeting?.spoken_languages);
+      if (spokenLanguages.length === 0) {
+        return [] as string[];
+      }
+
+      const sharedHistory = await this.getSortedTranscriptHistory(meetingId, "two_way");
+      if (sharedHistory.length === 0) {
+        return [] as string[];
+      }
+
+      const results = await Promise.allSettled(
+        spokenLanguages.map(async (language) => {
+          const markdown = await ollamaSummaryService.summarizeMeeting({
+            meetingId,
+            targetLanguage: language,
+            transcriptLanguage: "two_way",
+            utterances: sharedHistory,
+            meetingTopic: dbMeeting?.topic,
+          });
+          return await meetingTranscriptCacheService.writeMeetingSummary(meetingId, language, markdown);
+        }),
+      );
+
+      return results.flatMap((result, index) => {
+        if (result.status === "fulfilled") {
+          return [result.value];
+        }
+
+        logger.error("Failed generating two-way meeting summary language.", {
+          meetingId,
+          language: spokenLanguages[index] || null,
+          err: result.reason,
+        });
+        return [] as string[];
+      });
+    }
+
+    const results = await Promise.allSettled(
+        finalViewerLanguages.map(async (language) => {
+          const history = await this.getSortedTranscriptHistory(meetingId, language);
+          if (history.length === 0) {
+            return null;
+          }
+
+          const markdown = await ollamaSummaryService.summarizeMeeting({
+            meetingId,
+            targetLanguage: language,
+            transcriptLanguage: language,
+            utterances: history,
+            meetingTopic: dbMeeting?.topic,
+          });
+          return await meetingTranscriptCacheService.writeMeetingSummary(meetingId, language, markdown);
+        }),
+      );
+
+    return results.flatMap((result, index) => {
+      if (result.status === "fulfilled") {
+        return result.value ? [result.value] : [];
+      }
+
+      logger.error("Failed generating one-way meeting summary language.", {
+        meetingId,
+        language: finalViewerLanguages[index] || null,
+        err: result.reason,
+      });
+      return [] as string[];
+    });
   }
 
   /**

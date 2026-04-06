@@ -95,8 +95,7 @@ class MeetingTranscriptCacheService {
       return [] as string[];
     }
 
-    const meetingDirectory = join(this.outputRoot, meetingId);
-    await mkdir(meetingDirectory, { recursive: true });
+    const meetingDirectory = await this.ensureMeetingOutputDirectory(meetingId);
 
     const outputPaths: string[] = [];
 
@@ -109,6 +108,16 @@ class MeetingTranscriptCacheService {
 
     await this.clearMeetingHistory(meetingId);
     return outputPaths;
+  }
+
+  /**
+   * Writes a markdown summary artifact for one meeting/language pair.
+   */
+  async writeMeetingSummary(meetingId: string, language: string, content: string) {
+    const meetingDirectory = await this.ensureMeetingOutputDirectory(meetingId);
+    const outputPath = join(meetingDirectory, `summary-${this.sanitizeLanguage(language)}.md`);
+    await writeFile(outputPath, content, "utf8");
+    return outputPath;
   }
 
   /**
@@ -138,6 +147,13 @@ class MeetingTranscriptCacheService {
   }
 
   /**
+   * Returns the expected summary output path for a meeting/language pair.
+   */
+  getMeetingSummaryOutputPath(meetingId: string, language: string) {
+    return join(this.outputRoot, meetingId, `summary-${this.sanitizeLanguage(language)}.md`);
+  }
+
+  /**
    * Lists transcript languages that have already been flushed to disk.
    */
   async listTranscriptLanguages(meetingId: string) {
@@ -148,6 +164,24 @@ class MeetingTranscriptCacheService {
       return entries
         .filter((entry) => entry.isFile() && entry.name.endsWith(".vtt"))
         .map((entry) => entry.name.replace(/\.vtt$/i, ""))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right));
+    } catch {
+      return [] as string[];
+    }
+  }
+
+  /**
+   * Lists summary languages that have already been flushed to disk.
+   */
+  async listSummaryLanguages(meetingId: string) {
+    try {
+      const meetingDirectory = join(this.outputRoot, meetingId);
+      const entries = await readdir(meetingDirectory, { withFileTypes: true });
+
+      return entries
+        .filter((entry) => entry.isFile() && /^summary-.*\.md$/i.test(entry.name))
+        .map((entry) => entry.name.replace(/^summary-/i, "").replace(/\.md$/i, ""))
         .filter(Boolean)
         .sort((left, right) => left.localeCompare(right));
     } catch {
@@ -351,6 +385,15 @@ class MeetingTranscriptCacheService {
       .map((value) => String(value).padStart(2, "0"))
       .join(":")
       .concat(`.${String(milliseconds).padStart(3, "0")}`);
+  }
+
+  /**
+   * Ensures the meeting artifact directory exists before writing output files.
+   */
+  private async ensureMeetingOutputDirectory(meetingId: string) {
+    const meetingDirectory = join(this.outputRoot, meetingId);
+    await mkdir(meetingDirectory, { recursive: true });
+    return meetingDirectory;
   }
 
   /**

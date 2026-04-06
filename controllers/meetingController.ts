@@ -177,15 +177,17 @@ export const getMeetingDetails = async ({
       return { error: "Not authorized to view this meeting" };
     }
 
-    const transcriptLanguages = await meetingTranscriptCacheService.listTranscriptLanguages(
-      id,
-    );
+    const [transcriptLanguages, summaryLanguages] = await Promise.all([
+      meetingTranscriptCacheService.listTranscriptLanguages(id),
+      meetingTranscriptCacheService.listSummaryLanguages(id),
+    ]);
 
     logger.debug("Meeting details retrieved.", { userId, meetingId: id });
     return {
       meeting: {
         ...meeting,
         transcript_languages: transcriptLanguages,
+        summary_languages: summaryLanguages,
       },
     };
   } catch (err) {
@@ -357,6 +359,84 @@ export const downloadMeetingTranscript = async ({
     });
     set.status = 500;
     return { error: "Failed to download transcript" };
+  }
+};
+
+/**
+ * Downloads an archived per-language markdown summary for a meeting participant or host.
+ */
+export const downloadMeetingSummary = async ({
+  params: { id, language },
+  user,
+  set,
+}: any) => {
+  const userId = user?.id || "unknown_user";
+
+  try {
+    const [meeting] = await db
+      .select({
+        id: meetings.id,
+        readable_id: meetings.readable_id,
+        topic: meetings.topic,
+        scheduled_time: meetings.scheduled_time,
+        started_at: meetings.started_at,
+        ended_at: meetings.ended_at,
+        host_id: meetings.host_id,
+        attendees: meetings.attendees,
+      })
+      .from(meetings)
+      .where(eq(meetings.id, id));
+
+    if (!meeting) {
+      set.status = 404;
+      return { error: "Meeting not found" };
+    }
+
+    if (!canDownloadMeetingTranscript(meeting, user)) {
+      logger.warn("Meeting summary download access denied.", {
+        userId,
+        meetingId: id,
+        language,
+      });
+      set.status = 403;
+      return { error: "Not authorized to download this summary" };
+    }
+
+    const summaryPath = meetingTranscriptCacheService.getMeetingSummaryOutputPath(id, language);
+    const summaryFile = Bun.file(summaryPath);
+
+    if (!(await summaryFile.exists())) {
+      set.status = 404;
+      return { error: "Summary not found" };
+    }
+
+    const safeTitle = sanitizeTranscriptFilenamePart(
+      meeting.topic || meeting.readable_id || meeting.id,
+      "meeting",
+    );
+    const summaryDate = resolveTranscriptFilenameDate(meeting);
+    const safeLanguage = String(language).replace(/[^a-zA-Z0-9_-]/g, "_") || "unknown";
+
+    set.headers["content-type"] = "text/markdown; charset=utf-8";
+    set.headers["content-disposition"] =
+      `attachment; filename="${safeTitle}_${summaryDate}_${safeLanguage}_summary.md"`;
+
+    logger.info("Meeting summary download served.", {
+      userId,
+      meetingId: id,
+      language,
+    });
+
+    return summaryFile;
+  } catch (err) {
+    logger.error("Failed to download meeting summary.", {
+      userId,
+      meetingId: id,
+      language,
+      err,
+    });
+    set.status = 500;
+    return { error: "Failed to download summary" };
   }
 };
 

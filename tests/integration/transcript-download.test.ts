@@ -99,4 +99,58 @@ describe("Transcript download access", () => {
     );
     expect(tenantAdminResponse.status).toBe(403);
   });
+
+  it("allows only the host or listed attendees to download archived summaries", async () => {
+    const meeting = await createMeeting(host.token, {
+      topic: "Summary Download",
+      spoken_languages: ["en"],
+    });
+    createdMeetingIds.push(meeting.meetingId);
+
+    await fetch(
+      `http://localhost:${process.env.PORT || 8000}/api/meeting/join/${meeting.readableId}`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: `auth_session=${attendee.token}`,
+        },
+      },
+    );
+
+    await meetingTranscriptCacheService.writeMeetingSummary(
+      meeting.meetingId,
+      "en",
+      "# Meeting Summary\n\n## Overview\nArchived summary\n",
+    );
+
+    const hostResponse = await apiGet(
+      `/meeting/${meeting.meetingId}/summary/en`,
+      host.token,
+    );
+    expect(hostResponse.status).toBe(200);
+    expect(hostResponse.headers.get("content-type")).toContain("text/markdown");
+    expect(hostResponse.headers.get("content-disposition")).toContain(
+      'filename="Summary_Download_',
+    );
+    expect(await hostResponse.text()).toContain("Archived summary");
+
+    const attendeeResponse = await apiGet(
+      `/meeting/${meeting.meetingId}/summary/en`,
+      attendee.token,
+    );
+    expect(attendeeResponse.status).toBe(200);
+    expect(await attendeeResponse.text()).toContain("Archived summary");
+
+    const outsiderResponse = await apiGet(
+      `/meeting/${meeting.meetingId}/summary/en`,
+      outsider.token,
+    );
+    expect(outsiderResponse.status).toBe(403);
+
+    const tenantAdminResponse = await apiGet(
+      `/meeting/${meeting.meetingId}/summary/en`,
+      tenantAdmin.token,
+    );
+    expect(tenantAdminResponse.status).toBe(403);
+  });
 });

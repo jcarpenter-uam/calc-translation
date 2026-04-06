@@ -5,6 +5,7 @@ import { db } from "../../core/database";
 import { meetings } from "../../models/meetingModel";
 import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
 import { ollamaBackfillService } from "../../services/ollamaBackfillService";
+import { ollamaSummaryService } from "../../services/ollamaSummaryService";
 
 /**
  * Builds a lightweight websocket double that records outgoing messages by participant language.
@@ -65,6 +66,7 @@ describe("Transcript language isolation", () => {
     await websocketController.deleteMeeting("language-isolation-meeting");
     await db.delete(meetings).where(eq(meetings.topic, "Language Isolation Meeting"));
     ollamaBackfillService.resetTranslatorForTests();
+    ollamaSummaryService.resetSummarizerForTests();
   });
 
   it("sends one-way transcripts only to matching-language participants", async () => {
@@ -500,6 +502,131 @@ describe("Transcript language isolation", () => {
 
     expect(savedMeeting?.viewer_languages).toEqual(["en", "fr"]);
 
+    await db.delete(meetings).where(eq(meetings.id, meetingId));
+  });
+
+  it("writes one-way meeting summaries for each activated viewer language", async () => {
+    const meetingId = crypto.randomUUID();
+
+    await db.insert(meetings).values({
+      id: meetingId,
+      readable_id: `readable-${meetingId}`,
+      topic: "Language Isolation Meeting",
+      attendees: [],
+      spoken_languages: ["en"],
+      viewer_languages: [],
+      method: "one_way",
+    });
+
+    websocketController.initMeeting(meetingId, "host-en");
+    const meeting = websocketController.getMeeting(meetingId);
+    meeting?.audioSessions.set("en", createFakeAudioSession("en"));
+    meeting?.audioSessions.set("fr", createFakeAudioSession("fr"));
+    (meeting as any)?.activatedViewerLanguages.add("en");
+    (meeting as any)?.activatedViewerLanguages.add("fr");
+
+    await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId,
+      language: "en",
+      transcriptionText: "Ship the feature next week.",
+      translationText: null,
+      sourceLanguage: "en",
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+    });
+    await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId,
+      language: "fr",
+      transcriptionText: "Ship the feature next week.",
+      translationText: "Livrer la fonctionnalite la semaine prochaine.",
+      sourceLanguage: "en",
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+    });
+
+    ollamaSummaryService.setSummarizerForTests({
+      async summarizeMeeting(request) {
+        return `# Meeting Summary\n\n## Overview\n${request.targetLanguage} summary\n\n## Key Points\n- ${request.transcriptLanguage}\n\n## Action Items\n- none\n`;
+      },
+    });
+
+    await websocketController.deleteMeeting(meetingId);
+
+    const summaryLanguages = await meetingTranscriptCacheService.listSummaryLanguages(meetingId);
+    expect(summaryLanguages).toEqual(["en", "fr"]);
+
+    const englishSummary = await Bun.file(
+      meetingTranscriptCacheService.getMeetingSummaryOutputPath(meetingId, "en"),
+    ).text();
+    const frenchSummary = await Bun.file(
+      meetingTranscriptCacheService.getMeetingSummaryOutputPath(meetingId, "fr"),
+    ).text();
+
+    expect(englishSummary).toContain("en summary");
+    expect(frenchSummary).toContain("fr summary");
+
+    await meetingTranscriptCacheService.removeTranscriptArtifacts(meetingId);
+    await db.delete(meetings).where(eq(meetings.id, meetingId));
+  });
+
+  it("writes two-way meeting summaries for each spoken language", async () => {
+    const meetingId = crypto.randomUUID();
+
+    await db.insert(meetings).values({
+      id: meetingId,
+      readable_id: `readable-${meetingId}`,
+      topic: "Language Isolation Meeting",
+      attendees: [],
+      spoken_languages: ["en", "es"],
+      viewer_languages: [],
+      method: "two_way",
+    });
+
+    websocketController.initMeeting(meetingId, "host-en");
+    const meeting = websocketController.getMeeting(meetingId);
+    meeting?.audioSessions.set("two_way", {
+      ...createFakeAudioSession("two_way"),
+      config: {
+        enableSpeakerDiarization: true,
+        translation: { type: "two_way", language_a: "en", language_b: "es" },
+      },
+    } as any);
+
+    await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId,
+      language: "two_way",
+      transcriptionText: "Hello everyone",
+      translationText: "Hola a todos",
+      sourceLanguage: "en",
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+    });
+
+    ollamaSummaryService.setSummarizerForTests({
+      async summarizeMeeting(request) {
+        return `# Meeting Summary\n\n## Overview\n${request.targetLanguage} summary from ${request.transcriptLanguage}\n\n## Key Points\n- mixed transcript\n\n## Action Items\n- none\n`;
+      },
+    });
+
+    await websocketController.deleteMeeting(meetingId);
+
+    const summaryLanguages = await meetingTranscriptCacheService.listSummaryLanguages(meetingId);
+    expect(summaryLanguages).toEqual(["en", "es"]);
+
+    const englishSummary = await Bun.file(
+      meetingTranscriptCacheService.getMeetingSummaryOutputPath(meetingId, "en"),
+    ).text();
+    const spanishSummary = await Bun.file(
+      meetingTranscriptCacheService.getMeetingSummaryOutputPath(meetingId, "es"),
+    ).text();
+
+    expect(englishSummary).toContain("en summary from two_way");
+    expect(spanishSummary).toContain("es summary from two_way");
+
+    await meetingTranscriptCacheService.removeTranscriptArtifacts(meetingId);
     await db.delete(meetings).where(eq(meetings.id, meetingId));
   });
 

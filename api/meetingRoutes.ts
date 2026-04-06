@@ -4,6 +4,7 @@ import {
   getMeetingDetails,
   getMeetingParticipants,
   downloadMeetingTranscript,
+  downloadMeetingSummary,
   createMeeting,
   createQuickMeeting,
   listMeetingInvitees,
@@ -23,6 +24,7 @@ export const meetingRoutes = new Elysia({ prefix: "/meeting" })
     }),
   })
   .get("/:id/transcript/:language", downloadMeetingTranscript)
+  .get("/:id/summary/:language", downloadMeetingSummary)
   .get("/:id/participants", getMeetingParticipants)
   .get("/:id", getMeetingDetails)
   .post("/create", createMeeting, {

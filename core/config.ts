@@ -38,6 +38,8 @@ const envSchema = z.object({
 
   OLLAMA_BACKFILL_MODEL: z.string().default("gpt-oss:20b"),
 
+  OLLAMA_SUMMARY_MODEL: z.string().default("gpt-oss:20b"),
+
   REDIS_URL: z.string().url({ message: "REDIS_URL must be a valid URL" }).optional(),
 
   TRANSCRIPT_OUTPUT_DIR: z.string().default("transcripts"),

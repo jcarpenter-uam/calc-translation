@@ -4,8 +4,10 @@ import { websocketController } from "../../controllers/websocketController";
 import { db } from "../../core/database";
 import { meetings } from "../../models/meetingModel";
 import { meetingTranscriptCacheService } from "../../services/meetingTranscriptCacheService";
+import { meetingArtifactEmailService } from "../../services/meetingArtifactEmailService";
 import { ollamaBackfillService } from "../../services/ollamaBackfillService";
 import { ollamaSummaryService } from "../../services/ollamaSummaryService";
+import { createTestUser } from "../setup/utils/testHelpers";
 
 /**
  * Builds a lightweight websocket double that records outgoing messages by participant language.
@@ -67,6 +69,7 @@ describe("Transcript language isolation", () => {
     await db.delete(meetings).where(eq(meetings.topic, "Language Isolation Meeting"));
     ollamaBackfillService.resetTranslatorForTests();
     ollamaSummaryService.resetSummarizerForTests();
+    meetingArtifactEmailService.resetMailerForTests();
   });
 
   it("sends one-way transcripts only to matching-language participants", async () => {
@@ -625,6 +628,83 @@ describe("Transcript language isolation", () => {
 
     expect(englishSummary).toContain("en summary from two_way");
     expect(spanishSummary).toContain("es summary from two_way");
+
+    await meetingTranscriptCacheService.removeTranscriptArtifacts(meetingId);
+    await db.delete(meetings).where(eq(meetings.id, meetingId));
+  });
+
+  it("emails the host and attendees their preferred-language summary and transcript", async () => {
+    const host = await createTestUser("artifact-host", "Artifact Host", "en");
+    const attendee = await createTestUser("artifact-attendee", "Artifact Attendee", "fr");
+    const meetingId = crypto.randomUUID();
+    const delivered: Array<{ to: string; subject: string; html: string; attachments?: any[] }> = [];
+
+    await db.insert(meetings).values({
+      id: meetingId,
+      readable_id: `readable-${meetingId}`,
+      topic: "Language Isolation Meeting",
+      host_id: host.id,
+      attendees: [attendee.id],
+      spoken_languages: ["en"],
+      viewer_languages: [],
+      method: "one_way",
+    });
+
+    websocketController.initMeeting(meetingId, host.id);
+    const liveHost = createFakeSocket(host.id, "en");
+    const liveAttendee = createFakeSocket(attendee.id, "fr");
+    websocketController.joinMeeting(meetingId, host.id, liveHost.socket);
+    websocketController.joinMeeting(meetingId, attendee.id, liveAttendee.socket);
+
+    const meeting = websocketController.getMeeting(meetingId);
+    meeting?.audioSessions.set("en", createFakeAudioSession("en"));
+    meeting?.audioSessions.set("fr", createFakeAudioSession("fr"));
+    (meeting as any)?.activatedViewerLanguages.add("en");
+    (meeting as any)?.activatedViewerLanguages.add("fr");
+
+    await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId,
+      language: "en",
+      transcriptionText: "Ship next week.",
+      translationText: null,
+      sourceLanguage: "en",
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+    });
+    await meetingTranscriptCacheService.appendFinalUtterance({
+      meetingId,
+      language: "fr",
+      transcriptionText: "Ship next week.",
+      translationText: "Livrer la semaine prochaine.",
+      sourceLanguage: "en",
+      startedAtMs: 0,
+      endedAtMs: 1000,
+      speaker: null,
+    });
+
+    ollamaSummaryService.setSummarizerForTests({
+      async summarizeMeeting(request) {
+        return `# Summary\n\n${request.targetLanguage} summary`;
+      },
+    });
+    meetingArtifactEmailService.setMailerForTests({
+      async sendMail(request) {
+        delivered.push(request);
+      },
+    });
+
+    await websocketController.deleteMeeting(meetingId);
+    await meetingArtifactEmailService.awaitIdleForTests();
+
+    expect(delivered).toHaveLength(2);
+    expect(delivered.map((entry) => entry.to).sort()).toEqual([
+      `${attendee.id}@test.com`,
+      `${host.id}@test.com`,
+    ]);
+    expect(delivered[0]?.attachments?.[0]?.contentType).toBe("text/vtt");
+    expect(delivered.some((entry) => entry.html.includes("en summary"))).toBe(true);
+    expect(delivered.some((entry) => entry.html.includes("fr summary"))).toBe(true);
 
     await meetingTranscriptCacheService.removeTranscriptArtifacts(meetingId);
     await db.delete(meetings).where(eq(meetings.id, meetingId));

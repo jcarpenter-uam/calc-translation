@@ -40,6 +40,14 @@ const envSchema = z.object({
 
   OLLAMA_SUMMARY_MODEL: z.string().default("gpt-oss:20b"),
 
+  MAILER_TENANT_ID: z.string().optional(),
+
+  MAILER_CLIENT_ID: z.string().optional(),
+
+  MAILER_CLIENT_SECRET: z.string().optional(),
+
+  MAILER_SENDER_EMAIL: z.string().email().optional(),
+
   REDIS_URL: z.string().url({ message: "REDIS_URL must be a valid URL" }).optional(),
 
   TRANSCRIPT_OUTPUT_DIR: z.string().default("transcripts"),

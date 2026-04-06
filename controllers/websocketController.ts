@@ -12,6 +12,7 @@ import {
 } from "../services/transcriptionService";
 import { ollamaBackfillService } from "../services/ollamaBackfillService";
 import { ollamaSummaryService } from "../services/ollamaSummaryService";
+import { meetingArtifactEmailService } from "../services/meetingArtifactEmailService";
 import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
@@ -917,9 +918,16 @@ export class WebsocketController {
       const [dbMeeting] = isUuidMeetingId
         ? await db
             .select({
+              id: meetings.id,
+              readable_id: meetings.readable_id,
               method: meetings.method,
               spoken_languages: meetings.spoken_languages,
               topic: meetings.topic,
+              host_id: meetings.host_id,
+              attendees: meetings.attendees,
+              scheduled_time: meetings.scheduled_time,
+              started_at: meetings.started_at,
+              ended_at: meetings.ended_at,
             })
             .from(meetings)
             .where(eq(meetings.id, id))
@@ -992,6 +1000,28 @@ export class WebsocketController {
           });
         }
       });
+
+      if (dbMeeting) {
+        meetingArtifactEmailService.enqueueMeetingArtifactEmails({
+          meetingId: id,
+          readableId: dbMeeting.readable_id,
+          topic: dbMeeting.topic,
+          hostId: dbMeeting.host_id,
+          attendeeIds: Array.isArray(dbMeeting.attendees) ? dbMeeting.attendees : [],
+          method: (dbMeeting.method || "one_way") as "one_way" | "two_way",
+          spokenLanguages: getUniqueMeetingLanguages(dbMeeting.spoken_languages),
+          scheduledTime: dbMeeting.scheduled_time,
+          startedAt: dbMeeting.started_at,
+          endedAt: dbMeeting.ended_at,
+          transcriptOutputPaths: outputPaths,
+          summaryOutputPaths: summaryOutputPaths,
+          liveParticipants: Array.from(meeting.participants.values()).map((participant) => ({
+            id: participant.id,
+            email: participant.email,
+            languageCode: participant.languageCode,
+          })),
+        });
+      }
 
       this.meetings.delete(id);
       logger.debug("Meeting removed from memory.", { meetingId: id });
@@ -1067,8 +1097,15 @@ export class WebsocketController {
       });
     }
 
+    const summaryLanguages = Array.from(
+      new Set([
+        ...getUniqueMeetingLanguages(dbMeeting?.spoken_languages),
+        ...finalViewerLanguages,
+      ]),
+    ).sort((left, right) => left.localeCompare(right));
+
     const results = await Promise.allSettled(
-        finalViewerLanguages.map(async (language) => {
+        summaryLanguages.map(async (language) => {
           const history = await this.getSortedTranscriptHistory(meetingId, language);
           if (history.length === 0) {
             return null;
@@ -1092,7 +1129,7 @@ export class WebsocketController {
 
       logger.error("Failed generating one-way meeting summary language.", {
         meetingId,
-        language: finalViewerLanguages[index] || null,
+        language: summaryLanguages[index] || null,
         err: result.reason,
       });
       return [] as string[];

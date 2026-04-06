@@ -31,6 +31,7 @@ For setup, configuration, and deployment details, see [HOW-TO.md](./HOW-TO.md).
 - [x] On-Demand Language creation and destruction
 - [x] Backfill for late joins and language swaps
 - [x] Meeting summaries
-- [ ] Translated UI
+- [x] Translated UI
+- [ ] Onboarding tour
 - [ ] Zoom RTMS
 - [ ] Full monitoring and observability including API cost

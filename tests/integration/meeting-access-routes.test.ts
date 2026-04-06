@@ -29,10 +29,10 @@ describe("Meeting access routes", () => {
     await cleanupTestUsers();
   });
 
-  it("denies meeting details before join, then grants access after join and persists attendee language", async () => {
+  it("denies meeting details before join, then grants access after join and persists attendee viewer language", async () => {
     const meeting = await createMeeting(host.token, {
       topic: "Join Access Coverage",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
 
     const detailBeforeJoin = await fetch(`${BASE_URL}/meeting/${meeting.meetingId}`, {
@@ -64,20 +64,25 @@ describe("Meeting access routes", () => {
     });
     expect(detailAfterJoin.status).toBe(200);
 
-    // Joining doubles as invite acceptance, so both attendees and one-way languages should update.
+    // Joining doubles as invite acceptance, while viewer languages are only summarized at teardown.
     const [savedMeeting] = await db
-      .select({ attendees: meetings.attendees, languages: meetings.languages })
+      .select({
+        attendees: meetings.attendees,
+        spoken_languages: meetings.spoken_languages,
+        viewer_languages: meetings.viewer_languages,
+      })
       .from(meetings)
       .where(eq(meetings.id, meeting.meetingId));
 
     expect(savedMeeting?.attendees).toContain(guest.id);
-    expect(savedMeeting?.languages).toEqual(["en", "es"]);
+    expect(savedMeeting?.spoken_languages).toEqual(["en"]);
+    expect(savedMeeting?.viewer_languages).toEqual([]);
   });
 
   it("marks the host as active when they join their own meeting", async () => {
     const meeting = await createMeeting(host.token, {
       topic: "Host Join Coverage",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
 
     const joinResponse = await fetch(`${BASE_URL}/meeting/join/${meeting.readableId}`, {
@@ -94,7 +99,7 @@ describe("Meeting access routes", () => {
   it("rejects existing tokens after tenant membership is removed", async () => {
     const meeting = await createMeeting(host.token, {
       topic: "Stale Membership Coverage",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
 
     // Removing membership simulates a stale token after an admin revokes tenant access.

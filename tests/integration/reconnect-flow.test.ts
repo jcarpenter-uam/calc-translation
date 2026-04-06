@@ -59,7 +59,7 @@ describe("Host Reconnection and Timeout Logic", () => {
     /* Host creates and joins meeting */
     const createRes = await createMeeting(host.token, {
       topic: "Reconnection Test",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
 
     const meetingId = createRes.meetingId;
@@ -161,7 +161,7 @@ describe("Host Reconnection and Timeout Logic", () => {
     /* Host starts meeting */
     const createRes = await createMeeting(host.token, {
       topic: "Timeout Test",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
 
     const meetingId = createRes.meetingId;

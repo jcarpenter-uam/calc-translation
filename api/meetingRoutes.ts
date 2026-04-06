@@ -28,7 +28,7 @@ export const meetingRoutes = new Elysia({ prefix: "/meeting" })
   .post("/create", createMeeting, {
     body: t.Object({
       topic: t.Optional(t.String()),
-      languages: t.Optional(t.Array(t.String())),
+      spoken_languages: t.Optional(t.Array(t.String())),
       method: t.Optional(t.Union([t.Literal("one_way"), t.Literal("two_way")])),
       integration: t.Optional(t.String()),
       join_url: t.Optional(t.String()),

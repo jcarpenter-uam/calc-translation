@@ -1,12 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
-import {
-  addOneWayMeetingLanguage,
-  getUniqueMeetingLanguages,
-  MAX_ONE_WAY_LANGUAGES,
-} from "../utils/meetingPolicy";
-
 /**
  * Minimal meeting state needed from the real-time controller during join flow.
  */
@@ -33,7 +27,6 @@ export type JoinableMeeting = typeof meetings.$inferSelect;
  */
 export interface JoinMeetingUpdatePayload {
   attendees: string[];
-  languages?: string[];
 }
 
 /**
@@ -45,9 +38,7 @@ export interface JoinMeetingPlan {
   isActiveNow: boolean;
   method: string;
   userLanguage: string | null;
-  addedLanguage: boolean;
   updatePayload: JoinMeetingUpdatePayload;
-  languageLimitExceeded: boolean;
 }
 
 /**
@@ -91,7 +82,7 @@ export function buildRealtimeJoinState(
 }
 
 /**
- * Applies attendee/language join policy and returns the meeting update payload.
+ * Applies attendee join policy and returns the meeting update payload.
  */
 export function buildJoinMeetingPlan(
   meeting: JoinableMeeting,
@@ -106,12 +97,7 @@ export function buildJoinMeetingPlan(
   }
 
   const method = meeting.method || "one_way";
-  const currentLanguages = getUniqueMeetingLanguages(meeting.languages);
   const userLanguage = user.languageCode || null;
-  const nextLanguages =
-    method === "one_way"
-      ? addOneWayMeetingLanguage(currentLanguages, userLanguage)
-      : { languages: currentLanguages, added: false, limitExceeded: false };
 
   return {
     internalId: realtimeState.internalId,
@@ -119,11 +105,7 @@ export function buildJoinMeetingPlan(
     isActiveNow: realtimeState.isActiveNow,
     method,
     userLanguage,
-    addedLanguage: nextLanguages.added,
-    languageLimitExceeded: nextLanguages.limitExceeded,
-    updatePayload: nextLanguages.added
-      ? { attendees: currentAttendees, languages: nextLanguages.languages }
-      : { attendees: currentAttendees },
+    updatePayload: { attendees: currentAttendees },
   };
 }
 
@@ -135,11 +117,4 @@ export async function persistJoinMeetingPlan(
   updatePayload: JoinMeetingUpdatePayload,
 ) {
   await db.update(meetings).set(updatePayload).where(eq(meetings.id, meetingId));
-}
-
-/**
- * Human-readable validation message for one-way language cap errors.
- */
-export function getJoinLanguageLimitMessage() {
-  return `One-way meetings can include at most ${MAX_ONE_WAY_LANGUAGES} spoken languages`;
 }

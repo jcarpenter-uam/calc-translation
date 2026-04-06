@@ -76,7 +76,7 @@ describe("websocket switch_language route", () => {
     const meeting = await createMeeting(host.token, {
       topic: "Switch Language Route Integration Test",
       method: "one_way",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 
@@ -111,6 +111,7 @@ describe("websocket switch_language route", () => {
         },
       },
     } as any);
+    (activeMeeting as any).activatedViewerLanguages.add("en");
 
     await (websocketController as any).handleTranscriptionEvent(meeting.meetingId, {
       targetLanguage: "en",
@@ -162,6 +163,7 @@ describe("websocket switch_language route", () => {
       };
 
       targetMeeting.audioSessions.set(languageKey, entry as any);
+      (targetMeeting as any).activatedViewerLanguages.add(languageKey);
       return entry as any;
     };
     (websocketController as any).sendBackfilledTranscriptHistoryToSocket = async (
@@ -212,12 +214,16 @@ describe("websocket switch_language route", () => {
       expect(connectCount).toBeGreaterThanOrEqual(0);
       expect(messages.find((message) => message.type === "error")).toBeUndefined();
 
-      const [savedMeeting] = await db
-        .select({ languages: meetings.languages })
+      const [liveMeeting] = await db
+        .select({
+          spoken_languages: meetings.spoken_languages,
+          viewer_languages: meetings.viewer_languages,
+        })
         .from(meetings)
         .where(eq(meetings.id, meeting.meetingId));
 
-      expect(savedMeeting?.languages).toEqual(["en", "fr"]);
+      expect(liveMeeting?.spoken_languages).toEqual(["en"]);
+      expect(liveMeeting?.viewer_languages).toEqual([]);
     } finally {
       (websocketController as any).addTranscriptionSession = originalAddTranscriptionSession;
       (websocketController as any).sendBackfilledTranscriptHistoryToSocket =

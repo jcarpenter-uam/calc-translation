@@ -410,7 +410,8 @@ describe("Transcript language isolation", () => {
       readable_id: `readable-${meetingId}`,
       topic: "Language Isolation Meeting",
       attendees: [],
-      languages: ["es", "en", "fr"],
+      spoken_languages: ["en"],
+      viewer_languages: ["es", "en", "fr"],
       method: "one_way",
     });
 
@@ -465,6 +466,40 @@ describe("Transcript language isolation", () => {
 
     await websocketController.deleteMeeting(meetingId);
     await meetingTranscriptCacheService.clearMeetingHistory(meetingId);
+    await db.delete(meetings).where(eq(meetings.id, meetingId));
+  });
+
+  it("persists finalized viewer languages from in-memory session state at meeting end", async () => {
+    const meetingId = crypto.randomUUID();
+
+    await db.insert(meetings).values({
+      id: meetingId,
+      readable_id: `readable-${meetingId}`,
+      topic: "Persist Viewer Languages Meeting",
+      attendees: [],
+      spoken_languages: ["en"],
+      viewer_languages: [],
+      method: "one_way",
+    });
+
+    websocketController.initMeeting(meetingId, "host-en");
+    const meeting = websocketController.getMeeting(meetingId);
+    expect(meeting).toBeTruthy();
+
+    meeting?.audioSessions.set("en", createFakeAudioSession("en"));
+    meeting?.audioSessions.set("fr", createFakeAudioSession("fr"));
+    (meeting as any)?.activatedViewerLanguages.add("en");
+    (meeting as any)?.activatedViewerLanguages.add("fr");
+
+    await websocketController.deleteMeeting(meetingId);
+
+    const [savedMeeting] = await db
+      .select({ viewer_languages: meetings.viewer_languages })
+      .from(meetings)
+      .where(eq(meetings.id, meetingId));
+
+    expect(savedMeeting?.viewer_languages).toEqual(["en", "fr"]);
+
     await db.delete(meetings).where(eq(meetings.id, meetingId));
   });
 

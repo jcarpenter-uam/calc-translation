@@ -84,7 +84,7 @@ describe("Transcript language isolation integration", () => {
     const meeting = await createMeeting(host.token, {
       topic: "Language Isolation Host Integration Test",
       method: "one_way",
-      languages: ["en", "es"],
+      spoken_languages: ["en", "es"],
     });
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 
@@ -138,7 +138,7 @@ describe("Transcript language isolation integration", () => {
     const meeting = await createMeeting(host.token, {
       topic: "Language Isolation Attendee Integration Test",
       method: "one_way",
-      languages: ["en", "es"],
+      spoken_languages: ["en", "es"],
     });
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 
@@ -195,7 +195,7 @@ describe("Transcript language isolation integration", () => {
     const meeting = await createMeeting(host.token, {
       topic: "Language Isolation Two-Way Integration Test",
       method: "two_way",
-      languages: ["en", "es"],
+      spoken_languages: ["en", "es"],
     });
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 
@@ -264,7 +264,7 @@ describe("Transcript language isolation integration", () => {
     const meeting = await createMeeting(host.token, {
       topic: "Language Isolation Two-Way History Integration Test",
       method: "two_way",
-      languages: ["en", "es"],
+      spoken_languages: ["en", "es"],
     });
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 

@@ -7,7 +7,6 @@ import { meetings } from "../models/meetingModel";
 import { meetingTranscriptCacheService } from "../services/meetingTranscriptCacheService";
 import {
   buildJoinMeetingPlan,
-  getJoinLanguageLimitMessage,
   getMeetingByReadableId,
   normalizeReadableMeetingId,
   persistJoinMeetingPlan,
@@ -16,10 +15,9 @@ import { userTenants } from "../models/userTenantModel";
 import { users } from "../models/userModel";
 import { eq, and, desc, or, ilike, inArray, asc, isNull, sql } from "drizzle-orm";
 import {
-  addOneWayMeetingLanguage,
   buildOneWayTranscriptionConfig,
   getUniqueMeetingLanguages,
-  MAX_ONE_WAY_LANGUAGES,
+  validateSpokenLanguages,
 } from "../utils/meetingPolicy";
 import { parseBoundedInteger } from "../utils/pagination";
 import {
@@ -442,14 +440,13 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
 
   try {
     const method = body?.method || "one_way";
-    const languages = getUniqueMeetingLanguages(body?.languages);
+    const spokenLanguages = getUniqueMeetingLanguages(body?.spoken_languages);
     const integration = body?.integration === "zoom" ? "zoom" : "native";
 
-    if (method === "one_way" && languages.length > MAX_ONE_WAY_LANGUAGES) {
+    const spokenLanguageValidation = validateSpokenLanguages(method, spokenLanguages);
+    if (!spokenLanguageValidation.ok) {
       set.status = 400;
-      return {
-        error: `One-way meetings can include at most ${MAX_ONE_WAY_LANGUAGES} spoken languages`,
-      };
+      return { error: spokenLanguageValidation.error };
     }
 
     const readableId = generateReadableId();
@@ -473,7 +470,8 @@ export const createMeeting = async ({ body, user, tenantId, set }: any) => {
         tenant_id: scopedTenantId,
         join_url: joinUrl,
         attendees: [],
-        languages,
+        spoken_languages: spokenLanguages,
+        viewer_languages: [],
         integration,
         method,
         scheduled_time: body?.scheduled_time
@@ -578,7 +576,8 @@ export const createQuickMeeting = async ({ body, user, tenantId, set }: any) => 
         host_id: user.id,
         tenant_id: scopedTenantId,
         attendees: attendeeIds,
-        languages: [],
+        spoken_languages: [],
+        viewer_languages: [],
         method: "one_way",
       })
       .returning({
@@ -660,15 +659,15 @@ export const joinMeeting = async ({
         : null,
     );
 
-    if (joinPlan.languageLimitExceeded) {
-      set.status = 400;
-      return { error: getJoinLanguageLimitMessage() };
-    }
-
     // If the host is already live, add the new language session immediately so late joiners start
     // receiving transcript output without waiting for a restart.
-    if (joinPlan.method === "one_way" && joinPlan.userLanguage && joinPlan.addedLanguage) {
-      if (activeMeeting?.isHostSendingAudio) {
+    if (joinPlan.method === "one_way" && joinPlan.userLanguage && !joinPlan.isHost) {
+      const addedViewerLanguage = websocketController.registerViewerLanguageRequest(
+        internalId,
+        joinPlan.userLanguage,
+      );
+
+      if (addedViewerLanguage && activeMeeting?.isHostSendingAudio) {
         const newSession = websocketController.addTranscriptionSession(
           internalId,
           joinPlan.userLanguage,
@@ -678,16 +677,18 @@ export const joinMeeting = async ({
         await newSession?.session.connect();
       }
 
-      logger.info(
-        activeMeeting?.isHostSendingAudio
-          ? "Started dynamic one-way session while host audio was live."
-          : "Registered dynamic one-way session for future audio start.",
-        {
-          meetingId: internalId,
-          language: joinPlan.userLanguage,
-          triggeredBy: userId,
-        },
-      );
+      if (addedViewerLanguage) {
+        logger.info(
+          activeMeeting?.isHostSendingAudio
+            ? "Started dynamic one-way session while host audio was live."
+            : "Registered dynamic one-way session for future audio start.",
+          {
+            meetingId: internalId,
+            language: joinPlan.userLanguage,
+            triggeredBy: userId,
+          },
+        );
+      }
     }
 
     await persistJoinMeetingPlan(internalId, joinPlan.updatePayload);
@@ -706,9 +707,9 @@ export const joinMeeting = async ({
         meetingId: internalId,
         userId,
         isActive: joinPlan.isActiveNow,
-        isHost: joinPlan.isHost,
-      },
-    );
+          isHost: joinPlan.isHost,
+        },
+      );
 
     return {
       message: "Joined meeting",

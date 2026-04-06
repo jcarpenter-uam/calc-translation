@@ -51,7 +51,7 @@ describe("Meeting language limits", () => {
       body: JSON.stringify({
         topic: "Too many languages",
         method: "one_way",
-        languages: ["en", "es", "fr", "de", "it", "pt"],
+        spoken_languages: ["en", "es", "fr", "de", "it", "pt"],
       }),
     });
 
@@ -61,17 +61,36 @@ describe("Meeting language limits", () => {
     });
   });
 
-  it("rejects a sixth unique language when joining a one-way meeting", async () => {
+  it("rejects creating a two-way meeting without exactly two spoken languages", async () => {
+    const response = await fetch(`${BASE_URL}/meeting/create`, {
+      method: "POST",
+      headers: {
+        Cookie: `auth_session=${host.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        topic: "Wrong two-way language count",
+        method: "two_way",
+        spoken_languages: ["en"],
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Two-way meetings must include exactly 2 spoken languages",
+    });
+  });
+
+  it("keeps viewer languages empty until meeting teardown", async () => {
     const createRes = await createMeeting(host.token, {
       topic: "Join limit test",
       method: "one_way",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
 
     createdMeetings.push({ id: createRes.meetingId, hostToken: host.token });
 
-    // Fill the meeting to the allowed maximum before attempting the final rejected join.
-    for (const attendee of attendees.slice(0, 4)) {
+    for (const attendee of attendees) {
       const response = await fetch(
         `${BASE_URL}/meeting/join/${createRes.readableId}`,
         {
@@ -86,27 +105,15 @@ describe("Meeting language limits", () => {
       expect(response.status).toBe(200);
     }
 
-    const rejectedJoin = await fetch(
-      `${BASE_URL}/meeting/join/${createRes.readableId}`,
-      {
-        method: "POST",
-        headers: {
-          Cookie: `auth_session=${attendees[4].token}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    expect(rejectedJoin.status).toBe(400);
-    await expect(rejectedJoin.json()).resolves.toMatchObject({
-      error: "One-way meetings can include at most 5 spoken languages",
-    });
-
     const [meeting] = await db
-      .select({ languages: meetings.languages })
+      .select({
+        spoken_languages: meetings.spoken_languages,
+        viewer_languages: meetings.viewer_languages,
+      })
       .from(meetings)
       .where(eq(meetings.id, createRes.meetingId));
 
-    expect(meeting?.languages).toEqual(["en", "es", "fr", "de", "it"]);
+    expect(meeting?.spoken_languages).toEqual(["en"]);
+    expect(meeting?.viewer_languages).toEqual([]);
   });
 });

@@ -32,7 +32,7 @@ describe("Meeting integration configuration", () => {
         topic: "Native URL test",
         integration: "native",
         method: "one_way",
-        languages: ["en"],
+        spoken_languages: ["en"],
       }),
     });
 
@@ -66,7 +66,7 @@ describe("Meeting integration configuration", () => {
         topic: "Zoom URL required",
         integration: "zoom",
         method: "one_way",
-        languages: ["en"],
+        spoken_languages: ["en"],
       }),
     });
 

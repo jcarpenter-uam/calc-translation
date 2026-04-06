@@ -7,7 +7,6 @@ import { users } from "../../models/userModel";
 import {
   buildJoinMeetingPlan,
   buildRealtimeJoinState,
-  getJoinLanguageLimitMessage,
   getMeetingByReadableId,
   normalizeReadableMeetingId,
   persistJoinMeetingPlan,
@@ -63,7 +62,8 @@ describe("meetingJoinService", () => {
         host_id: "meeting_join_host",
         tenant_id: tenantId,
         attendees: ["meeting_join_host"],
-        languages: ["en"],
+        spoken_languages: ["en"],
+        viewer_languages: ["en"],
         method: "one_way",
       })
       .returning({ id: meetings.id });
@@ -103,7 +103,7 @@ describe("meetingJoinService", () => {
     expect(realtimeState.isActiveNow).toBe(true);
   });
 
-  it("builds a join plan that appends attendees and expands one-way languages", async () => {
+  it("builds a join plan that appends attendees without persisting viewer languages", async () => {
     const meeting = await getMeetingByReadableId("1234567890");
     expect(meeting).toBeTruthy();
 
@@ -114,51 +114,28 @@ describe("meetingJoinService", () => {
     );
 
     expect(joinPlan.isHost).toBe(false);
-    expect(joinPlan.addedLanguage).toBe(true);
-    expect(joinPlan.languageLimitExceeded).toBe(false);
     expect(joinPlan.updatePayload.attendees).toContain("meeting_join_guest");
-    expect(joinPlan.updatePayload.languages).toEqual(["en", "es"]);
+    expect(joinPlan.updatePayload).toEqual({
+      attendees: ["meeting_join_host", "meeting_join_guest"],
+    });
   });
 
-  it("flags when a one-way meeting has reached its language cap", () => {
-    // This synthetic record keeps the cap test independent from prior persistence assertions.
-    const joinPlan = buildJoinMeetingPlan(
-      {
-        id: "meeting-cap",
-        readable_id: "cap-id",
-        passcode: null,
-        join_url: null,
-        method: "one_way",
-        languages: ["en", "es", "fr", "de", "it"],
-        integration: null,
-        scheduled_time: null,
-        started_at: null,
-        ended_at: null,
-        host_id: "meeting_join_host",
-        attendees: ["meeting_join_host"],
-        topic: "Cap Meeting",
-        tenant_id: tenantId,
-      },
-      { id: "meeting_join_extra", languageCode: "pt" },
-      null,
-    );
-
-    expect(joinPlan.languageLimitExceeded).toBe(true);
-    expect(getJoinLanguageLimitMessage()).toContain("at most 5 spoken languages");
-  });
-
-  it("persists the join plan back to the meeting record", async () => {
+  it("persists only attendee changes back to the meeting record", async () => {
     await persistJoinMeetingPlan(meetingId, {
       attendees: ["meeting_join_host", "meeting_join_guest"],
-      languages: ["en", "es"],
     });
 
     const [savedMeeting] = await db
-      .select({ attendees: meetings.attendees, languages: meetings.languages })
+      .select({
+        attendees: meetings.attendees,
+        spoken_languages: meetings.spoken_languages,
+        viewer_languages: meetings.viewer_languages,
+      })
       .from(meetings)
       .where(eq(meetings.id, meetingId));
 
     expect(savedMeeting?.attendees).toEqual(["meeting_join_host", "meeting_join_guest"]);
-    expect(savedMeeting?.languages).toEqual(["en", "es"]);
+    expect(savedMeeting?.spoken_languages).toEqual(["en"]);
+    expect(savedMeeting?.viewer_languages).toEqual(["en"]);
   });
 });

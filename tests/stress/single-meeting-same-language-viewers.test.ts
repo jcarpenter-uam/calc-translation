@@ -144,7 +144,7 @@ describe("Single meeting same-language fanout stress", () => {
     const meeting = await createMeeting(host.token, {
       topic: "Single Meeting Same-Language Stress Ramp",
       method: "one_way",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
     createdMeetings.push({ id: meeting.meetingId, hostToken: host.token });
 

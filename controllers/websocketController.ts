@@ -16,7 +16,6 @@ import { db } from "../core/database";
 import { meetings } from "../models/meetingModel";
 import { eq } from "drizzle-orm";
 import {
-  addOneWayMeetingLanguage,
   buildOneWayTranscriptionConfig,
   buildMeetingSessionPlan,
   getUniqueMeetingLanguages,
@@ -43,6 +42,8 @@ interface Meeting {
   hostId: string | null;
   participants: Map<string, Participant>;
   audioSessions: Map<string, MeetingAudioSession>;
+  requestedViewerLanguages: Set<string>;
+  activatedViewerLanguages: Set<string>;
   audioCursorMs: number;
   audioClockStarted: boolean;
   lastChunkStartedAtMs: number | null;
@@ -89,6 +90,8 @@ export class WebsocketController {
         hostId: hostId || null,
         participants: new Map(),
         audioSessions: new Map(),
+        requestedViewerLanguages: new Set(),
+        activatedViewerLanguages: new Set(),
         audioCursorMs: 0,
         audioClockStarted: false,
         lastChunkStartedAtMs: null,
@@ -161,7 +164,25 @@ export class WebsocketController {
     };
 
     meeting.audioSessions.set(languageKey, entry);
+    if (languageKey !== "two_way") {
+      meeting.activatedViewerLanguages.add(languageKey);
+    }
     return entry;
+  }
+
+  /**
+   * Records a one-way viewer language request for this active meeting.
+   */
+  registerViewerLanguageRequest(meetingId: string, languageCode: string | null | undefined) {
+    const meeting = this.meetings.get(meetingId);
+    const normalizedLanguage = typeof languageCode === "string" ? languageCode.trim() : "";
+    if (!meeting || !normalizedLanguage) {
+      return false;
+    }
+
+    const initialSize = meeting.requestedViewerLanguages.size;
+    meeting.requestedViewerLanguages.add(normalizedLanguage);
+    return meeting.requestedViewerLanguages.size > initialSize;
   }
 
   /**
@@ -332,21 +353,7 @@ export class WebsocketController {
       return { ok: true as const, addedLanguage: false, startedSession: false };
     }
 
-    const currentLanguages = getUniqueMeetingLanguages(dbMeeting.languages);
-    const nextLanguages = addOneWayMeetingLanguage(currentLanguages, languageCode);
-    if (nextLanguages.limitExceeded) {
-      return {
-        ok: false as const,
-        error: "One-way meeting language limit reached",
-      };
-    }
-
-    if (nextLanguages.added) {
-      await db
-        .update(meetings)
-        .set({ languages: nextLanguages.languages })
-        .where(eq(meetings.id, meetingId));
-    }
+    const addedLanguage = this.registerViewerLanguageRequest(meetingId, languageCode);
 
     let startedSession = false;
     if (meeting.isHostSendingAudio && !meeting.audioSessions.has(languageCode)) {
@@ -366,20 +373,20 @@ export class WebsocketController {
     logger.info(
       startedSession
         ? "Started on-demand one-way session after transcript language switch."
-        : nextLanguages.added
+        : addedLanguage
           ? "Registered on-demand one-way language after transcript language switch."
           : "Transcript language switch reused existing one-way session.",
       {
         meetingId,
         languageCode,
         startedSession,
-        addedLanguage: nextLanguages.added,
+        addedLanguage,
       },
     );
 
     return {
       ok: true as const,
-      addedLanguage: nextLanguages.added,
+      addedLanguage,
       startedSession,
     };
   }
@@ -587,8 +594,13 @@ export class WebsocketController {
     const [dbMeeting] = isUuidMeetingId
       ? await db.select().from(meetings).where(eq(meetings.id, meetingId))
       : [];
+    const requestedViewerLanguages = Array.from(meeting.requestedViewerLanguages);
     const orderedLanguages = dbMeeting
-      ? getUniqueMeetingLanguages(dbMeeting.languages)
+      ? (dbMeeting.method || "one_way") === "two_way"
+        ? getUniqueMeetingLanguages(dbMeeting.spoken_languages)
+        : requestedViewerLanguages.length > 0
+          ? requestedViewerLanguages
+          : Array.from(meeting.audioSessions.keys())
       : Array.from(meeting.audioSessions.keys());
 
     for (const language of orderedLanguages) {
@@ -870,6 +882,9 @@ export class WebsocketController {
         meetingId: id,
       });
 
+      const finalViewerLanguages = Array.from(meeting.activatedViewerLanguages)
+        .sort((left, right) => left.localeCompare(right));
+
       if (meeting.hostTimeout) {
         clearTimeout(meeting.hostTimeout);
         logger.debug("Canceling host reconnect timeout timer.", {
@@ -897,7 +912,26 @@ export class WebsocketController {
         ),
       );
 
+      const isUuidMeetingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id,
+      );
+      const [dbMeeting] = isUuidMeetingId
+        ? await db
+            .select({ method: meetings.method })
+            .from(meetings)
+            .where(eq(meetings.id, id))
+        : [];
+
+      if (isUuidMeetingId && (dbMeeting?.method || "one_way") === "one_way") {
+        await db
+          .update(meetings)
+          .set({ viewer_languages: finalViewerLanguages })
+          .where(eq(meetings.id, id));
+      }
+
       meeting.audioSessions.clear();
+      meeting.requestedViewerLanguages.clear();
+      meeting.activatedViewerLanguages.clear();
       meeting.pendingHostAudioChunks.length = 0;
 
       let outputPaths: string[] = [];
@@ -1072,8 +1106,17 @@ export class WebsocketController {
         ? await this.ensureMeetingAudioSessionsStarted(meetingId)
         : false;
       const activeMeeting = this.meetings.get(meetingId);
+      const [dbMeeting] = await db
+        .select({ method: meetings.method })
+        .from(meetings)
+        .where(eq(meetings.id, meetingId));
+      const allowsIdleOneWayStart = (dbMeeting?.method || "one_way") === "one_way";
 
-      if (!activeMeeting?.audioSessions.size) {
+      if (!activeMeeting) {
+        return;
+      }
+
+      if (!activeMeeting.audioSessions.size && !allowsIdleOneWayStart) {
         return;
       }
 
@@ -1326,8 +1369,12 @@ export class WebsocketController {
       return false;
     }
 
-    const sessionPlan = buildMeetingSessionPlan(dbMeeting.method, dbMeeting.languages);
-    if (sessionPlan.length === 0) {
+    const sessionPlan = buildMeetingSessionPlan(
+      dbMeeting.method,
+      dbMeeting.spoken_languages,
+      Array.from(meeting.requestedViewerLanguages),
+    );
+    if (sessionPlan.length === 0 && (dbMeeting.method || "one_way") === "two_way") {
       logger.warn("No Soniox session plan available for meeting.", {
         meetingId,
         method: dbMeeting.method,

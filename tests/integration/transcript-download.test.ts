@@ -39,7 +39,7 @@ describe("Transcript download access", () => {
   it("allows only the host or listed attendees to download archived transcripts", async () => {
     const meeting = await createMeeting(host.token, {
       topic: "Transcript Download",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
     createdMeetingIds.push(meeting.meetingId);
 

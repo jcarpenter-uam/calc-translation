@@ -3,7 +3,12 @@ import type { TranscriptionConfig } from "../services/transcriptionService";
 /**
  * Maximum number of spoken languages supported by one-way meetings.
  */
-export const MAX_ONE_WAY_LANGUAGES = 5;
+export const MAX_ONE_WAY_SPOKEN_LANGUAGES = 5;
+
+/**
+ * Exact number of spoken languages required by two-way meetings.
+ */
+export const TWO_WAY_LANGUAGE_COUNT = 2;
 
 /**
  * Describes the transcription sessions a meeting needs based on its translation mode.
@@ -32,6 +37,39 @@ export function getUniqueMeetingLanguages(languages: unknown): string[] {
 }
 
 /**
+ * Validates the configured spoken languages for a meeting method.
+ */
+export function validateSpokenLanguages(method: string | null | undefined, languages: string[]) {
+  const resolvedMethod = method || "one_way";
+
+  if (resolvedMethod === "two_way") {
+    return {
+      ok: languages.length === TWO_WAY_LANGUAGE_COUNT,
+      error:
+        languages.length === TWO_WAY_LANGUAGE_COUNT
+          ? null
+          : `Two-way meetings must include exactly ${TWO_WAY_LANGUAGE_COUNT} spoken languages`,
+    };
+  }
+
+  if (languages.length === 0) {
+    return {
+      ok: false,
+      error: "One-way meetings must include at least 1 spoken language",
+    };
+  }
+
+  if (languages.length > MAX_ONE_WAY_SPOKEN_LANGUAGES) {
+    return {
+      ok: false,
+      error: `One-way meetings can include at most ${MAX_ONE_WAY_SPOKEN_LANGUAGES} spoken languages`,
+    };
+  }
+
+  return { ok: true, error: null };
+}
+
+/**
  * Builds the Soniox config for one-way translation into a single target language.
  */
 export function buildOneWayTranscriptionConfig(targetLanguage: string): TranscriptionConfig {
@@ -49,13 +87,15 @@ export function buildOneWayTranscriptionConfig(targetLanguage: string): Transcri
  */
 export function buildMeetingSessionPlan(
   method: string | null,
-  languages: unknown,
+  spokenLanguages: unknown,
+  viewerLanguages: unknown,
 ): MeetingSessionPlan[] {
   const resolvedMethod = method || "one_way";
-  const uniqueLanguages = getUniqueMeetingLanguages(languages);
+  const uniqueSpokenLanguages = getUniqueMeetingLanguages(spokenLanguages);
+  const uniqueViewerLanguages = getUniqueMeetingLanguages(viewerLanguages);
 
   if (resolvedMethod === "two_way") {
-    const [languageA, languageB] = uniqueLanguages;
+    const [languageA, languageB] = uniqueSpokenLanguages;
     if (!languageA || !languageB) {
       return [];
     }
@@ -75,16 +115,16 @@ export function buildMeetingSessionPlan(
     ];
   }
 
-  return uniqueLanguages.map((language) => ({
+  return uniqueViewerLanguages.map((language) => ({
     languageKey: language,
     config: buildOneWayTranscriptionConfig(language),
   }));
 }
 
 /**
- * Adds a participant language to a one-way meeting when allowed by the policy cap.
+ * Adds a participant language to the persisted one-way viewer language list.
  */
-export function addOneWayMeetingLanguage(
+export function addOneWayViewerLanguage(
   languages: string[],
   userLanguage: string | null | undefined,
 ) {
@@ -92,21 +132,11 @@ export function addOneWayMeetingLanguage(
     return {
       languages,
       added: false,
-      limitExceeded: false,
-    };
-  }
-
-  if (languages.length >= MAX_ONE_WAY_LANGUAGES) {
-    return {
-      languages,
-      added: false,
-      limitExceeded: true,
     };
   }
 
   return {
     languages: [...languages, userLanguage],
     added: true,
-    limitExceeded: false,
   };
 }

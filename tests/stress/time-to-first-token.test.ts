@@ -53,7 +53,7 @@ describe("Stress Test & TTFT Measurement", () => {
         const createRes = await createMeeting(host.token, {
           topic: `Stress Test Meeting ${i + 1}`,
           method: "one_way",
-          languages: ["en"],
+          spoken_languages: ["en"],
         });
 
         const joinRes = await apiFetch(

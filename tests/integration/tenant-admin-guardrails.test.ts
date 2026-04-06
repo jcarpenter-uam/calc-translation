@@ -141,7 +141,7 @@ describe("Tenant admin guardrails", () => {
         scheduled_time: new Date(),
         host_id: "tenant-guardrails-super",
         tenant_id: "tenant-guardrails-b",
-        languages: ["en"],
+        spoken_languages: ["en"],
         method: "one_way",
         join_url: "https://example.test/meeting",
       } as any)

@@ -60,7 +60,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     const createRes = await createMeeting(host.token, {
       topic: "Waiting Room TTFT Test",
       method: "one_way",
-      languages: ["en", "es"], // Only preload two languages
+      spoken_languages: ["en", "es"], // Only preload two languages
     });
 
     expect(createRes.readableId).toBeDefined();
@@ -180,7 +180,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     const createRes = await createMeeting(host.token, {
       topic: "On-Demand TTFT Test",
       method: "one_way",
-      languages: ["en"], // Host only configures English initially
+      spoken_languages: ["en"], // Host only configures English initially
     });
 
     expect(createRes.readableId).toBeDefined();
@@ -295,7 +295,7 @@ describe("Meeting Lifecycle & Real-Time TTFT", () => {
     const createRes = await createMeeting(host.token, {
       topic: "Hybrid TTFT Test",
       method: "one_way",
-      languages: ["en"], // Start with just English
+      spoken_languages: ["en"], // Start with just English
     });
 
     expect(createRes.readableId).toBeDefined();

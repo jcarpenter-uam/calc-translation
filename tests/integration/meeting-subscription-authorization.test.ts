@@ -130,7 +130,7 @@ describe("Meeting subscription authorization", () => {
   it("allows joining a meeting from another tenant when the user is authenticated", async () => {
     const meeting = await createMeeting(hostToken, {
       topic: "Cross Tenant Join Allowed",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
 
     const response = await fetch(`${BASE_URL}/meeting/join/${meeting.readableId}`, {
@@ -149,7 +149,7 @@ describe("Meeting subscription authorization", () => {
   it("rejects websocket subscription for a same-tenant user who never joined the meeting", async () => {
     const meeting = await createMeeting(hostToken, {
       topic: "Same Tenant WebSocket Denial",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
     const outsiderTicket = await generateWsTicket(
       "meeting-sub-same-tenant-outsider",
@@ -173,7 +173,7 @@ describe("Meeting subscription authorization", () => {
   it("rejects websocket subscription for a user from another tenant", async () => {
     const meeting = await createMeeting(hostToken, {
       topic: "Cross Tenant WebSocket Denial",
-      languages: ["en"],
+      spoken_languages: ["en"],
     });
     const outsiderTicket = await generateWsTicket(
       "meeting-sub-cross-tenant-outsider",

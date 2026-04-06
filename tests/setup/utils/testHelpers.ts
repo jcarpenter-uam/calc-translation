@@ -226,12 +226,16 @@ export async function apiGet(
  */
 export async function createMeeting(
   token: string,
-  config: { topic?: string; method?: string; languages?: string[] } = {},
+  config: {
+    topic?: string;
+    method?: string;
+    spoken_languages?: string[];
+  } = {},
 ): Promise<CreateMeetingResponse> {
   const body = {
     topic: config.topic || "Test Meeting",
     method: config.method || "one_way",
-    languages: config.languages || ["en"],
+    spoken_languages: config.spoken_languages || ["en"],
   };
   return apiFetch<CreateMeetingResponse>("/meeting/create", token, body);
 }

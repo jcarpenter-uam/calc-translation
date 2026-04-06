@@ -184,7 +184,7 @@ describe("Concurrent meetings two-language capacity", () => {
     const created = await createMeeting(host.token, {
       topic: `Concurrent Two-Language Capacity ${meetingIndex}`,
       method: "one_way",
-      languages: ["en", "es"],
+      spoken_languages: ["en", "es"],
     });
     createdMeetings.push({ id: created.meetingId, hostToken: host.token });
 

@@ -1,4 +1,4 @@
-import { pgTable, text, pgEnum, timestamp } from "drizzle-orm/pg-core";
+import { boolean, pgEnum, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * Supported user roles for RBAC checks.
@@ -13,6 +13,12 @@ export const users = pgTable("users", {
   name: text("name"),
   email: text("email"),
   languageCode: text("language_code"),
+  hasCompletedDashboardTour: boolean("has_completed_dashboard_tour")
+    .default(false)
+    .notNull(),
+  hasCompletedMeetingTour: boolean("has_completed_meeting_tour")
+    .default(false)
+    .notNull(),
   role: roleEnum("role").default("user").notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });

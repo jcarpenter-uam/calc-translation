@@ -212,29 +212,43 @@ describe("User Routes", () => {
 
     expect(data.user.id).toBe("users_t1_admin");
     expect(data.user.role).toBe("tenant_admin");
+    expect(data.user.hasCompletedDashboardTour).toBe(false);
+    expect(data.user.hasCompletedMeetingTour).toBe(false);
     expect(data.tenant.id).toBe(tenantOneId);
     expect(data.tenant.name).toBe("Users Tenant One");
   });
 
-  it("updates own account language with PATCH /user/me", async () => {
+  it("updates own account language and tour completion with PATCH /user/me", async () => {
     const response = await fetch(`${BASE_URL}/user/me`, {
       method: "PATCH",
       headers: {
         Cookie: `auth_session=${tokens.t1memberA}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ languageCode: "ja" }),
+      body: JSON.stringify({
+        languageCode: "ja",
+        hasCompletedDashboardTour: true,
+        hasCompletedMeetingTour: true,
+      }),
     });
 
     expect(response.status).toBe(200);
     const data = (await response.json()) as any;
     expect(data.user.languageCode).toBe("ja");
+    expect(data.user.hasCompletedDashboardTour).toBe(true);
+    expect(data.user.hasCompletedMeetingTour).toBe(true);
 
     const [updatedUser] = await db
-      .select({ languageCode: users.languageCode })
+      .select({
+        languageCode: users.languageCode,
+        hasCompletedDashboardTour: users.hasCompletedDashboardTour,
+        hasCompletedMeetingTour: users.hasCompletedMeetingTour,
+      })
       .from(users)
       .where(eq(users.id, "users_t1_member_a"));
     expect(updatedUser?.languageCode).toBe("ja");
+    expect(updatedUser?.hasCompletedDashboardTour).toBe(true);
+    expect(updatedUser?.hasCompletedMeetingTour).toBe(true);
   });
 
   it("returns cached calendar events within the requested range for the authenticated user, including cancelled meetings", async () => {

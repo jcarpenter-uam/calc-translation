@@ -32,6 +32,8 @@ export const getMe = async ({ user, tenantId, set }: any) => {
         email: user.email,
         role: user.role,
         languageCode: user.languageCode,
+        hasCompletedDashboardTour: user.hasCompletedDashboardTour,
+        hasCompletedMeetingTour: user.hasCompletedMeetingTour,
       },
       tenant: tenant || null,
     };
@@ -53,9 +55,32 @@ export const updateMe = async ({ user, body, set }: any) => {
   const userId = user?.id || "unknown_user";
 
   try {
+    const updates: {
+      languageCode?: string;
+      hasCompletedDashboardTour?: boolean;
+      hasCompletedMeetingTour?: boolean;
+    } = {};
+
+    if (typeof body.languageCode === "string") {
+      updates.languageCode = body.languageCode;
+    }
+
+    if (typeof body.hasCompletedDashboardTour === "boolean") {
+      updates.hasCompletedDashboardTour = body.hasCompletedDashboardTour;
+    }
+
+    if (typeof body.hasCompletedMeetingTour === "boolean") {
+      updates.hasCompletedMeetingTour = body.hasCompletedMeetingTour;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      set.status = 400;
+      return { error: "No profile changes provided" };
+    }
+
     const [updatedUser] = await db
       .update(users)
-      .set({ languageCode: body.languageCode })
+      .set(updates)
       .where(and(eq(users.id, user.id), isNull(users.deletedAt)))
       .returning({
         id: users.id,
@@ -63,6 +88,8 @@ export const updateMe = async ({ user, body, set }: any) => {
         email: users.email,
         role: users.role,
         languageCode: users.languageCode,
+        hasCompletedDashboardTour: users.hasCompletedDashboardTour,
+        hasCompletedMeetingTour: users.hasCompletedMeetingTour,
       });
 
     if (!updatedUser) {
@@ -70,13 +97,15 @@ export const updateMe = async ({ user, body, set }: any) => {
       return { error: "User not found" };
     }
 
-    logger.info("User language preference updated.", {
+    logger.info("User profile updated.", {
       userId,
       languageCode: body.languageCode,
+      hasCompletedDashboardTour: body.hasCompletedDashboardTour,
+      hasCompletedMeetingTour: body.hasCompletedMeetingTour,
     });
 
     return {
-      message: "Language updated successfully",
+      message: "Profile updated successfully",
       user: updatedUser,
     };
   } catch (err) {

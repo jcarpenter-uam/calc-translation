@@ -28,9 +28,13 @@ export const userRoutes = new Elysia()
   })
   .patch("/user/me", updateMe, {
     body: t.Object({
-      languageCode: t.String({
-        minLength: 2,
-        maxLength: 10,
-      }),
+      languageCode: t.Optional(
+        t.String({
+          minLength: 2,
+          maxLength: 10,
+        }),
+      ),
+      hasCompletedDashboardTour: t.Optional(t.Boolean()),
+      hasCompletedMeetingTour: t.Optional(t.Boolean()),
     }),
   });

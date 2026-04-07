@@ -32,6 +32,6 @@ For setup, configuration, and deployment details, see [HOW-TO.md](./HOW-TO.md).
 - [x] Backfill for late joins and language swaps
 - [x] Meeting summaries
 - [x] Translated UI
-- [ ] Onboarding tour
+- [x] Onboarding tour
 - [ ] Zoom RTMS
 - [ ] Full monitoring and observability including API cost

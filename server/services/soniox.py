@@ -412,8 +412,17 @@ class SonioxService:
 
     async def send_json(self, data: dict):
         """Helper to send JSON control messages (like keepalives)."""
-        if self.ws:
-            await self.ws.send(json.dumps(data))
+        if self.ws and self._is_connected:
+            try:
+                await self.ws.send(json.dumps(data))
+            except ConnectionClosedOK:
+                self._is_connected = False
+                with log_step("SONIOX"):
+                    logger.debug("Skipping JSON send: Soniox connection already closed.")
+            except ConnectionClosedError as e:
+                self._is_connected = False
+                with log_step("SONIOX"):
+                    logger.warning(f"JSON send error (connection closed): {e}")
 
     async def finalize_stream(self):
         """

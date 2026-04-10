@@ -299,3 +299,33 @@ async def test_finalize_stream_warn_path_and_skip_path(callbacks):
     # already disconnected branch
     svc2 = make_service(callbacks)
     await svc2.finalize_stream()
+
+
+@pytest.mark.asyncio
+async def test_send_json_closed_connection_is_ignored(callbacks):
+    svc = make_service(callbacks)
+
+    ok_exc = ConnectionClosedOK(
+        Close(1000, "done"), Close(1000, "done"), rcvd_then_sent=True
+    )
+
+    class ClosedWS(FakeWS):
+        async def send(self, data):
+            raise ok_exc
+
+    svc.ws = ClosedWS()
+    svc._is_connected = True
+
+    await svc.send_json({"type": "keepalive"})
+    assert svc._is_connected is False
+
+
+@pytest.mark.asyncio
+async def test_send_json_skip_when_already_disconnected(callbacks):
+    svc = make_service(callbacks)
+    fake_ws = FakeWS()
+    svc.ws = fake_ws
+    svc._is_connected = False
+
+    await svc.send_json({"type": "keepalive"})
+    assert fake_ws.sent == []

@@ -159,12 +159,7 @@ class SonioxService:
                         with log_step("TRANSCRIPTION"):
                             logger.error(error_msg)
 
-                        if "Cannot continue request" in error_msg:
-                            await self.on_error_callback(
-                                SonioxConnectionError(error_msg)
-                            )
-                        else:
-                            await self.on_error_callback(SonioxFatalError(error_msg))
+                        await self.on_error_callback(SonioxConnectionError(error_msg))
                         break
 
                     non_final_transcription_tokens = []

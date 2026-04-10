@@ -121,20 +121,30 @@ async def test_receive_loop_finished_flag_emits_final(callbacks):
 
 
 @pytest.mark.asyncio
-async def test_receive_loop_error_code_connection_and_fatal(callbacks):
+@pytest.mark.parametrize(
+    ("error_code", "error_message"),
+    [
+        (503, "Cannot continue request"),
+        (401, "bad key"),
+        (400, "audio too long"),
+    ],
+)
+async def test_receive_loop_error_code_always_reconnectable(
+    callbacks, error_code, error_message
+):
     calls, _, _, _ = callbacks
 
-    svc1 = make_service(callbacks)
-    svc1.ws = FakeWS(messages=[json.dumps({"error_code": 503, "error_message": "Cannot continue request"})])
-    svc1._is_connected = True
-    await svc1._receive_loop()
+    svc = make_service(callbacks)
+    svc.ws = FakeWS(
+        messages=[
+            json.dumps(
+                {"error_code": error_code, "error_message": error_message}
+            )
+        ]
+    )
+    svc._is_connected = True
+    await svc._receive_loop()
     assert isinstance(calls["errors"][-1], soniox.SonioxConnectionError)
-
-    svc2 = make_service(callbacks)
-    svc2.ws = FakeWS(messages=[json.dumps({"error_code": 401, "error_message": "bad key"})])
-    svc2._is_connected = True
-    await svc2._receive_loop()
-    assert isinstance(calls["errors"][-1], soniox.SonioxFatalError)
 
 
 @pytest.mark.asyncio

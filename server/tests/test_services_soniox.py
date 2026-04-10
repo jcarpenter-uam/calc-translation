@@ -321,6 +321,25 @@ async def test_send_json_closed_connection_is_ignored(callbacks):
 
 
 @pytest.mark.asyncio
+async def test_send_json_connection_closed_error_marks_disconnected(callbacks):
+    svc = make_service(callbacks)
+
+    err_exc = ConnectionClosedError(
+        Close(1011, "err"), Close(1011, "err"), rcvd_then_sent=True
+    )
+
+    class ClosedWS(FakeWS):
+        async def send(self, data):
+            raise err_exc
+
+    svc.ws = ClosedWS()
+    svc._is_connected = True
+
+    await svc.send_json({"type": "keepalive"})
+    assert svc._is_connected is False
+
+
+@pytest.mark.asyncio
 async def test_send_json_skip_when_already_disconnected(callbacks):
     svc = make_service(callbacks)
     fake_ws = FakeWS()

@@ -5,9 +5,9 @@ import jwt
 from core.config import settings
 from core.db import AsyncSessionLocal
 from core.logging_setup import log_step
-from models.users import User
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, HTTPException, Query, Request, WebSocketException, status
+from models.users import User
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from starlette.requests import HTTPConnection
@@ -38,8 +38,9 @@ def generate_jwt_token(
     """
     now = datetime.now(timezone.utc)
 
+    # NOTE: This is a temp fix, stateful auth needs to be introduce in v3
     if expires_delta is None:
-        expires_delta = timedelta(hours=3)  # 3 Hours
+        expires_delta = timedelta(hours=24)  # 24 Hours
 
     payload = {
         "iss": "calc-translation-service",

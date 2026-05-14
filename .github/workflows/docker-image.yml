@@ -74,7 +74,7 @@ jobs:
   #           --cov-fail-under=100
 
   build-and-push:
-    needs: test-gates
+    # needs: test-gates
     runs-on: ubuntu-latest
     permissions:
       contents: read

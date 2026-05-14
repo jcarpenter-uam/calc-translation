@@ -1,7 +1,11 @@
 import logging
 from typing import Optional
 
-from core.authentication import generate_jwt_token, get_current_user_payload
+from core.authentication import (
+    generate_jwt_token,
+    get_current_user_payload,
+    get_token_from_cookie,
+)
 from core.config import settings
 from core.db import AsyncSessionLocal
 from core.logging_setup import log_step, session_id_var
@@ -342,7 +346,8 @@ def create_auth_router() -> APIRouter:
 
             user_id: str | None = None
             try:
-                user_payload = await get_current_user_payload(request)
+                token = await get_token_from_cookie(request)
+                user_payload = get_current_user_payload(token=token)
                 user_id = user_payload.get("sub")
             except HTTPException as e:
                 if e.status_code in (401, 403):

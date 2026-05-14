@@ -319,7 +319,11 @@ async def test_zoom_callback_requires_code():
 
 @pytest.mark.asyncio
 async def test_zoom_callback_logged_in_exchanges_token(monkeypatch):
-    async def fake_get_current_user_payload(_request):
+    async def fake_get_token_from_cookie(_request):
+        return "tok"
+
+    def fake_get_current_user_payload(token):
+        assert token == "tok"
         return {"sub": "u1"}
 
     called = {}
@@ -327,6 +331,7 @@ async def test_zoom_callback_logged_in_exchanges_token(monkeypatch):
     async def fake_exchange(code, redirect_uri, user_id):
         called.update({"code": code, "redirect_uri": redirect_uri, "user_id": user_id})
 
+    monkeypatch.setattr(auth, "get_token_from_cookie", fake_get_token_from_cookie)
     monkeypatch.setattr(auth, "get_current_user_payload", fake_get_current_user_payload)
     monkeypatch.setattr(auth, "exchange_code_for_token", fake_exchange)
 
@@ -341,10 +346,10 @@ async def test_zoom_callback_logged_in_exchanges_token(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_zoom_callback_logged_out_stashes_code_in_cookie(monkeypatch):
-    async def fake_user_payload(_request):
+    async def fake_get_token_from_cookie(_request):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    monkeypatch.setattr(auth, "get_current_user_payload", fake_user_payload)
+    monkeypatch.setattr(auth, "get_token_from_cookie", fake_get_token_from_cookie)
 
     endpoint = _endpoint("/api/auth/zoom/callback", "GET")
     response = await endpoint(SimpleNamespace(query_params={"code": "abc"}, cookies={}), Response())
@@ -356,10 +361,10 @@ async def test_zoom_callback_logged_out_stashes_code_in_cookie(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_zoom_callback_propagates_non_auth_http_exception(monkeypatch):
-    async def bad_user_payload(_request):
+    async def bad_get_token_from_cookie(_request):
         raise HTTPException(status_code=500, detail="bad")
 
-    monkeypatch.setattr(auth, "get_current_user_payload", bad_user_payload)
+    monkeypatch.setattr(auth, "get_token_from_cookie", bad_get_token_from_cookie)
 
     endpoint = _endpoint("/api/auth/zoom/callback", "GET")
     with pytest.raises(HTTPException) as exc_info:
@@ -370,12 +375,17 @@ async def test_zoom_callback_propagates_non_auth_http_exception(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_zoom_callback_http_exception_from_exchange(monkeypatch):
-    async def fake_get_current_user_payload(_request):
+    async def fake_get_token_from_cookie(_request):
+        return "tok"
+
+    def fake_get_current_user_payload(token):
+        assert token == "tok"
         return {"sub": "u1"}
 
     async def bad_exchange(code, redirect_uri, user_id):
         raise HTTPException(status_code=400, detail="invalid code")
 
+    monkeypatch.setattr(auth, "get_token_from_cookie", fake_get_token_from_cookie)
     monkeypatch.setattr(auth, "get_current_user_payload", fake_get_current_user_payload)
     monkeypatch.setattr(auth, "exchange_code_for_token", bad_exchange)
 
@@ -388,12 +398,17 @@ async def test_zoom_callback_http_exception_from_exchange(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_zoom_callback_unhandled_error_returns_500(monkeypatch):
-    async def fake_get_current_user_payload(_request):
+    async def fake_get_token_from_cookie(_request):
+        return "tok"
+
+    def fake_get_current_user_payload(token):
+        assert token == "tok"
         return {"sub": "u1"}
 
     async def bad_exchange(code, redirect_uri, user_id):
         raise RuntimeError("boom")
 
+    monkeypatch.setattr(auth, "get_token_from_cookie", fake_get_token_from_cookie)
     monkeypatch.setattr(auth, "get_current_user_payload", fake_get_current_user_payload)
     monkeypatch.setattr(auth, "exchange_code_for_token", bad_exchange)
 

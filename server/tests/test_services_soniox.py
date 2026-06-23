@@ -129,7 +129,7 @@ async def test_receive_loop_finished_flag_emits_final(callbacks):
         (400, "audio too long"),
     ],
 )
-async def test_receive_loop_error_code_always_reconnectable(
+async def test_receive_loop_error_code_reconnectable(
     callbacks, error_code, error_message
 ):
     calls, _, _, _ = callbacks
@@ -145,6 +145,29 @@ async def test_receive_loop_error_code_always_reconnectable(
     svc._is_connected = True
     await svc._receive_loop()
     assert isinstance(calls["errors"][-1], soniox.SonioxConnectionError)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_code", [402, "402"])
+async def test_receive_loop_budget_exhausted_error_is_fatal(callbacks, error_code):
+    calls, _, _, _ = callbacks
+
+    svc = make_service(callbacks)
+    svc.ws = FakeWS(
+        messages=[
+            json.dumps(
+                {
+                    "error_code": error_code,
+                    "error_message": "Project monthly budget exhausted. Please increase it.",
+                }
+            )
+        ]
+    )
+    svc._is_connected = True
+
+    await svc._receive_loop()
+
+    assert isinstance(calls["errors"][-1], soniox.SonioxFatalError)
 
 
 @pytest.mark.asyncio

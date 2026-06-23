@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional, List
+from typing import Awaitable, Callable, List, Optional
 
 import websockets
 from core.config import settings
@@ -105,7 +105,7 @@ class SonioxService:
             #
             # Select the model to use.
             # See: soniox.com/docs/stt/models
-            "model": "stt-rt-v4",
+            "model": "stt-rt-v5",
             #
             # Enable language identification. Each token will include a "language" field.
             # See: soniox.com/docs/stt/concepts/language-identification
@@ -159,7 +159,12 @@ class SonioxService:
                         with log_step("TRANSCRIPTION"):
                             logger.error(error_msg)
 
-                        await self.on_error_callback(SonioxConnectionError(error_msg))
+                        if str(res["error_code"]) == "402":
+                            await self.on_error_callback(SonioxFatalError(error_msg))
+                        else:
+                            await self.on_error_callback(
+                                SonioxConnectionError(error_msg)
+                            )
                         break
 
                     non_final_transcription_tokens = []
@@ -418,7 +423,9 @@ class SonioxService:
             except ConnectionClosedOK:
                 self._is_connected = False
                 with log_step("SONIOX"):
-                    logger.debug("Skipping JSON send: Soniox connection already closed.")
+                    logger.debug(
+                        "Skipping JSON send: Soniox connection already closed."
+                    )
             except ConnectionClosedError as e:
                 self._is_connected = False
                 with log_step("SONIOX"):
